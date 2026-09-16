@@ -1,0 +1,105 @@
+import Foundation
+
+public enum PolicyError: Error, Equatable, Sendable {
+    case invalidBatteryFloor
+    case invalidDuration
+    case invalidDate
+    case invalidClock
+    case powerModeNotAuthorized
+    case batteryFloorNotAuthorized
+    case automationNotAuthorized
+    case duplicateSession
+    case sessionLimitReached
+}
+
+public enum PowerSource: String, Codable, Sendable {
+    case battery, external, unknown
+}
+
+public enum PowerMode: String, CaseIterable, Codable, Sendable {
+    case battery, external, all
+
+    public var flag: String {
+        switch self {
+        case .battery: "-b"
+        case .external: "-c"
+        case .all: "-a"
+        }
+    }
+
+    public func allows(_ source: PowerSource) -> Bool {
+        switch (self, source) {
+        case (_, .unknown): false
+        case (.all, _), (.battery, .battery), (.external, .external): true
+        default: false
+        }
+    }
+
+    public func isWithin(_ ceiling: PowerMode) -> Bool {
+        ceiling == .all || self == ceiling
+    }
+}
+
+/// Set by the native app. Clients may request stricter values, never weaker ones.
+public struct UserPolicy: Codable, Equatable, Sendable {
+    public let mode: PowerMode
+    public let batteryFloor: Int
+    public let maximumDuration: TimeInterval?
+    public let allowsAutomation: Bool
+
+    public init(
+        mode: PowerMode = .all,
+        batteryFloor: Int = 20,
+        maximumDuration: TimeInterval? = nil,
+        allowsAutomation: Bool = false
+    ) throws {
+        guard (0...50).contains(batteryFloor) else { throw PolicyError.invalidBatteryFloor }
+        if let maximumDuration { try Self.validateDuration(maximumDuration) }
+        self.mode = mode
+        self.batteryFloor = batteryFloor
+        self.maximumDuration = maximumDuration
+        self.allowsAutomation = allowsAutomation
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            mode: values.decode(PowerMode.self, forKey: .mode),
+            batteryFloor: values.decode(Int.self, forKey: .batteryFloor),
+            maximumDuration: values.decodeIfPresent(TimeInterval.self, forKey: .maximumDuration),
+            allowsAutomation: values.decode(Bool.self, forKey: .allowsAutomation)
+        )
+    }
+
+    public static func validateDuration(_ seconds: TimeInterval) throws {
+        guard seconds.isFinite, seconds > 0 else { throw PolicyError.invalidDuration }
+    }
+}
+
+/// Absence of a battery is different from failure to read one.
+public enum BatteryReading: Equatable, Sendable {
+    case notPresent
+    case available(percent: Int, isDischarging: Bool)
+    case unavailable
+
+    public static func measured(percent: Int, isDischarging: Bool) -> Self {
+        guard (0...100).contains(percent) else { return .unavailable }
+        return .available(percent: percent, isDischarging: isDischarging)
+    }
+}
+
+public struct PowerSnapshot: Equatable, Sendable {
+    public let source: PowerSource
+    public let battery: BatteryReading
+
+    public init(source: PowerSource, battery: BatteryReading) {
+        self.source = source
+        if case .available(let percent, _) = battery, !(0...100).contains(percent) {
+            self.battery = .unavailable
+        } else if source == .battery, battery == .notPresent {
+            self.battery = .unavailable
+        } else {
+            self.battery = battery
+        }
+    }
+}
