@@ -6,15 +6,19 @@
 SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
-The two modules pass 48 Swift Testing tests (36 core, 12 system; including
+The two modules pass 54 default Swift Testing tests (36 core, 18 system; including
 parameterized boundary cases), strict swift-format lint and a Release build.
-Separate Address Sanitizer and Thread Sanitizer runs also pass all 48 tests.
+One additional opt-in, read-only Mac integration test also passes on the inspected
+MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 55 tests
+with that opt-in enabled.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
 System tests cover strict Boolean decoding, the real continuous clock and bounded
 unprivileged `true`/`false`/`sleep` subprocesses. Journal tests use real temporary
 files to check reopening, exclusive ownership, atomic cleanup, malformed data,
 permissions, ACLs, symlinks, hard links and FIFOs. Coverage profiles are generated.
+Power-source tests cover scaling, AC discharge, missing or malformed fields and
+loss of a previously detected battery.
 Tests never call privileged power writes or create real sleep assertions. XPC,
 the root-path journal integration, UI and physical sleep behavior remain untested.
 
@@ -50,6 +54,16 @@ Use distinct scratch paths for simultaneous sanitizer builds. Do not disable cod
 signing or strip security attributes to work around an installation failure.
 CLT also emits linker warnings for absent Xcode-style search directories; these
 are recorded environment warnings, not evidence that full Xcode was tested.
+
+Opt in to the real, read-only IOKit/IOPowerSources smoke check on a supported Mac:
+
+```sh
+rtk proxy env LIMITLESS_READ_ONLY_INTEGRATION=1 LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build swift Tools/ProjectTool.swift check
+```
+
+This checks readable power data and the global flag without creating an assertion
+or changing a setting. Ordinary CI skips this hardware-dependent assertion. It
+does not qualify closed-lid operation, transitions, helper approval or restoration.
 
 ## CI and security
 

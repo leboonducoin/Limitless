@@ -21,7 +21,8 @@ No Node or Python runtime will be required to use it.
 ## Development
 
 The implemented components are the Swift policy/session core, the observed-state
-controller and an isolated macOS backend. The app, CLI and authenticated helper
+controller, a protected ownership journal and isolated macOS power adapters.
+The app, CLI and authenticated helper
 are still in development. Build and test with Xcode 26.2 or newer using
 `rtk proxy swift Tools/ProjectTool.swift check`.
 See [testing](docs/testing.md) for sanitizer commands and the CLT/synced-folder
