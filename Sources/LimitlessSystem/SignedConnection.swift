@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import LimitlessCore
 import Security
@@ -17,9 +18,10 @@ public enum SignatureError: Error, Sendable {
     case untrustedIdentity, invalidRequirement
 }
 
-/// Exact identifiers and the current executable's validated team constrain both XPC directions.
+/// Pin the current executable's actual signing certificate and exact peer identifiers.
+/// A self-signed identity is sufficient; ad-hoc signatures have no certificate and are rejected.
 public struct SignedIdentity: Sendable {
-    public let team: String
+    public let certificateFingerprint: String
 
     public init(expectedIdentifier: String) throws {
         var code: SecCode?
@@ -31,33 +33,40 @@ public struct SignedIdentity: Sendable {
                 staticCode, SecCSFlags(rawValue: kSecCSSigningInformation),
                 &information) == errSecSuccess,
             let details = information as? [String: Any],
-            let team = details[kSecCodeInfoTeamIdentifier as String] as? String,
+            let certificates = details[kSecCodeInfoCertificates as String] as? [SecCertificate],
+            let leaf = certificates.first,
             details[kSecCodeInfoIdentifier as String] as? String == expectedIdentifier
         else { throw SignatureError.untrustedIdentity }
-        let requirement = try Self.requirement(identifier: expectedIdentifier, team: team)
+        // Apple's requirement language selects certificates with a SHA-1 fingerprint.
+        // This is a certificate selector, not the digest used to authenticate release archives.
+        let fingerprint = Insecure.SHA1.hash(data: SecCertificateCopyData(leaf) as Data)
+            .map { String(format: "%02x", $0) }.joined()
+        let requirement = try Self.requirement(
+            identifier: expectedIdentifier, certificateFingerprint: fingerprint)
         var parsed: SecRequirement?
         guard SecRequirementCreateWithString(requirement as CFString, [], &parsed) == errSecSuccess,
             let parsed, SecCodeCheckValidity(code, [], parsed) == errSecSuccess
         else { throw SignatureError.untrustedIdentity }
-        self.team = team
+        certificateFingerprint = fingerprint
     }
 
     public func requirement(for identifier: String) throws -> String {
-        try Self.requirement(identifier: identifier, team: team)
+        try Self.requirement(identifier: identifier, certificateFingerprint: certificateFingerprint)
     }
 
-    static func requirement(identifier: String, team: String) throws -> String {
+    static func requirement(identifier: String, certificateFingerprint: String) throws -> String {
         guard
             [
                 LimitlessIdentity.application, LimitlessIdentity.commandLine,
                 LimitlessIdentity.helper,
             ]
-            .contains(identifier), team.utf8.count == 10,
-            team.utf8.allSatisfy({ (65...90).contains($0) || (48...57).contains($0) })
+            .contains(identifier), certificateFingerprint.utf8.count == 40,
+            certificateFingerprint.utf8.allSatisfy({
+                (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0)
+            })
         else { throw SignatureError.invalidRequirement }
         let value =
-            "anchor apple generic and identifier \"\(identifier)\" "
-            + "and certificate leaf[subject.OU] = \"\(team)\""
+            "identifier \"\(identifier)\" and certificate leaf = H\"\(certificateFingerprint)\""
         var parsed: SecRequirement?
         guard SecRequirementCreateWithString(value as CFString, [], &parsed) == errSecSuccess else {
             throw SignatureError.invalidRequirement

@@ -28,6 +28,9 @@
 - Swift release commands for Developer ID signing, notarization, exported-archive
   verification and digest-backed Homebrew cask generation; source metadata and
   matching CLI/bundle versions. No signed release or publication has been performed.
+- Reciprocal XPC requirements now pin the executable's actual leaf certificate and
+  exact peer identifiers, permitting a stable self-signed identity without Apple
+  membership. Ad-hoc signatures remain rejected; no-account installation is pending.
 
 ## Unreleased
 

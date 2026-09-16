@@ -79,7 +79,7 @@ func developerRequirement(identifier: String, team: String) throws -> SecRequire
     return requirement
 }
 
-func verifyCode(_ path: URL, identifier: String, team: String) throws {
+func verifyCode(_ path: URL, identifier: String, team: String) throws -> Data {
     let requirement = try developerRequirement(identifier: identifier, team: team)
     var code: SecStaticCode?
     try require(
@@ -98,7 +98,12 @@ func verifyCode(_ path: URL, identifier: String, team: String) throws {
             code, SecCSFlags(rawValue: kSecCSSigningInformation),
             &information) == errSecSuccess,
         "Cannot inspect signing information: \(path.path)")
-    try verifySigningInformation(information as? [String: Any] ?? [:])
+    let details = information as? [String: Any] ?? [:]
+    try verifySigningInformation(details)
+    guard let certificates = details[kSecCodeInfoCertificates as String] as? [SecCertificate],
+        let leaf = certificates.first
+    else { throw CocoaError(.coderValueNotFound) }
+    return SecCertificateCopyData(leaf) as Data
 }
 
 func verifySigningInformation(_ details: [String: Any]) throws {
@@ -114,14 +119,17 @@ func verifySigningInformation(_ details: [String: Any]) throws {
 func verifyRelease(_ app: URL, team: String, notarized: Bool) throws -> (String, BuildRecord) {
     try require(app.lastPathComponent == "Limitless.app", "Expected a Limitless.app bundle.")
     let identifier = "io.github.leboonducoin.Limitless"
-    try verifyCode(app, identifier: identifier, team: team)
+    let certificate = try verifyCode(app, identifier: identifier, team: team)
     for (relative, suffix) in [
         ("MacOS/limitless", ".cli"),
         ("Library/HelperTools/LimitlessHelper", ".helper"),
     ] {
-        try verifyCode(
+        let peerCertificate = try verifyCode(
             app.appendingPathComponent("Contents/" + relative),
             identifier: identifier + suffix, team: team)
+        try require(
+            peerCertificate == certificate,
+            "App, CLI and helper must use the same signing certificate.")
     }
     _ = try run("/usr/bin/codesign", ["--verify", "--strict", "--deep", app.path])
     let contents = app.appendingPathComponent("Contents")

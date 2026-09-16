@@ -17,11 +17,21 @@ The application and CLI have separate Mach services (`.control` and `.tasks`),
 under `io.github.leboonducoin.Limitless`. The corresponding executable identifiers
 are `io.github.leboonducoin.Limitless`, `.cli`, and `.helper`. Both sides constrain
 every XPC message with the public `setCodeSigningRequirement` API: an exact
-identifier, an Apple certificate chain, and the validated executable's signing
-team. Ad-hoc and unsigned builds cannot open a privileged channel. Requirements
-are parsed before Foundation receives them; identifiers are fixed and team values
-are restricted to ten uppercase ASCII letters/digits. No PID-only signature check
-or private audit-token API is used.
+identifier and the leaf signing certificate of the caller's own validated running
+executable. All three executables must be signed with the same certificate.
+The certificate can be self-signed; an Apple-issued identity is not required by
+this transport. Ad-hoc and unsigned builds have no certificate and fail closed.
+Requirements are parsed before Foundation receives them; identifiers are fixed
+and certificate fingerprints accept exactly 40 ASCII hexadecimal characters.
+Apple's requirement language uses SHA-1 as its certificate selector; release
+archives use SHA-256. No PID-only signature check or private audit-token API is used.
+
+Pinning establishes that peers have the same signer, not that Apple or a third
+party has reviewed the app. Native admin approval must establish the installed
+helper's trust. Certificate rotation requires removing the old installation with
+its matching old app before installing the new signer; the existing guarded
+upgrade/removal flow is retained. A new certificate from the same Apple Team ID
+does not silently gain access to an old helper.
 
 The helper also checks the kernel-provided effective UID against the current
 console user, on admission and every reconciliation. Root and background users
@@ -50,7 +60,9 @@ restoration attempts can delay a confirmed stop. SIGTERM/SIGINT revoke demands
 and attempt cleanup before exit; an unconfirmed stop retains the journal. A crash
 or SIGKILL relies on the subsequent helper start to restore the journaled hold.
 
-The executable and client compile locally. Signed XPC exchange, native service
+The Security requirement compiler and Foundation's XPC requirement setter accept
+the certificate constraints in local tests. The executable and client compile
+locally. Real same-signer/wrong-signer XPC exchange, native service
 registration and privileged lifecycle tests have not yet been performed.
 
 The CLI uses native `Process` termination for foreground commands and public

@@ -11,19 +11,19 @@ must also be usable through GitHub or a dedicated Homebrew tap before then. User
 must never need their own developer membership. The Developer ID commands below
 remain an optional future channel, not the only acceptable product distribution.
 
-The current code is not ready for this route: `SignedIdentity` requires an
-Apple-backed Team ID, and setup uses `SMAppService.daemon`. The installed Apple
+The current code is not ready for this complete route. `SignedIdentity` now pins
+the exact peer identifier and the executable's own signing certificate, including
+a self-signed certificate, but setup still uses `SMAppService.daemon`. The installed Apple
 SDK's public `SMAppService.h` explicitly requires notarization for apps containing
 LaunchDaemons. Simply removing the Team ID check would neither qualify installation
 nor preserve helper authentication. Ad-hoc development bundles remain disabled
 while that boundary is redesigned.
 
-The next implementation must retain a stable cryptographic identity without
-requiring an Apple-issued certificate, authenticate exact app/CLI/helper identities
-in both XPC directions, and keep native administrator approval. Apple's code-signing
-requirements support pinning a self-signed certificate; a bundle identifier or a
-UID alone is insufficient. This is a candidate trust mechanism, not yet implemented
-or proven as a complete installation flow.
+The certificate requirements compile and are accepted by Foundation's XPC setter
+in local tests; a bundle identifier or UID alone remains insufficient. Real
+same-certificate/wrong-certificate exchange and native administrator approval
+still need integration evidence. Apple's code-signing requirements support a
+self-signed certificate pin; that does not prove a complete installation flow.
 [Apple certificate requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
 
 The installation review must compare the current documented `SMAppService` contract
@@ -151,7 +151,8 @@ and a matching universal/Intel recipe require separate evidence.
    source revision, and verifies the tree again before signing. It signs the CLI
    and helper before the app, with hardened runtime and secure timestamps. Each
    executable must satisfy the exact Developer ID Application certificate class,
-   bundle ID and requested Team ID. Entitlements are not needed by this design
+   bundle ID and requested Team ID, and all three must contain the same leaf
+   certificate. Entitlements are not needed by this design
    and are rejected. There is no `--deep` signing or silent ad-hoc fallback.
    [Apple signing guidance](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac),
    [certificate requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
