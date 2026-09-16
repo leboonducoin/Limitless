@@ -11,6 +11,48 @@ The helper owns reconciliation and deadlines independently of the panel. App and
 CLI requests cross an authenticated XPC boundary. The CLI runs user commands under
 the user's identity; the helper never receives a command to execute.
 
+## Authenticated service
+
+The application and CLI have separate Mach services (`.control` and `.tasks`),
+under `io.github.leboonducoin.Limitless`. The corresponding executable identifiers
+are `io.github.leboonducoin.Limitless`, `.cli`, and `.helper`. Both sides constrain
+every XPC message with the public `setCodeSigningRequirement` API: an exact
+identifier, an Apple certificate chain, and the validated executable's signing
+team. Ad-hoc and unsigned builds cannot open a privileged channel. Requirements
+are parsed before Foundation receives them; identifiers are fixed and team values
+are restricted to ten uppercase ASCII letters/digits. No PID-only signature check
+or private audit-token API is used.
+
+The helper also checks the kernel-provided effective UID against the current
+console user, on admission and every reconciliation. Root and background users
+are rejected. Switching users or logging out drops all demands and resets policy
+to safe defaults, including disabled automation. Reconnecting never restores a
+previous session or its authorization.
+
+Requests are versioned, bounded JSON inside an XPC `Data` message. There are no
+command, executable or path fields. The control endpoint can set policy, stop all,
+explicitly rearm or retry cleanup. The task endpoint can only request a constrained
+session, inspect state, renew liveness and release its own session. Owner UUIDs
+and manual/task classification are assigned by the service. Connections and queued
+requests are bounded to 64 each; one demand is allowed per connection. A task
+connection cannot start a second demand after its first ends.
+
+Clients renew a 30-second liveness lease every five seconds while responsible for
+work. Heartbeats do not change the original deadline. Disconnection releases only
+that owner's demand; an expired lease cannot be renewed. XPC interruption or a
+ten-second client timeout closes the channel, with no automatic reacquisition.
+
+The helper confines runtime state and all blocking backend calls to one serial
+dispatch queue. Public power notifications trigger reconciliation; a two-second
+watchdog (250 ms scheduling leeway) also checks telemetry, leases and deadlines.
+This is not a hard real-time bound: scheduling, powerd propagation and bounded
+restoration attempts can delay a confirmed stop. SIGTERM/SIGINT revoke demands
+and attempt cleanup before exit; an unconfirmed stop retains the journal. A crash
+or SIGKILL relies on the subsequent helper start to restore the journaled hold.
+
+The executable and client compile locally. Signed XPC exchange, native service
+registration and privileged lifecycle tests have not yet been performed.
+
 ## Power management
 
 Public IOKit assertions cover idle sleep prevention. Public IOPowerSources APIs
@@ -83,8 +125,8 @@ An exhausted cleanup keeps the ownership record and reports a blocked state.
 Only explicit cleanup retry can reset that budget. Fault recovery never grants
 activation permission. The persistent journal implementation and helper transport
 are separate from the controller; controller tests substitute both OS and disk.
-The concrete journal is now tested with real temporary files; helper transport
-remains a separate delivery step.
+The concrete journal is tested with real temporary files; signed helper transport
+still requires its dedicated Mac integration gate.
 
 `SecureOwnershipJournal` uses the fixed production directory
 `/Library/Application Support/Limitless`, owned by root with mode 0700. It opens
@@ -117,4 +159,5 @@ No persistent database, telemetry SDK, network service, web UI or custom UI fram
 - [Inspected powerd implementation](https://github.com/apple-oss-distributions/PowerManagement/blob/d415e45501842834a280930c3eed9186544a67f0/pmconfigd/PMSettings.m#L1341): propagation of the effective Boolean to the root domain.
 - [Apple idle versus forced sleep](https://developer.apple.com/library/archive/qa/qa1340/_index.html).
 - [SMAppService](https://developer.apple.com/documentation/servicemanagement/smappservice).
+- [NSXPCConnection code-signing requirements](https://developer.apple.com/documentation/foundation/nsxpcconnection/setcodesigningrequirement(_:)).
 - [Sleepless 1.2.7](https://github.com/Aboudjem/Sleepless/tree/2a690e50724ffc17440ef58e5e0c9f69c82452fa): behavior studied, no source or assets incorporated.
