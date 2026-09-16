@@ -10,7 +10,7 @@ struct LimitlessCLI {
             let options = try CommandOptions.parse(Array(CommandLine.arguments.dropFirst()))
             switch options {
             case .help: print(help)
-            case .version: print("Limitless 0.1.0-dev")
+            case .version: print("Limitless \(LimitlessIdentity.version)")
             case .status(let json):
                 let client = try ServiceClient(role: .task)
                 do {
