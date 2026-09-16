@@ -30,6 +30,14 @@ An unfinished child remains tracked, blocking another write. A successful comman
 gets up to one second for powerd propagation, then requires a matching observation.
 These synchronous operations run only on the helper's serial worker.
 
+`PowerSourceReader` uses only public IOPowerSources calls and keys. A failed list
+or description read is unavailable; a successful empty list on AC identifies a
+machine without an internal battery. Once an internal battery has been seen,
+its disappearance becomes unavailable telemetry. Missing, ambiguous or incorrectly
+typed fields never imply a healthy battery. Signed electrical current detects
+discharge while an adapter is connected. UPS-provided power and multiple internal
+batteries are conservatively unqualified in the initial hardware scope.
+
 `-b` allows battery only, `-c` AC only, `-a` both. Mismatched power temporarily
 suspends an otherwise valid session, without extending its deadline. Returning to
 an allowed source can resume it. Unknown source suspends rather than assuming AC.

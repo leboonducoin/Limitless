@@ -11,6 +11,8 @@
   and simulated failure coverage; isolated IOKit/pmset backend and continuous clock.
 - Protected, durable ownership journal with exclusive locking and filesystem
   boundary tests, including ACLs and link attacks.
+- Public IOPowerSources reader with conservative missing-data handling and an
+  opt-in read-only Mac integration check.
 
 ## Unreleased
 

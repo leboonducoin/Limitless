@@ -67,6 +67,8 @@ build/
 .swiftpm/
 graphify-out/
 .DS_Store
+*.profraw
+*.profdata
 .env*
 *.p12
 *.p8
