@@ -11,7 +11,7 @@ exists. No public release or push is authorized by this document.
 | R01 | Native Swift menu-bar app, SwiftUI/AppKit | Native build, UI inspection and keyboard/VoiceOver exercise | Open |
 | R02 | Keep awake, including lid closed without an external display when supported | Backend tests and real MacBook lid-closed runs, version/model recorded | Open |
 | R03 | Exclusive `-b`, `-c`, `-a` policies, enforced on source transitions | Policy/parser tests and physical AC/battery transitions | Core policy tested; parser and hardware open |
-| R04 | Observe applied state and recover in a controlled way | Backend failure, unknown state, bounded retry and ownership tests | Open |
+| R04 | Observe applied state and recover in a controlled way | Backend failure, unknown state, bounded retry and ownership tests | Simulated controller tested; privileged integration open |
 | R05 | Battery floor 0–50, step 1; 0 disables custom protection with warning | Boundary/serialization tests and UI/CLI warning checks | Core boundaries tested; UI/CLI open |
 | R06 | Presets, custom duration, date/time, command/process completion, unlimited | Clock, expiry, process and UI tests; long-duration device check | Clock and expiry tested; adapters/UI open |
 | R07 | Launch at login independent of activation | SMAppService integration and fresh-login inactive-state evidence | Open |
@@ -21,7 +21,7 @@ exists. No public release or push is authorized by this document.
 | R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Open |
 | R12 | Public-ready MIT repository with docs, tests, complete CI and security | Executed checks and release checklist, exact source/artifact linkage | Open |
 | R13 | All authored executable code Swift; no Node/Python product runtime | Source and packaged-artifact inventory | Open |
-| R14 | Public Apple APIs; isolate undocumented mechanism | Call-site audit, entitlement inspection and backend tests | Open |
+| R14 | Public Apple APIs; isolate undocumented mechanism | Call-site audit, entitlement inspection and backend tests | Backend isolated; signed artifact audit open |
 | R15 | Frequent local commits, maintained AGENTS.md, RTK for terminal work | Git history and maintained contributor instructions | In progress |
 
 ## Delivery sequence

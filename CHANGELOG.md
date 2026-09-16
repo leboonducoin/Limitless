@@ -7,6 +7,8 @@
 - Swift Testing coverage and a Swift maintenance tool for local validation.
 - Pinned CI/security workflows for builds, sanitizers, CodeQL, secrets, dependency
   review, workflow lint and workflow security analysis.
+- Observed-state controller with owned restoration, bounded recovery, fault latching
+  and simulated failure coverage; isolated IOKit/pmset backend and continuous clock.
 
 ## Unreleased
 

@@ -18,6 +18,18 @@ provide power information. ServiceManagement handles helper registration and log
 The undocumented global `pmset disablesleep` mechanism is confined to one backend;
 its reads, writes and compatibility interpretation must not leak into UI code.
 
+`MacSleepBackend` reads `SleepDisabled` on `IOPMrootDomain` through the public
+IORegistry API. This property name is undocumented and is isolated with `pmset`.
+Apple's powerd source writes the effective Boolean there; `pmset -g` can omit its
+persisted preference when unset. Absence, a non-Boolean value or read failure is
+unknown, never false. This proves only the reported flag, not physical lid support.
+The backend uses the fixed executable `/usr/bin/pmset` and only `disablesleep 0/1`.
+It clears inherited process environment and discards command output. The process
+has a two-second execution timeout; termination gets up to another half second.
+An unfinished child remains tracked, blocking another write. A successful command
+gets up to one second for powerd propagation, then requires a matching observation.
+These synchronous operations run only on the helper's serial worker.
+
 `-b` allows battery only, `-c` AC only, `-a` both. Mismatched power temporarily
 suspends an otherwise valid session, without extending its deadline. Returning to
 an allowed source can resume it. Unknown source suspends rather than assuming AC.
@@ -56,6 +68,19 @@ before accepting new activation; do not recreate old sessions. A global flag has
 no provenance, so concurrent writers cannot be perfectly arbitrated. An unavailable
 helper/kernel can prevent timely restoration; report the failure and recovery path.
 
+The controller permits at most three repairs per user rearm, with bounded backoff;
+successful repairs do not replenish that allowance. Cleanup has its own three
+attempts and backoff, independent of activation backoff, so stop starts immediately.
+An exhausted cleanup keeps the ownership record and reports a blocked state.
+Only explicit cleanup retry can reset that budget. Fault recovery never grants
+activation permission. The persistent journal implementation and helper transport
+are separate delivery steps; current controller tests substitute both OS and disk.
+
+Restoration of an owned hold writes `disablesleep 0`; it does not rewrite ordinary
+energy preferences or attempt to undo a foreign hold. On a Mac with an initially
+unset preference, this leaves an explicit false value with the default sleep
+behavior. The undocumented mechanism has no supported unset command.
+
 ## UI and development baseline
 
 Initial target: macOS 26+, Apple Silicon, Swift 6 language mode. Use an Xcode/Swift
@@ -66,6 +91,7 @@ No persistent database, telemetry SDK, network service, web UI or custom UI fram
 ## Sources examined
 
 - [Apple pmset implementation](https://github.com/apple-oss-distributions/PowerManagement/blob/main/pmset/pmset.m): `disablesleep` uses system-wide settings rather than the selected source mask.
+- [Inspected powerd implementation](https://github.com/apple-oss-distributions/PowerManagement/blob/d415e45501842834a280930c3eed9186544a67f0/pmconfigd/PMSettings.m#L1341): propagation of the effective Boolean to the root domain.
 - [Apple idle versus forced sleep](https://developer.apple.com/library/archive/qa/qa1340/_index.html).
 - [SMAppService](https://developer.apple.com/documentation/servicemanagement/smappservice).
 - [Sleepless 1.2.7](https://github.com/Aboudjem/Sleepless/tree/2a690e50724ffc17440ef58e5e0c9f69c82452fa): behavior studied, no source or assets incorporated.
