@@ -73,6 +73,11 @@ Never invent tool commands or force an installation rejected by security control
 - Run the repository's complete local check command, when available, after a
   substantive change. Also run checks specific to a changed security/build boundary.
   Do not claim a workflow passed unless its actual execution was observed.
+- Current Swift checks: `rtk proxy swift Tools/ProjectTool.swift check`, plus
+  `asan` and `tsan` for instrumented runs. See `docs/testing.md` for a separate
+  scratch path on a synced Desktop and the local security-tool evidence.
+- Validate workflow edits with actionlint and zizmor; scan staged changes and Git
+  history with Gitleaks. Never silently skip an unavailable security gate.
 - Keep `docs/testing.md` accurate about executable commands, results, unavailable
   tools, and separate Mac-only/manual gates. No invented coverage percentages.
 - UI work requires native visual inspection, keyboard and accessibility checks and

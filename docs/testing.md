@@ -41,6 +41,34 @@ signing or strip security attributes to work around an installation failure.
 CLT also emits linker warnings for absent Xcode-style search directories; these
 are recorded environment warnings, not evidence that full Xcode was tested.
 
+## CI and security
+
+The checked-in workflows run on pull requests, pushes to `main`, and manual
+dispatch. Security also runs weekly. Actions are pinned to verified full commit
+IDs; checkout credentials are not persisted. Jobs have individual minimum
+permissions and timeouts. No job installs the helper or changes power settings.
+
+| Check | Local evidence, 2026-09-16 | GitHub execution |
+| --- | --- | --- |
+| Release build, strict format, Swift tests | Passed | Configured; not run |
+| Address / Thread Sanitizer, separate builds | Both passed; runtime libraries verified in binaries | Configured; not run |
+| actionlint 1.7.12 | Passed | Configured; not run |
+| zizmor 1.30.1, pedantic | Offline audit passed | Online audit configured; not run |
+| Gitleaks 8.30.1 | Full local history and staged core passed | Full fetched history configured; not run |
+| CodeQL Swift and GitHub Actions, extended security | Not available locally with this CLT toolchain | Configured; not run |
+| Dependency review and Dependabot | Configuration inspected | Requires GitHub execution/settings |
+
+Primary CI uses Xcode 26.2 on `macos-26`, within CodeQL's documented Swift
+compiler support. Go is a development-only runner dependency for pinned
+actionlint and the MIT Gitleaks scanner, not a Limitless product dependency.
+The separately licensed Gitleaks GitHub Action is not used. zizmor's action and
+scanner version are pinned. Security-tool versions embedded in `run` commands
+need manual review when updating; Dependabot manages action references.
+
+No push has occurred, so no remote CI result is claimed. UI tests, authenticated
+XPC checks, release signing/notarization and artifact provenance checks remain
+release gates to add and execute as those components become available.
+
 ## Required validation layers
 
 1. Swift Testing for deterministic core policy, transport validation and time.
