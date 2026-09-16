@@ -21,8 +21,9 @@ No Node or Python runtime will be required to use it.
 ## Development
 
 The implemented components include the Swift policy/session core, power adapters,
-protected ownership journal, authenticated helper, and command/process CLI.
-The native app, installation and signed integration are still in development.
+protected ownership journal, authenticated helper, command/process CLI and native
+menu-bar interface. The interface has read-only development previews; installation,
+signed integration and physical qualification remain open.
 Build and test with Xcode 26.2 or newer using
 `rtk proxy swift Tools/ProjectTool.swift check`.
 See [testing](docs/testing.md) for sanitizer commands and the CLT/synced-folder
@@ -33,6 +34,7 @@ notes. There are no Swift package dependencies.
 - [Requirements and acceptance tracking](docs/requirements.md)
 - [Architecture and behavior](docs/architecture.md)
 - [CLI and AI integration](docs/cli.md)
+- [Native interface contract](docs/design.md)
 - [Security policy](SECURITY.md)
 - [Testing and evidence](docs/testing.md)
 - [Contributing](CONTRIBUTING.md)

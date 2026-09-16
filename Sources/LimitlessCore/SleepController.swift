@@ -33,6 +33,15 @@ public struct SleepReport: Equatable, Codable, Sendable {
     public let observed: SleepObservation
     public let ownsGlobalHold: Bool
     public let fault: SleepFault?
+
+    public init(
+        phase: SleepPhase, observed: SleepObservation, ownsGlobalHold: Bool, fault: SleepFault?
+    ) {
+        self.phase = phase
+        self.observed = observed
+        self.ownsGlobalHold = ownsGlobalHold
+        self.fault = fault
+    }
 }
 
 /// Owns decisions, not OS handles. Access and all backend calls must be serialized.

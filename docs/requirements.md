@@ -8,14 +8,14 @@ exists. No public release or push is authorized by this document.
 
 | ID | Requirement | Required evidence | Status |
 | --- | --- | --- | --- |
-| R01 | Native Swift menu-bar app, SwiftUI/AppKit | Native build, UI inspection and keyboard/VoiceOver exercise | Open |
+| R01 | Native Swift menu-bar app, SwiftUI/AppKit | Native build, UI inspection and keyboard/VoiceOver exercise | Builds and preview inspected; complete keyboard/VoiceOver open |
 | R02 | Keep awake, including lid closed without an external display when supported | Backend tests and real MacBook lid-closed runs, version/model recorded | Open |
 | R03 | Exclusive `-b`, `-c`, `-a` policies, enforced on source transitions | Policy/parser tests and physical AC/battery transitions | Core policy and CLI parser tested; hardware open |
 | R04 | Observe applied state and recover in a controlled way | Backend failure, unknown state, bounded retry and ownership tests | Simulated controller tested; privileged integration open |
-| R05 | Battery floor 0–50, step 1; 0 disables custom protection with warning | Boundary/serialization tests and UI/CLI warning checks | Core boundaries tested; UI/CLI open |
-| R06 | Presets, custom duration, date/time, command/process completion, unlimited | Clock, expiry, process and UI tests; long-duration device check | Clock, CLI duration/date and process adapters tested; UI/integration open |
-| R07 | Launch at login independent of activation | SMAppService integration and fresh-login inactive-state evidence | Open |
-| R08 | Restrained Liquid Glass UI, original icon, discreet motion | Light/dark, contrast, reduced-motion/transparency and visual evidence | Open |
+| R05 | Battery floor 0–50, step 1; 0 disables custom protection with warning | Boundary/serialization tests and UI/CLI warning checks | Core boundaries and UI warning/step tested; signed CLI warning gate open |
+| R06 | Presets, custom duration, date/time, command/process completion, unlimited | Clock, expiry, process and UI tests; long-duration device check | Core/CLI tests and UI stop controls inspected; signed integration open |
+| R07 | Launch at login independent of activation | SMAppService integration and fresh-login inactive-state evidence | Independent native control implemented; real registration/login open |
+| R08 | Restrained Liquid Glass UI, original icon, discreet motion | Light/dark, contrast, reduced-motion/transparency and visual evidence | Original Swift artwork and native light/dark previews inspected; accessibility gates open |
 | R09 | Swift CLI and AI skill track actual work, release all completed tasks, obey user limits | Concurrent tasks, interruptions, stale owners, PID reuse and policy-boundary tests | CLI, process adapter and leases tested; skill validated; signed end-to-end open |
 | R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Open |
 | R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Helper and signature constraints compile; signed approval/exchange open |

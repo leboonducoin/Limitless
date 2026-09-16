@@ -160,6 +160,21 @@ version supported by CodeQL for primary CI, with newer toolchains as compatibili
 checks. App state belongs on MainActor; blocking subprocess work does not.
 No persistent database, telemetry SDK, network service, web UI or custom UI framework.
 
+The SwiftUI `MenuBarExtra` uses an observable MainActor model and separate native
+settings. Read-only status requests renew the app's lease every five seconds even
+when the panel is closed. A process-bound manual session checks the same PID/UID/
+start-time adapter as the CLI every second. Losing a connection clears that watcher
+and never recreates a manual demand. A stale reading is visibly unavailable;
+button actions are not reported as applied until the service returns its state.
+
+The app persists only validated power/battery/duration preferences. Automation and
+active demands are never persisted. Setting changes require an explicit Apply;
+automation changes use the currently applied policy. Helper registration and login
+registration have separate native controls. Quit requests an owned manual stop and
+warns if restoration is unconfirmed; independently authorized CLI work can remain.
+Debug presentation fixtures disable all external mutations and preference writes.
+See [the interface contract](design.md) for visual and accessibility decisions.
+
 ## Sources examined
 
 - [Apple pmset implementation](https://github.com/apple-oss-distributions/PowerManagement/blob/main/pmset/pmset.m): `disablesleep` uses system-wide settings rather than the selected source mask.

@@ -6,11 +6,11 @@
 SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
-The two libraries, helper and CLI executables pass strict swift-format and a Release
-build. There are 69 default Swift Testing tests (43 core, 23 system, 3 CLI, including
+The two libraries, app, helper and CLI executables pass strict swift-format and a Release
+build. There are 72 default Swift Testing tests (43 core, 23 system, 3 CLI, 3 app, including
 parameterized boundary cases).
 One additional opt-in, read-only Mac integration test also passes on the inspected
-MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 70 tests
+MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 73 tests
 with that opt-in enabled.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
@@ -31,9 +31,12 @@ rejection, PID/start-time identity and owner changes. The built CLI's `--help`
 works; `run -- /usr/bin/printf should-not-run` returned 69 without launching that
 command because the development signature does not satisfy the production identity.
 The installed skill-creator validator accepted `skills/limitless/SKILL.md`.
+App tests reject misleading active/inactive presentation, invalid saved limits and
+preview attempts to control the helper, automation or login items.
 Tests never call privileged power writes or create real sleep assertions. Live
-signed XPC, the complete CLI/service lifecycle, root-path journal integration,
-UI and physical sleep remain untested.
+signed XPC, the complete CLI/service lifecycle, root-path journal integration and
+physical sleep remain untested. Native presentation inspection is recorded below;
+it does not qualify privileged controls or physical power behavior.
 
 Read-only inspection outside the tool sandbox found an absent `SleepDisabled`
 line in `pmset -g`, while IORegistry reported a Boolean false. The sandboxed pmset
@@ -102,9 +105,48 @@ The separately licensed Gitleaks GitHub Action is not used. zizmor's action and
 scanner version are pinned. Security-tool versions embedded in `run` commands
 need manual review when updating; Dependabot manages action references.
 
-No push has occurred, so no remote CI result is claimed. UI tests, authenticated
+No push has occurred, so no remote CI result is claimed. Native interaction tests, authenticated
 XPC checks, release signing/notarization and artifact provenance checks remain
 release gates to add and execute as those components become available.
+
+## Native interface inspection
+
+Read-only Debug previews were inspected through native accessibility automation on
+the Mac above. Dark active state and light inactive state rendered without panel
+overflow; a process-help truncation was found and corrected. The light inspection
+used an app-local `NSAppearance.accessibilityHighContrastAqua` override, without
+changing the Mac's appearance or accessibility preferences. This is not proof that
+every system accessibility preference has been exercised.
+
+The stop menu exposes unlimited time, all 13 presets, custom duration with units,
+native date/time entry and process identity input. Settings expose independent
+power limits, automation consent and login controls. Native scrolling reaches the
+startup explanation. The battery control exposes its label/value to accessibility;
+0% displays the warning, and one increment gives 1%. Tab focus and the Up arrow
+were exercised on the stepper (20% to 21%). Preview controls cannot apply policy,
+enable automation, register the helper or change login items.
+
+Command-comma and Command-W did not produce an observable action through this
+automation session; keep shortcut verification open. VoiceOver speech, full
+keyboard-only use, actual menu-bar popover placement, Reduce Motion and Reduce
+Transparency preferences remain manual qualification gates.
+
+Runtime-log review found Apple AppIntents `com.apple.linkd.autoShortcut` connection
+errors (4097), BaseBoard task-port messages and cache-file lookup messages during
+the development previews. No Limitless-originated error was identified in that
+sample. A GUI launch inside the command sandbox aborted; the authorized native
+preview outside that sandbox ran and exited normally. Recheck logs with the signed
+installed app; these observations are not a claim of an error-free production run.
+
+Motion review using the installed `review-animations` skill:
+
+| Before | After | Why |
+| --- | --- | --- |
+| No custom transitions, springs or looping animation | Retain native control/popover feedback and disable asynchronous layout animation | Frequent status refreshes must not move controls or delay keyboard feedback |
+
+**Approve the source-level motion scope.** Native reduced-motion behavior still
+requires the manual gate above. Ponytail complexity review: lean already; no extra
+UI framework, duplicated policy engine or animation layer to remove.
 
 ## Required validation layers
 

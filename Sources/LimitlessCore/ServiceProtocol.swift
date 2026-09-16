@@ -45,6 +45,19 @@ public struct SessionSummary: Codable, Equatable, Sendable, Identifiable {
     public let remainingSeconds: TimeInterval?
     public let suspension: SuspensionReason?
     public let belongsToClient: Bool
+
+    public init(
+        id: UUID, kind: SessionKind, end: SessionEnd, startedAt: Date,
+        remainingSeconds: TimeInterval?, suspension: SuspensionReason?, belongsToClient: Bool
+    ) {
+        self.id = id
+        self.kind = kind
+        self.end = end
+        self.startedAt = startedAt
+        self.remainingSeconds = remainingSeconds
+        self.suspension = suspension
+        self.belongsToClient = belongsToClient
+    }
 }
 
 public struct ServiceStatus: Codable, Equatable, Sendable {

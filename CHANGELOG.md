@@ -18,6 +18,8 @@
   revocation. Signed integration and registration remain release gates.
 - Swift CLI for real foreground commands and identity-bound PID observation, with
   exclusive option parsing, owned completion and a distributable AI skill.
+- Native SwiftUI menu-bar app, independent settings/login controls, original Swift
+  icon artwork, observed-state presentation and read-only development previews.
 
 ## Unreleased
 
