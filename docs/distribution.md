@@ -66,7 +66,9 @@ protected CI secrets, outside Git. No artifact upload or release is authorized b
 this document. A source hash, version and signed artifact digest must agree before
 publication. Do not publish the ad-hoc bundle or invent a downloadable release URL.
 
-The Homebrew cask and complete removal flow remain to be implemented and exercised.
+The Homebrew cask remains to be generated from a real signed release. The native
+removal flow is implemented, with session/filesystem tests; its signed
+ServiceManagement lifecycle has not been exercised.
 Installation must preserve macOS approval; a cask must not run `sudo pmset`, install
 passwordless sudoers rules or disable quarantine. Native first launch separately
 requests helper approval and offers launch at login.
@@ -77,3 +79,42 @@ preferences/skill. An unresolved ownership journal must stop destructive removal
 Never promise that deleting an app or rebooting clears the undocumented global
 flag. Active-session uninstall, upgrade, approval rejection and interrupted cleanup
 remain required tests before a Homebrew release is usable.
+
+## Prepare for removal
+
+In Settings, **Prepare for removal** ends all sessions and disables automation.
+The helper blocks new activation, policy changes and rearming for the rest of its
+process lifetime, including across reconnects and console-user changes. Running
+commands/processes are never terminated by this operation.
+
+Only a confirmed allowed sleep flag, no owned hold, no remaining idle assertion
+and no sessions permit the helper to remove its empty state directory. It checks
+the held directory and lock against their original filesystem identities. Unknown
+files, a still-owned/corrupt journal, changed permissions or replaced links block
+cleanup. There is no recursive root deletion. The retired journal cannot accept
+new writes. A partial failure can be retried without recreating a demand.
+
+The app then uses asynchronous `SMAppService.unregister()` for the helper and
+login item, checks their registration states and verifies that the fixed state
+directory is absent. Only then can it report preparation complete. A failed or
+unreadable check leaves an error. Finder cannot be prevented from deleting a file;
+keep the app installed until preparation succeeds. [Apple unregister API](https://developer.apple.com/documentation/servicemanagement/smappservice/unregister(completionhandler:)).
+
+The signed app provides the same operation for a future Homebrew uninstall hook,
+run as the console user, without `sudo`:
+
+```sh
+rtk proxy /Applications/Limitless.app/Contents/MacOS/LimitlessApp --prepare-uninstall
+```
+
+It exits 0 only on confirmed completion, otherwise 1 (64 for invalid arguments).
+An ad-hoc development app refuses it. `--erase-preferences` explicitly removes the
+current user's saved Limitless preferences after successful cleanup; the default
+preserves them. User-created skill copies and external links are not silently deleted.
+
+The cask must quit the app before invoking this hook with `must_succeed: true`,
+then let Homebrew remove its app and CLI link. Optional `zap` handles this user's
+preferences/cache/saved-window state. Do not use blanket deletion rules for the
+protected journal or ignore a failed hook. Install, upgrade/reinstall and uninstall
+remain signed-Mac tests, including approval loss and a helper restart between
+cleanup and unregistration. [Homebrew cask rules](https://docs.brew.sh/Cask-Cookbook#stanza-uninstall).

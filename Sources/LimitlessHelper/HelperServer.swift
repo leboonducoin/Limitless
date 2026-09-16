@@ -160,7 +160,8 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     }
 
     private static func encode(_ reply: ServiceReply) -> Data {
-        (try? ServiceWire.encode(reply)) ?? Data(#"{"version":1,"error":"unavailable"}"#.utf8)
+        (try? ServiceWire.encode(reply))
+            ?? Data("{\"version\":\(ServiceWire.version),\"error\":\"unavailable\"}".utf8)
     }
 }
 

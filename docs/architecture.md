@@ -29,7 +29,7 @@ are rejected. Switching users or logging out drops all demands and resets policy
 to safe defaults, including disabled automation. Reconnecting never restores a
 previous session or its authorization.
 
-Requests are versioned, bounded JSON inside an XPC `Data` message. There are no
+Requests use protocol version 2 and bounded JSON inside an XPC `Data` message. There are no
 command, executable or path fields. The control endpoint can set policy, stop all,
 explicitly rearm or retry cleanup. The task endpoint can only request a constrained
 session, inspect state, renew liveness and release its own session. Owner UUIDs
@@ -174,6 +174,22 @@ registration have separate native controls. Quit requests an owned manual stop a
 warns if restoration is unconfirmed; independently authorized CLI work can remain.
 Debug presentation fixtures disable all external mutations and preference writes.
 See [the interface contract](design.md) for visual and accessibility decisions.
+
+## Removal
+
+The application-only `prepareRemoval` operation revokes demands and seals the
+session service against new activation, rearm or configuration. A shared core
+predicate requires an explicit removal state, no sessions/owned hold, an observed
+allowed flag and an inactive/blocked controller. The helper additionally verifies
+that its idle assertion is absent before deleting the unowned journal directory.
+Cleanup uses held directory descriptors, inode/device comparisons and nonrecursive
+unlink operations. Unknown contents or ownership retain the directory. Once
+cleanup begins, that journal instance permanently refuses new ownership writes.
+
+The app unregisters both native services only after acknowledged cleanup, then
+checks registration and absence again. The task endpoint has no removal privilege.
+No executable, path or password crosses this boundary. See [distribution](distribution.md)
+for the app hook, failure behavior and signed integration gates.
 
 ## Sources examined
 

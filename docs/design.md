@@ -53,6 +53,12 @@ without a trusted signing identity expose the UI but disable privileged actions.
 Debug previews are clearly labeled and cannot call the helper, register services,
 change login items or persist power policy.
 
+Removal uses a native confirmation, separate from ordinary Stop. It states that
+all sessions end while commands continue. An explicit preference-erasure option is
+off by default. The preview may open the confirmation, but cannot execute its
+destructive action. Successful preparation leaves clear instructions to quit and
+remove the app; a failure keeps retry guidance and never claims removal succeeded.
+
 ## Design references and validation
 
 The installed Emil Kowalski and apple-design skills informed feedback, hierarchy,

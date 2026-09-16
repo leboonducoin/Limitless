@@ -22,6 +22,12 @@ current console UID. Automation starts disabled after service startup or user
 switch; a task cannot configure policy, rearm recovery or release another owner.
 Ad-hoc builds fail closed. No test-only authentication bypass is shipped.
 
+Removal is application-only and first revokes all demands. A protected ownership
+record is never deleted to bypass a failed restoration. Journal cleanup refuses
+unknown contents and replaced directories/locks, uses no recursive deletion, and
+retires the writer. Service unregistration and final absence checks must succeed
+before a packaging hook reports success. The unprivileged CLI cannot request removal.
+
 The lid-closed mechanism uses an undocumented global OS setting. A successful read
 does not establish hardware compatibility, continued execution, or thermal safety.
 Another privileged tool can change the same state. Helper or OS failure may prevent

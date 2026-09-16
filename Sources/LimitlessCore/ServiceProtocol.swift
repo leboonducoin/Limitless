@@ -14,10 +14,11 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
     case heartbeat
     case rearm
     case retryRestoration
+    case prepareRemoval
 
     public var requiresApplication: Bool {
         switch self {
-        case .configure, .stopAll, .rearm, .retryRestoration: true
+        case .configure, .stopAll, .rearm, .retryRestoration, .prepareRemoval: true
         case .status, .start, .stop, .heartbeat: false
         }
     }
@@ -25,7 +26,11 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
 
 public enum ServiceError: String, Error, Codable, Sendable {
     case invalidMessage, incompatibleVersion, unauthorized, ownerExpired, capacityReached
-    case sessionRejected, restorationRequired, unavailable
+    case sessionRejected, restorationRequired, removalInProgress, unavailable
+}
+
+public enum RemovalState: String, Codable, Equatable, Sendable {
+    case none, preparing, ready
 }
 
 public struct ServiceRequest: Codable, Sendable {
@@ -66,16 +71,23 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
     public let sleep: SleepReport
     public let sessions: [SessionSummary]
     public let sampledAt: Date
+    public let removal: RemovalState
+
+    public var canRemoveService: Bool {
+        removal != .none && sessions.isEmpty && !sleep.ownsGlobalHold
+            && sleep.observed == .allowed && (sleep.phase == .inactive || sleep.phase == .blocked)
+    }
 
     public init(
         policy: UserPolicy, power: PowerSnapshot, sleep: SleepReport,
-        sessions: [SessionSummary], sampledAt: Date
+        sessions: [SessionSummary], sampledAt: Date, removal: RemovalState = .none
     ) {
         self.policy = policy
         self.power = power
         self.sleep = sleep
         self.sessions = sessions
         self.sampledAt = sampledAt
+        self.removal = removal
     }
 }
 
@@ -97,7 +109,7 @@ public struct ServiceReply: Codable, Sendable {
 
 /// NSData is the only XPC payload type; decoding and semantic validation happen in the helper.
 public enum ServiceWire {
-    public static let version = 1
+    public static let version = 2
     public static let maximumMessageBytes = 131_072
 
     public static func decodeRequest(_ data: Data) throws -> ServiceRequest {

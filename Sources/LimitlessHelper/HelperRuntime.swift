@@ -38,7 +38,8 @@ final class HelperRuntime {
         return ServiceStatus(
             policy: sessions.registry.policy, power: power, sleep: report,
             sessions: sessions.summaries(for: owner, evaluation: evaluation, now: now),
-            sampledAt: now.wall)
+            sampledAt: now.wall,
+            removal: sessions.isRemoving ? (journal.isRemoved ? .ready : .preparing) : .none)
     }
 
     func takeExpiredOwners() -> Set<UUID> {
@@ -57,8 +58,14 @@ final class HelperRuntime {
                 request.operation, owner: owner, now: SystemClock.now())
             switch request.operation {
             case .rearm: try controller.rearm()
-            case .retryRestoration: controller.retryRestoration()
+            case .retryRestoration, .prepareRemoval: controller.retryRestoration()
             default: break
+            }
+            if request.operation == .prepareRemoval {
+                let status = try reconcile(owner: owner)
+                guard status.canRemoveService, !backend.hasIdleAssertion
+                else { throw ServiceError.restorationRequired }
+                try journal.removeUnownedDirectory()
             }
             return ServiceReply(status: try reconcile(owner: owner), startedSession: started)
         } catch {

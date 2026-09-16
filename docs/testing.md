@@ -7,10 +7,10 @@ SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
 The two libraries, app, helper and CLI executables pass strict swift-format and a Release
-build. There are 72 default Swift Testing tests (43 core, 23 system, 3 CLI, 3 app, including
+build. There are 80 default Swift Testing tests (45 core, 29 system, 3 CLI, 3 app, including
 parameterized boundary cases).
 One additional opt-in, read-only Mac integration test also passes on the inspected
-MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 73 tests
+MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 81 tests
 with that opt-in enabled.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
@@ -18,6 +18,12 @@ System tests cover strict Boolean decoding, the real continuous clock and bounde
 unprivileged `true`/`false`/`sleep` subprocesses. Journal tests use real temporary
 files to check reopening, exclusive ownership, atomic cleanup, malformed data,
 permissions, ACLs, symlinks, hard links and FIFOs. Coverage profiles are generated.
+Removal tests cover active/corrupt ownership, unexpected files, replaced locks and
+directories, dangling links, successful empty cleanup and rejection of retired
+journal writes. A real permission failure after lock removal verifies that the
+journal remains sealed and a later cleanup retry succeeds (unprivileged test only).
+Core tests verify that removal revokes all work, survives console
+changes, denies task-endpoint removal, and requires a confirmed restored state.
 Power-source tests cover scaling, AC discharge, missing or malformed fields and
 loss of a previously detected battery.
 Service tests cover role separation, connection capacity, console-user changes,
@@ -32,7 +38,7 @@ works; `run -- /usr/bin/printf should-not-run` returned 69 without launching tha
 command because the development signature does not satisfy the production identity.
 The installed skill-creator validator accepted `skills/limitless/SKILL.md`.
 App tests reject misleading active/inactive presentation, invalid saved limits and
-preview attempts to control the helper, automation or login items.
+preview attempts to control the helper, automation, login items or removal.
 Tests never call privileged power writes or create real sleep assertions. Live
 signed XPC, the complete CLI/service lifecycle, root-path journal integration and
 physical sleep remain untested. Native presentation inspection is recorded below;
@@ -111,6 +117,8 @@ MIT license and AI skill. Its packaged CLI prints help successfully and rejects
 `run -- /usr/bin/printf should-not-run` with exit 69 before launching that command:
 an ad-hoc artifact cannot impersonate the signed production identity. No helper
 was installed or executed for this packaging check.
+The app's `--prepare-uninstall` hook also returned 1 with the expected signed-build
+requirement before any removal action. Actual service unregistration remains untested.
 
 No push has occurred, so no remote CI result is claimed. Native interaction tests, authenticated
 XPC checks, release signing/notarization and artifact provenance checks remain
@@ -132,6 +140,10 @@ startup explanation. The battery control exposes its label/value to accessibilit
 0% displays the warning, and one increment gives 1%. Tab focus and the Up arrow
 were exercised on the stepper (20% to 21%). Preview controls cannot apply policy,
 enable automation, register the helper or change login items.
+The removal section and native confirmation were inspected in the read-only
+preview. The destructive confirmation is disabled there; opening and dismissing
+the dialogue changes only presentation state. No real removal was performed.
+The final dialog's explicit Cancel action was also exercised with Escape.
 
 Command-comma and Command-W did not produce an observable action through this
 automation session; keep shortcut verification open. VoiceOver speech, full

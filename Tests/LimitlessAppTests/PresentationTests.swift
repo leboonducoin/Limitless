@@ -50,6 +50,8 @@ private func status(
         await model.setAutomation(false)
         await model.registerHelper()
         await model.setLaunchAtLogin(true)
+        #expect(await model.removeIntegration(erasePreferences: true) == false)
+        #expect(!model.removalComplete)
         #expect(model.status == before)
         #expect(model.loginStatus == .notRegistered)
     }

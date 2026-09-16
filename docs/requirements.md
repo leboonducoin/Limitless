@@ -17,7 +17,7 @@ exists. No public release or push is authorized by this document.
 | R07 | Launch at login independent of activation | SMAppService integration and fresh-login inactive-state evidence | Independent native control implemented; real registration/login open |
 | R08 | Restrained Liquid Glass UI, original icon, discreet motion | Light/dark, contrast, reduced-motion/transparency and visual evidence | Original Swift artwork and native light/dark previews inspected; accessibility gates open |
 | R09 | Swift CLI and AI skill track actual work, release all completed tasks, obey user limits | Concurrent tasks, interruptions, stale owners, PID reuse and policy-boundary tests | CLI, process adapter and leases tested; skill validated; signed end-to-end open |
-| R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Open |
+| R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Guarded native removal and filesystem/session tests implemented; signed lifecycle and Homebrew open |
 | R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Helper and signature constraints compile; signed approval/exchange open |
 | R12 | Public-ready MIT repository with docs, tests, complete CI and security | Executed checks and release checklist, exact source/artifact linkage | Open |
 | R13 | All authored executable code Swift; no Node/Python product runtime | Source and packaged-artifact inventory | Source and local Debug/Release bundle inventoried; signed release audit open |

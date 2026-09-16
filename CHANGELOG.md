@@ -22,6 +22,9 @@
   icon artwork, observed-state presentation and read-only development previews.
 - Swift development-bundle builder with shared icon export, bundled service/CLI/
   skill, ad-hoc signature validation and CI/CodeQL coverage of packaging tools.
+- Application-only removal preparation with session revocation, confirmed-restoration
+  gates, nonrecursive protected-state cleanup, native service unregistration and a
+  signed app hook for packaging. Protocol version 2 rejects earlier clients.
 
 ## Unreleased
 
