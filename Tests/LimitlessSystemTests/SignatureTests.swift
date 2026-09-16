@@ -4,25 +4,40 @@ import Testing
 
 @testable import LimitlessSystem
 
-@Test func signingRequirementsPinIdentifierAndTeamAndRejectInjection() throws {
+@Test func signingRequirementsPinIdentifierAndCertificateAndRejectInjection() throws {
+    let fingerprint = "0123456789abcdef0123456789abcdef01234567"
     for identifier in [
         LimitlessIdentity.application, LimitlessIdentity.commandLine, LimitlessIdentity.helper,
     ] {
-        let requirement = try SignedIdentity.requirement(identifier: identifier, team: "A123456789")
+        let requirement = try SignedIdentity.requirement(
+            identifier: identifier, certificateFingerprint: fingerprint)
         var parsed: SecRequirement?
         #expect(
             SecRequirementCreateWithString(requirement as CFString, [], &parsed) == errSecSuccess)
-        #expect(requirement.contains("anchor apple generic"))
+        #expect(requirement.contains("certificate leaf = H\"\(fingerprint)\""))
         #expect(requirement.contains(identifier))
-        #expect(requirement.contains("A123456789"))
+        // Foundation also validates this language before any connection is activated.
+        let connection = NSXPCConnection(
+            machServiceName: "io.github.leboonducoin.Limitless.test-unregistered")
+        connection.setCodeSigningRequirement(requirement)
+        connection.invalidate()
     }
-    for team in ["", "A12345678", "a123456789", "A12345678\"", "A123456789 or true"] {
+    _ = try SignedIdentity.requirement(
+        identifier: LimitlessIdentity.application,
+        certificateFingerprint: fingerprint.uppercased())
+    for invalid in [
+        "", String(fingerprint.dropLast()), fingerprint + "0",
+        fingerprint + "\n", "g" + String(fingerprint.dropFirst()),
+        fingerprint + "\" or true",
+    ] {
         #expect(throws: SignatureError.invalidRequirement) {
-            try SignedIdentity.requirement(identifier: LimitlessIdentity.application, team: team)
+            try SignedIdentity.requirement(
+                identifier: LimitlessIdentity.application, certificateFingerprint: invalid)
         }
     }
     #expect(throws: SignatureError.invalidRequirement) {
-        try SignedIdentity.requirement(identifier: "arbitrary.identifier", team: "A123456789")
+        try SignedIdentity.requirement(
+            identifier: "arbitrary.identifier", certificateFingerprint: fingerprint)
     }
 }
 

@@ -28,8 +28,10 @@ Power-source tests cover scaling, AC discharge, missing or malformed fields and
 loss of a previously detected battery.
 Service tests cover role separation, connection capacity, console-user changes,
 expired leases, unextendable deadlines, transport bounds and malformed policy.
-Signature tests parse the exact requirements, reject injected team/identifier
-values, and confirm the test host cannot impersonate the production helper.
+Signature tests parse the exact certificate requirements with Security and set
+them on inactive Foundation XPC connections. They reject malformed/injected
+certificate fingerprints and identifiers, and confirm the ad-hoc test host cannot
+impersonate the production helper. This is not a successful cross-process exchange.
 CLI tests cover conflicting modes/stop conditions, malformed options, unbounded
 representable durations, timezone-bearing dates and unchanged argument arrays.
 Real unprivileged process tests verify exit codes, termination, duplicate launch
