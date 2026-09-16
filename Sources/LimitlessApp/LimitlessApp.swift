@@ -8,6 +8,17 @@ struct LimitlessApp: App {
 
     init() {
         guard geteuid() != 0 else { exit(1) }
+        if CommandLine.arguments.contains("--prepare-uninstall") {
+            let options = Array(CommandLine.arguments.dropFirst())
+            guard
+                options == ["--prepare-uninstall"]
+                    || options == ["--prepare-uninstall", "--erase-preferences"]
+            else {
+                FileHandle.standardError.write(
+                    Data("Usage: LimitlessApp --prepare-uninstall [--erase-preferences]\n".utf8))
+                exit(64)
+            }
+        }
     }
 
     var body: some Scene {
@@ -51,6 +62,17 @@ struct LimitlessApp: App {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         NSApp.applicationIconImage = BrandArt.appIcon(size: 256)
+        if CommandLine.arguments.contains("--prepare-uninstall") {
+            Task {
+                let success = await model.removeIntegration(
+                    erasePreferences: CommandLine.arguments.contains("--erase-preferences"))
+                let output = (model.message ?? "Removal was not confirmed.") + "\n"
+                (success ? FileHandle.standardOutput : FileHandle.standardError).write(
+                    Data(output.utf8))
+                exit(success ? 0 : 1)
+            }
+            return
+        }
         model.beginMonitoring()
         #if DEBUG
             if model.isPreview {

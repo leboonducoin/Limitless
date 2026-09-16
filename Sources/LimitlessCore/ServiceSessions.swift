@@ -7,6 +7,7 @@ public struct ServiceSessions: Sendable {
     public static let clientCapacity = 64
     public private(set) var registry: SessionRegistry
     public private(set) var consoleUser: UInt32?
+    public private(set) var isRemoving = false
     private struct Client: Sendable {
         let user: UInt32
         let role: ClientRole
@@ -63,6 +64,12 @@ public struct ServiceSessions: Sendable {
         guard !operation.requiresApplication || client.role == .application else {
             throw ServiceError.unauthorized
         }
+        if isRemoving {
+            switch operation {
+            case .configure, .start, .rearm: throw ServiceError.removalInProgress
+            case .status, .stop, .stopAll, .heartbeat, .retryRestoration, .prepareRemoval: break
+            }
+        }
         client.lastContact = now.continuous
         clients[owner] = client
         switch operation {
@@ -83,6 +90,9 @@ public struct ServiceSessions: Sendable {
         case .stop(let id):
             guard registry.stop(id, owner: owner) else { throw ServiceError.unauthorized }
         case .stopAll: try registry.stopAll()
+        case .prepareRemoval:
+            try registry.stopAll()
+            isRemoving = true
         case .status, .heartbeat, .rearm, .retryRestoration: break
         }
         return nil

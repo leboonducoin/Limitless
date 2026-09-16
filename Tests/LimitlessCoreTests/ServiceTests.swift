@@ -23,7 +23,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     let now = try serviceClock(0)
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
-        .stopAll, .rearm, .retryRestoration,
+        .stopAll, .rearm, .retryRestoration, .prepareRemoval,
     ] {
         #expect(throws: ServiceError.unauthorized) {
             try value.apply(operation, owner: task, now: now)
@@ -117,20 +117,79 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     for data in [
         Data(), Data("{}".utf8), Data(repeating: 32, count: ServiceWire.maximumMessageBytes + 1),
         Data(
-            #"{"version":1,"operation":{"configure":{"_0":{"mode":"all","batteryFloor":51,"allowsAutomation":true}}}}"#
+            #"{"version":2,"operation":{"configure":{"_0":{"mode":"all","batteryFloor":51,"allowsAutomation":true}}}}"#
                 .utf8),
     ] {
         #expect(throws: ServiceError.invalidMessage) { try ServiceWire.decodeRequest(data) }
     }
     #expect(throws: ServiceError.incompatibleVersion) {
-        try ServiceWire.decodeRequest(Data(#"{"version":2,"operation":{"status":{}}}"#.utf8))
+        try ServiceWire.decodeRequest(Data(#"{"version":1,"operation":{"status":{}}}"#.utf8))
     }
     for operation in [
         ServiceOperation.status, .heartbeat, .stop(UUID()), .rearm, .retryRestoration,
-        .stopAll, .configure(try UserPolicy()), .start(SessionRequest(end: .after(seconds: 60))),
+        .stopAll, .prepareRemoval, .configure(try UserPolicy()),
+        .start(SessionRequest(end: .after(seconds: 60))),
     ] {
         #expect(
             try ServiceWire.decodeRequest(ServiceWire.encode(ServiceRequest(operation))).operation
                 == operation)
     }
+}
+
+@Test func removalRevokesWorkAndCannotBeUndoneByAnotherClientOrConsoleChange() throws {
+    var (value, app, task) = try service()
+    let now = try serviceClock(0)
+    _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
+    _ = try value.apply(.start(SessionRequest()), owner: task, now: now)
+    _ = try value.apply(.start(SessionRequest()), owner: app, now: now)
+    _ = try value.apply(.prepareRemoval, owner: app, now: now)
+    #expect(value.isRemoving && value.registry.sessions.isEmpty)
+    #expect(!value.registry.policy.allowsAutomation)
+    for operation in [
+        ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
+        .start(SessionRequest()), .rearm,
+    ] {
+        #expect(throws: ServiceError.removalInProgress) {
+            try value.apply(operation, owner: app, now: now)
+        }
+    }
+    _ = try value.apply(.heartbeat, owner: task, now: now)
+    _ = try value.apply(.prepareRemoval, owner: app, now: now)
+    _ = try value.expire(now: serviceClock(1), consoleUser: 502)
+    let next = UUID()
+    try value.connect(owner: next, user: 502, role: .application, now: serviceClock(1))
+    #expect(throws: ServiceError.removalInProgress) {
+        try value.apply(.start(SessionRequest()), owner: next, now: serviceClock(1))
+    }
+    _ = try value.apply(.retryRestoration, owner: next, now: serviceClock(1))
+    #expect(value.registry.sessions.isEmpty)
+}
+
+@Test func removalNeedsAnExplicitDrainAndConfirmedRestoration() throws {
+    let reports: [(SleepPhase, SleepObservation, Bool, Bool)] = [
+        (.inactive, .allowed, false, true), (.blocked, .allowed, false, true),
+        (.restoring, .allowed, true, false), (.inactive, .unknown, false, false),
+        (.inactive, .disabled, false, false), (.active, .allowed, false, false),
+    ]
+    for (phase, observed, owned, expected) in reports {
+        for removal in [RemovalState.none, .preparing, .ready] {
+            let value = ServiceStatus(
+                policy: try UserPolicy(),
+                power: PowerSnapshot(source: .unknown, battery: .unavailable),
+                sleep: SleepReport(
+                    phase: phase, observed: observed, ownsGlobalHold: owned, fault: nil),
+                sessions: [], sampledAt: Date(), removal: removal)
+            #expect(value.canRemoveService == (expected && removal != .none))
+        }
+    }
+    let withWork = ServiceStatus(
+        policy: try UserPolicy(), power: PowerSnapshot(source: .unknown, battery: .unavailable),
+        sleep: SleepReport(phase: .inactive, observed: .allowed, ownsGlobalHold: false, fault: nil),
+        sessions: [
+            SessionSummary(
+                id: UUID(), kind: .task, end: .unlimited, startedAt: Date(), remainingSeconds: nil,
+                suspension: .powerSource, belongsToClient: false)
+        ],
+        sampledAt: Date(), removal: .preparing)
+    #expect(!withWork.canRemoveService)
 }

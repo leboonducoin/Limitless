@@ -24,6 +24,10 @@ struct MenuPanel: View {
                 }
             }
             statusOverview
+            if model.removalInProgress {
+                Text("Removal is pending. New sessions are blocked; finish removal in Settings.")
+                    .font(.callout).fixedSize(horizontal: false, vertical: true)
+            }
             Divider()
             if model.isPreview || model.helperStatus == .enabled {
                 sessionControls
@@ -183,7 +187,12 @@ struct MenuPanel: View {
 
     private var setupControls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if !model.trustedBuild {
+            if model.removalComplete {
+                Text("Ready to remove").font(.callout.weight(.semibold))
+                Text("Quit Limitless, then uninstall with Homebrew or move the app to the Trash.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(
+                        horizontal: false, vertical: true)
+            } else if !model.trustedBuild {
                 Text("Development build").font(.callout.weight(.semibold))
                 Text(
                     "Power controls need a signed installation. You can inspect the interface and its settings here."

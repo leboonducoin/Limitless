@@ -67,7 +67,8 @@ struct SettingsView: View {
                         get: { model.loginStatus == .enabled },
                         set: { enabled in Task { await model.setLaunchAtLogin(enabled) } })
                 )
-                .disabled(!model.trustedBuild || model.isPreview || model.busy)
+                .disabled(
+                    !model.trustedBuild || model.isPreview || model.busy || model.removalComplete)
                 Text(
                     "Opening Limitless never starts a keep-awake session or authorizes automation."
                 )
@@ -77,6 +78,39 @@ struct SettingsView: View {
                     Button("Review in System Settings") { model.openLoginSettings() }
                         .disabled(model.isPreview)
                 }
+            }
+            Section("Remove Limitless") {
+                Toggle(
+                    "Also remove saved Limitless preferences",
+                    isOn: $model.erasePreferencesOnRemoval
+                )
+                .disabled(model.removalComplete || model.busy)
+                Button(model.removalInProgress ? "Retry removal…" : "Prepare for removal…") {
+                    model.confirmingRemoval = true
+                }
+                .disabled(
+                    (!model.trustedBuild && !model.isPreview) || model.busy || model.removalComplete
+                )
+                .confirmationDialog(
+                    "Prepare Limitless for removal?", isPresented: $model.confirmingRemoval
+                ) {
+                    Button("End sessions and remove setup", role: .destructive) {
+                        Task {
+                            _ = await model.removeIntegration(
+                                erasePreferences: model.erasePreferencesOnRemoval)
+                        }
+                    }
+                    .disabled(model.isPreview)
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text(
+                        "This ends every keep-awake session and removes the power helper and login item. Keep the app installed unless this operation succeeds. Running commands are not terminated."
+                    )
+                }
+                Text(
+                    "Restore normal sleep before uninstalling. Then use Homebrew or move Limitless to the Trash."
+                )
+                .font(.caption).foregroundStyle(.secondary)
             }
             if let message = model.message {
                 Section {

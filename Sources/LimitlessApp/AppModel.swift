@@ -12,6 +12,7 @@ import ServiceManagement
     private(set) var helperStatus: SMAppService.Status = .notRegistered
     private(set) var loginStatus: SMAppService.Status = .notRegistered
     private(set) var trustedBuild = false
+    private(set) var removalComplete = false
     var message: String?
     var draft = PolicyDraft()
     var stopChoice: StopChoice = .preset(60)
@@ -19,6 +20,8 @@ import ServiceManagement
     var durationUnit: DurationUnit = .minutes
     var stopDate = Date().addingTimeInterval(3_600)
     var processID = ""
+    var confirmingRemoval = false
+    var erasePreferencesOnRemoval = false
     private let preferences: UserDefaults
     private let helper = SMAppService.daemon(plistName: LimitlessIdentity.daemonPlist)
     private var client: ServiceClient?
@@ -44,8 +47,9 @@ import ServiceManagement
 
     var canControl: Bool {
         trustedBuild && !isPreview && helperStatus == .enabled && client != nil
-            && connectionError == nil
+            && connectionError == nil && !removalInProgress && !removalComplete
     }
+    var removalInProgress: Bool { status.map { $0.removal != .none } ?? false }
     var ownSession: SessionSummary? {
         status?.sessions.first(where: { $0.belongsToClient && $0.kind == .manual })
     }
@@ -199,7 +203,7 @@ import ServiceManagement
     }
 
     func registerHelper() async {
-        guard trustedBuild, !isPreview, !busy else { return }
+        guard trustedBuild, !isPreview, !busy, !removalComplete else { return }
         busy = true
         do { try helper.register() } catch {
             message =
@@ -211,7 +215,7 @@ import ServiceManagement
     }
 
     func setLaunchAtLogin(_ enabled: Bool) async {
-        guard trustedBuild, !isPreview, !busy else { return }
+        guard trustedBuild, !isPreview, !busy, !removalComplete else { return }
         busy = true
         do {
             if enabled {
@@ -229,6 +233,68 @@ import ServiceManagement
     func openLoginSettings() {
         guard !isPreview else { return }
         SMAppService.openSystemSettingsLoginItems()
+    }
+
+    /// Shared by the native settings action and the signed app's Homebrew removal hook.
+    /// No app files, external CLI links or user-created skill copies are deleted here.
+    func removeIntegration(erasePreferences: Bool = false) async -> Bool {
+        guard trustedBuild, !isPreview, !busy else {
+            message = "Removal requires a correctly signed Limitless installation."
+            return false
+        }
+        quitting = true
+        busy = true
+        revision &+= 1
+        defer { busy = false }
+        while refreshing { try? await Task.sleep(for: .milliseconds(50)) }
+        do {
+            helperStatus = helper.status
+            if helperStatus == .enabled {
+                if client == nil { client = try ServiceClient(role: .application) }
+                guard let client else { throw ServiceError.unavailable }
+                try accept(await client.send(.prepareRemoval))
+                guard let status, status.removal == .ready, status.canRemoveService
+                else { throw ServiceError.restorationRequired }
+            } else {
+                guard try SecureOwnershipJournal.isStateDirectoryAbsent() else {
+                    throw ServiceError.restorationRequired
+                }
+            }
+            if helper.status != .notRegistered { try await helper.unregister() }
+            guard helper.status == .notRegistered else { throw ServiceError.unavailable }
+            await client?.close()
+            client = nil
+            if SMAppService.mainApp.status != .notRegistered {
+                try await SMAppService.mainApp.unregister()
+            }
+            guard SMAppService.mainApp.status == .notRegistered,
+                try SecureOwnershipJournal.isStateDirectoryAbsent()
+            else { throw ServiceError.restorationRequired }
+            if erasePreferences {
+                preferences.removePersistentDomain(forName: LimitlessIdentity.application)
+            }
+            helperStatus = helper.status
+            loginStatus = SMAppService.mainApp.status
+            status = nil
+            watchedProcess = nil
+            connectionError = nil
+            removalComplete = true
+            monitoring?.cancel()
+            message =
+                "The power helper and login item are removed. Quit Limitless, then use Homebrew or move the app to the Trash."
+            return true
+        } catch {
+            quitting = false
+            await client?.close()
+            client = nil
+            connectionError =
+                "Removal was not confirmed. Reconnect before trusting the current state."
+            helperStatus = helper.status
+            loginStatus = SMAppService.mainApp.status
+            message =
+                "Removal is incomplete. Keep the app installed and retry. If the helper is unavailable while its state directory remains, restore the signed installation and enable the helper before retrying."
+            return false
+        }
     }
 
     func prepareToQuit() async -> Bool {
