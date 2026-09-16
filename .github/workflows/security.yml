@@ -1,0 +1,104 @@
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '29 7 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflows:
+    name: Workflow syntax and security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: actionlint 1.7.12 (immutable source revision)
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca -color
+      - uses: zizmorcore/zizmor-action@e639db99335bc9038abc0e066dfcd72e23d26fb4 # v0.3.0
+        with:
+          version: v1.30.1
+          persona: pedantic
+          advanced-security: false
+
+  secrets:
+    name: Secrets / full Git history
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Gitleaks 8.30.1 (MIT binary, immutable source revision)
+        run: go run github.com/zricethezav/gitleaks/v8@83d9cd684c87d95d656c1458ef04895a7f1cbd8e git --redact --no-banner --log-opts=--all
+
+  dependencies:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: low
+          comment-summary-in-pr: never
+
+  codeql:
+    name: CodeQL / ${{ matrix.language }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write # Publish CodeQL findings to the repository security tab.
+    env:
+      DEVELOPER_DIR: ${{ matrix.developer-dir }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: swift
+            os: macos-26
+            build-mode: manual
+            developer-dir: /Applications/Xcode_26.2.app/Contents/Developer
+          - language: actions
+            os: ubuntu-24.04
+            build-mode: none
+            developer-dir: ''
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - name: Build Swift with a CodeQL-supported compiler
+        if: matrix.language == 'swift'
+        run: swift build --build-tests
+      - name: Include the Swift maintenance tool in analysis
+        if: matrix.language == 'swift'
+        run: swiftc Tools/ProjectTool.swift -o "$RUNNER_TEMP/limitless-project-tool"
+      - uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          category: /language:${{ matrix.language }}
