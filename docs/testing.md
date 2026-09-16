@@ -59,8 +59,9 @@ rtk proxy swift Tools/ProjectTool.swift asan
 rtk proxy swift Tools/ProjectTool.swift tsan
 ```
 
-`check` runs whitespace checks, strict formatting, Release compilation and tests
-with coverage enabled. `asan` and `tsan` run separate instrumented test builds.
+`check` runs whitespace checks, strict formatting, release-tool input checks,
+Homebrew DSL syntax, Release compilation and tests with coverage enabled.
+`asan` and `tsan` run separate instrumented test builds.
 The tool loads Apple's existing Swift Testing macro explicitly when the selected
 Command Line Tools contain it in the nested `plugins/testing` directory. It does
 not install a framework or modify the toolchain. Ordinary Xcode needs no override.
@@ -98,6 +99,7 @@ permissions and timeouts. No job installs the helper or changes power settings.
 | --- | --- | --- |
 | Release build, strict format, Swift tests | Passed | Configured; not run |
 | Development app bundle, icon export, plist and strict ad-hoc signature verification | Debug and Release passed | Release bundle configured; not run |
+| Release input validation, Homebrew template syntax, ad-hoc release rejection | Passed | Included in check and bundle; not run |
 | Address / Thread Sanitizer, separate builds | Both passed; runtime libraries verified in binaries | Configured; not run |
 | actionlint 1.7.12 | Passed | Configured; not run |
 | zizmor 1.30.1, pedantic | Offline audit passed | Online audit configured; not run |
@@ -120,9 +122,24 @@ was installed or executed for this packaging check.
 The app's `--prepare-uninstall` hook also returned 1 with the expected signed-build
 requirement before any removal action. Actual service unregistration remains untested.
 
-No push has occurred, so no remote CI result is claimed. Native interaction tests, authenticated
-XPC checks, release signing/notarization and artifact provenance checks remain
-release gates to add and execute as those components become available.
+Release-tool self-checks reject malformed/injected Team IDs, nonnumeric versions,
+invalid digests and ad-hoc artifacts. Synthetic signing-information checks reject
+missing/invalid runtime flags or timestamps and any entitlement data. They parse the Developer ID requirement and
+the Homebrew template with the system Ruby parser. Ruby is only a development
+DSL check/Homebrew dependency, not an application or CLI runtime. Each development
+bundle repeats the negative signature check after its ordinary signature passes.
+The builder also checks that the actual CLI version matches the bundle plist.
+The positive Developer ID/timestamp/entitlement, Apple submission, stapling,
+Gatekeeper and exported-release checks are implemented but not executed: this Mac
+still has zero valid signing identities and Command Line Tools, not full Xcode.
+No notarization upload, generated production cask or signed artifact is claimed.
+The separate `brew style --help` probe was unable to create Homebrew's cache in
+the restricted environment; it did not install a dependency. Full Homebrew
+style/audit and install/upgrade/uninstall qualification are not claimed.
+
+No push has occurred, so no remote CI result is claimed. Native interaction tests,
+authenticated XPC, release-tool positive paths, independent provenance attestation
+and the signed Homebrew lifecycle remain separate release gates.
 
 ## Native interface inspection
 

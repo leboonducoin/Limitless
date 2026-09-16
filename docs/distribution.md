@@ -13,7 +13,7 @@ rtk proxy swift Tools/ProjectTool.swift bundle
 ```
 
 The tool prints a new temporary output directory. Set `LIMITLESS_OUTPUT_DIR` for
-a chosen output parent; an existing `Limitless.app` is refused rather than replaced.
+a chosen new output directory; an existing directory is refused rather than replaced.
 On a synced Desktop, keep build output outside the sync provider:
 
 ```sh
@@ -35,6 +35,7 @@ changed. The bundle includes:
 | `Resources/Limitless.icns` | Original artwork exported by Swift/AppKit at native icon sizes |
 | `Resources/limitless-skill` | Distributable AI instructions |
 | `Resources/LICENSE` | MIT attribution |
+| `Resources/Build.json` | Source revision, configuration and worktree cleanliness |
 
 `Tools/ExportIcon.swift` shares `BrandArt.swift` with the app. No generated image
 runtime, downloaded image, Node or Python is packaged. The bundle command runs
@@ -66,9 +67,10 @@ protected CI secrets, outside Git. No artifact upload or release is authorized b
 this document. A source hash, version and signed artifact digest must agree before
 publication. Do not publish the ad-hoc bundle or invent a downloadable release URL.
 
-The Homebrew cask remains to be generated from a real signed release. The native
-removal flow is implemented, with session/filesystem tests; its signed
-ServiceManagement lifecycle has not been exercised.
+The Swift release tooling and Homebrew template are implemented; they have not
+produced a signed or notarized release. The native removal flow is implemented,
+with session/filesystem tests; its signed ServiceManagement lifecycle has not
+been exercised.
 Installation must preserve macOS approval; a cask must not run `sudo pmset`, install
 passwordless sudoers rules or disable quarantine. Native first launch separately
 requests helper approval and offers launch at login.
@@ -79,6 +81,94 @@ preferences/skill. An unresolved ownership journal must stop destructive removal
 Never promise that deleting an app or rebooting clears the undocumented global
 flag. Active-session uninstall, upgrade, approval rejection and interrupted cleanup
 remain required tests before a Homebrew release is usable.
+
+## Maintainer release commands
+
+Run these commands from the repository root **only after authorization for the
+corresponding signature, Apple upload or publication**. They do not install the
+app, helper or login item. The first release recipe targets Apple Silicon and
+macOS 26 or later; it rejects other binary architectures. Intel qualification
+and a matching universal/Intel recipe require separate evidence.
+
+1. Set the same numeric `major.minor.patch` in `Packaging/Info.plist` and
+   `LimitlessIdentity.version`; advance `CFBundleVersion` in the plist. The builder
+   executes the unprivileged CLI's `--version` and rejects a mismatch. Commit all
+   source changes, run full CI/security checks, and complete the hardware matrix.
+2. Select full Xcode for the process with `DEVELOPER_DIR`, without changing the
+   system-wide developer directory. Install your own **Developer ID Application**
+   certificate/private key through Apple's tools. Check its fingerprint with
+   `rtk proxy security find-identity -v -p codesigning`. No identity or credential
+   is provided by this repository.
+3. Set `LIMITLESS_TEAM_ID` to the real ten-character Apple Team ID and
+   `LIMITLESS_SIGNING_IDENTITY` to that certificate's 40-character SHA-1 fingerprint.
+   SHA-1 here selects a keychain identity; artifact integrity uses SHA-256.
+   Then build into a new directory:
+
+   ```sh
+   rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-release-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-signed swift Tools/ProjectTool.swift sign
+   ```
+
+   `sign` requires a clean committed tree, forces a Release build, embeds its
+   source revision, and verifies the tree again before signing. It signs the CLI
+   and helper before the app, with hardened runtime and secure timestamps. Each
+   executable must satisfy the exact Developer ID Application certificate class,
+   bundle ID and requested Team ID. Entitlements are not needed by this design
+   and are rejected. There is no `--deep` signing or silent ad-hoc fallback.
+   [Apple signing guidance](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac),
+   [certificate requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+4. Store notarization credentials in a named keychain profile using Apple's
+   interactive `notarytool store-credentials`, outside Git. After upload approval,
+   replace the following uppercase labels with your actual values:
+
+   ```sh
+   rtk proxy swift Tools/ProjectTool.swift notarize /private/tmp/limitless-signed/Limitless.app TEAM_ID KEYCHAIN_PROFILE
+   ```
+
+   This command **uploads the signed app to Apple**. It requires an `Accepted`
+   result, staples the ticket, validates it and asks Gatekeeper to assess the
+   app. It prints a diagnostic directory containing the submitted ZIP and JSON
+   response, including when a nonzero tool result supplies JSON. A 30-minute
+   wait timeout does not cancel Apple's processing: inspect the submission ID
+   with `notarytool info`/`log` before deciding whether to submit again. No
+   automatic resubmission, password argument or security bypass is used.
+   [Apple notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
+5. Create the final archive **after stapling**, from the same clean source commit:
+
+   ```sh
+   rtk proxy swift Tools/ProjectTool.swift package /private/tmp/limitless-signed/Limitless.app TEAM_ID /private/tmp/limitless-release
+   ```
+
+   `package` refuses existing output, creates `Limitless-VERSION-arm64.zip`,
+   extracts it into a fresh temporary directory and repeats signature, identity,
+   architecture, metadata, ticket and Gatekeeper verification on the exported app.
+   It then writes `SHA256SUMS`, `release.json` and `limitless.rb` using the actual
+   archive's SHA-256. The manifest identifies the version, source commit, team,
+   filename and digest. A standalone verification is also available:
+
+   ```sh
+   rtk proxy swift Tools/ProjectTool.swift verify /private/tmp/limitless-signed/Limitless.app TEAM_ID
+   ```
+
+The cask is generated from `Packaging/limitless.rb.in`. Its GitHub URL follows the
+planned `vVERSION` tag and exact ZIP filename; generation **does not create that
+release or make the URL available**. No tap has been created. After an authorized
+release actually exists, the matching generated cask can be distributed through a
+reviewed tap or installed as a local cask file with Homebrew. Never use the template
+itself as an installable cask, substitute a dummy digest, or use `--no-quarantine`.
+
+The source record is covered by the app signature; the digest binds the archive.
+Neither proves an independently reproducible build or a GitHub artifact
+attestation. Before publication, record the exact successful CI/security runs,
+hardware acceptance, clean-Mac Gatekeeper result, signature team, tag/commit,
+manifest and release artifacts together. Protected release approvals and any
+hosted provenance attestation require repository/signing configuration; this
+repository currently performs no automatic credential import, upload or release.
+
+On upgrade/reinstall, the guarded uninstall hook also revokes sessions and removes
+native registrations. Saved preferences remain, but helper approval, login and
+automation must be enabled again through the app. No session resumes automatically.
+`zap` removes only this user's documented preferences/cache/window state. It must
+not delete the protected root journal or user-created AI skill copies.
 
 ## Prepare for removal
 
@@ -100,7 +190,7 @@ directory is absent. Only then can it report preparation complete. A failed or
 unreadable check leaves an error. Finder cannot be prevented from deleting a file;
 keep the app installed until preparation succeeds. [Apple unregister API](https://developer.apple.com/documentation/servicemanagement/smappservice/unregister(completionhandler:)).
 
-The signed app provides the same operation for a future Homebrew uninstall hook,
+The signed app provides the same operation for the generated Homebrew uninstall hook,
 run as the console user, without `sudo`:
 
 ```sh

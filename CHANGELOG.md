@@ -25,6 +25,9 @@
 - Application-only removal preparation with session revocation, confirmed-restoration
   gates, nonrecursive protected-state cleanup, native service unregistration and a
   signed app hook for packaging. Protocol version 2 rejects earlier clients.
+- Swift release commands for Developer ID signing, notarization, exported-archive
+  verification and digest-backed Homebrew cask generation; source metadata and
+  matching CLI/bundle versions. No signed release or publication has been performed.
 
 ## Unreleased
 

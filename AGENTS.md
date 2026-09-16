@@ -77,8 +77,13 @@ Never invent tool commands or force an installation rejected by security control
   `asan` and `tsan` for instrumented runs. See `docs/testing.md` for a separate
   scratch path on a synced Desktop and the local security-tool evidence.
 - Build a local ad-hoc app with `rtk proxy swift Tools/ProjectTool.swift bundle`.
-  It refuses an existing output app and never registers a helper or login item.
+  It refuses an existing output directory and never registers a helper or login item.
   See `docs/distribution.md`; a development bundle is not a releasable artifact.
+- `check` also validates release inputs and the Homebrew DSL. Each development
+  bundle must fail the Developer ID release check. `sign`, `notarize`, `verify`
+  and `package` use the same Swift tool; see distribution docs before using them.
+  Signature creation and Apple uploads need explicit authorization. Never invent
+  a release digest, upload result, available download URL or successful CI run.
 - Validate workflow edits with actionlint and zizmor; scan staged changes and Git
   history with Gitleaks. Never silently skip an unavailable security gate.
 - Keep `docs/testing.md` accurate about executable commands, results, unavailable
