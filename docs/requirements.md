@@ -17,12 +17,13 @@ exists. No public release or push is authorized by this document.
 | R07 | Launch at login independent of activation | SMAppService integration and fresh-login inactive-state evidence | Independent native control implemented; real registration/login open |
 | R08 | Restrained Liquid Glass UI, original icon, discreet motion | Light/dark, contrast, reduced-motion/transparency and visual evidence | Original Swift artwork and native light/dark previews inspected; accessibility gates open |
 | R09 | Swift CLI and AI skill track actual work, release all completed tasks, obey user limits | Concurrent tasks, interruptions, stale owners, PID reuse and policy-boundary tests | CLI, process adapter and leases tested; skill validated; signed end-to-end open |
-| R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Guarded native removal and filesystem/session tests implemented; signed lifecycle and Homebrew open |
+| R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Guarded removal, release tooling and cask template implemented; no-account route and real lifecycle open |
 | R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Helper and signature constraints compile; signed approval/exchange open |
 | R12 | Public-ready MIT repository with docs, tests, complete CI and security | Executed checks and release checklist, exact source/artifact linkage | Open |
 | R13 | All authored executable code Swift; no Node/Python product runtime | Source and packaged-artifact inventory | Source and local Debug/Release bundle inventoried; signed release audit open |
 | R14 | Public Apple APIs; isolate undocumented mechanism | Call-site audit, entitlement inspection and backend tests | Backend isolated; signed artifact audit open |
 | R15 | Frequent local commits, maintained AGENTS.md, RTK for terminal work | Git history and maintained contributor instructions | In progress |
+| R16 | Usable distribution without the maintainer or users holding a paid Apple Developer membership; Developer ID is optional later | No-account authentication/installation review, GitHub download and dedicated Homebrew tap tested on a clean Mac | Required by user on 2026-09-16; current Apple-only trust/installer path must be adapted |
 
 ## Delivery sequence
 
@@ -67,8 +68,13 @@ power source, expected result, observation and restoration result for each run:
 
 ## External prerequisites
 
-Full Xcode; Apple Developer Program/Team ID and Developer ID Application signing
-identity; notarization credentials stored outside Git; final bundle identifiers;
-private vulnerability reporting; a Homebrew tap; authorized Mac integration tests.
+Apple build tools; a stable signing identity and a qualified native installation
+path for the no-account distribution; final bundle identifiers; private
+vulnerability reporting; a Homebrew tap; authorized Mac integration tests.
+Apple Developer Program membership, a Team ID, Developer ID Application identity
+and notarization credentials are prerequisites only for the optional notarized
+channel. End users never need developer membership. Do not silently reduce the
+closed-lid, initial native admin approval, XPC authentication or removal requirements
+to satisfy R16. See [distribution decisions](distribution.md#distribution-without-apple-developer-membership).
 The development environment currently has CLT Swift 6.4 and no detected usable
 signing identity or full Xcode. Revalidate this before claiming a blocker persists.

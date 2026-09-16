@@ -8,6 +8,12 @@ and the hardware permit it. Read `docs/requirements.md` and the relevant canonic
 document before changing behavior. Preserve the full requested scope and distinguish
 implemented, automatically tested, physically verified, and publication-ready work.
 
+The user requires a working GitHub/Homebrew distribution without paid Apple
+Developer membership. Developer ID/notarization is an optional later channel.
+Read the no-account decision in `docs/distribution.md` before changing trust or
+installation. Preserve native admin consent and reciprocal XPC authentication;
+never replace certificate validation with a bundle ID/UID-only check.
+
 ## Mandatory terminal discipline
 
 - Prefix **every terminal command** with `rtk`. Use `rtk proxy <command>` when RTK
