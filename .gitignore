@@ -60,3 +60,16 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Limitless local artifacts and credentials
+dist/
+build/
+.swiftpm/
+graphify-out/
+.DS_Store
+.env*
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
+*.xcresult
