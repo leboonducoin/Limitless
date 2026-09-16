@@ -4,10 +4,15 @@ import PackageDescription
 let package = Package(
     name: "Limitless",
     platforms: [.macOS(.v26)],
-    products: [.library(name: "LimitlessCore", targets: ["LimitlessCore"])],
+    products: [
+        .library(name: "LimitlessCore", targets: ["LimitlessCore"]),
+        .library(name: "LimitlessSystem", targets: ["LimitlessSystem"]),
+    ],
     targets: [
         .target(name: "LimitlessCore"),
+        .target(name: "LimitlessSystem", dependencies: ["LimitlessCore"]),
         .testTarget(name: "LimitlessCoreTests", dependencies: ["LimitlessCore"]),
+        .testTarget(name: "LimitlessSystemTests", dependencies: ["LimitlessSystem"]),
     ],
     swiftLanguageModes: [.v6]
 )

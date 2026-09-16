@@ -6,12 +6,20 @@
 SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
-The deterministic session core passes 22 Swift Testing tests (including
+The two modules pass 41 Swift Testing tests (36 core, 5 system; including
 parameterized boundary cases), strict swift-format lint and a Release build.
-Separate Address Sanitizer and Thread Sanitizer runs also pass the 22 tests.
+Separate Address Sanitizer and Thread Sanitizer runs also pass all 41 tests.
 This covers policy, clock semantics, ownership, simultaneous demands, source
-suspension, battery cutoff and revocation. It does not exercise a power backend,
-XPC, UI or physical sleep behavior.
+suspension, battery cutoff, revocation and simulated restoration/recovery failures.
+System tests cover strict Boolean decoding, the real continuous clock and bounded
+unprivileged `true`/`false`/`sleep` subprocesses. Coverage profiles are generated.
+Tests never call privileged power writes or create real sleep assertions. XPC,
+the persistent ownership journal, UI and physical sleep behavior remain untested.
+
+Read-only inspection outside the tool sandbox found an absent `SleepDisabled`
+line in `pmset -g`, while IORegistry reported a Boolean false. The sandboxed pmset
+read had returned only a header. Neither empty output is treated as false by the
+implementation. No source from Apple or Sleepless was copied into this repository.
 
 ## Local commands
 
