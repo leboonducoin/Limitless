@@ -33,3 +33,9 @@ jobs:
         env:
           CHECK: ${{ matrix.check }}
         run: swift Tools/ProjectTool.swift "$CHECK"
+      - name: Build and inspect the development app bundle
+        if: matrix.check == 'check'
+        env:
+          LIMITLESS_CONFIGURATION: release
+          LIMITLESS_OUTPUT_DIR: ${{ runner.temp }}/limitless-bundle
+        run: swift Tools/ProjectTool.swift bundle

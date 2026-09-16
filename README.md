@@ -35,6 +35,7 @@ notes. There are no Swift package dependencies.
 - [Architecture and behavior](docs/architecture.md)
 - [CLI and AI integration](docs/cli.md)
 - [Native interface contract](docs/design.md)
+- [Build, installation and removal](docs/distribution.md)
 - [Security policy](SECURITY.md)
 - [Testing and evidence](docs/testing.md)
 - [Contributing](CONTRIBUTING.md)
