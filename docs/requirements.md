@@ -20,7 +20,7 @@ exists. No public release or push is authorized by this document.
 | R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Open |
 | R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Helper and signature constraints compile; signed approval/exchange open |
 | R12 | Public-ready MIT repository with docs, tests, complete CI and security | Executed checks and release checklist, exact source/artifact linkage | Open |
-| R13 | All authored executable code Swift; no Node/Python product runtime | Source and packaged-artifact inventory | Open |
+| R13 | All authored executable code Swift; no Node/Python product runtime | Source and packaged-artifact inventory | Source and local Debug/Release bundle inventoried; signed release audit open |
 | R14 | Public Apple APIs; isolate undocumented mechanism | Call-site audit, entitlement inspection and backend tests | Backend isolated; signed artifact audit open |
 | R15 | Frequent local commits, maintained AGENTS.md, RTK for terminal work | Git history and maintained contributor instructions | In progress |
 

@@ -96,9 +96,11 @@ jobs:
       - name: Build Swift with a CodeQL-supported compiler
         if: matrix.language == 'swift'
         run: swift build --build-tests
-      - name: Include the Swift maintenance tool in analysis
+      - name: Include Swift maintenance and artwork tools in analysis
         if: matrix.language == 'swift'
-        run: swiftc Tools/ProjectTool.swift -o "$RUNNER_TEMP/limitless-project-tool"
+        run: |
+          swiftc Tools/ProjectTool.swift -o "$RUNNER_TEMP/limitless-project-tool"
+          swiftc Sources/LimitlessApp/BrandArt.swift Tools/ExportIcon.swift -o "$RUNNER_TEMP/limitless-export-icon"
       - uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           category: /language:${{ matrix.language }}

@@ -91,10 +91,11 @@ permissions and timeouts. No job installs the helper or changes power settings.
 | Check | Local evidence, 2026-09-16 | GitHub execution |
 | --- | --- | --- |
 | Release build, strict format, Swift tests | Passed | Configured; not run |
+| Development app bundle, icon export, plist and strict ad-hoc signature verification | Debug and Release passed | Release bundle configured; not run |
 | Address / Thread Sanitizer, separate builds | Both passed; runtime libraries verified in binaries | Configured; not run |
 | actionlint 1.7.12 | Passed | Configured; not run |
 | zizmor 1.30.1, pedantic | Offline audit passed | Online audit configured; not run |
-| Gitleaks 8.30.1 | Full local history and staged core passed | Full fetched history configured; not run |
+| Gitleaks 8.30.1 | Full local history and staged changes passed | Full fetched history configured; not run |
 | CodeQL Swift and GitHub Actions, extended security | Not available locally with this CLT toolchain | Configured; not run |
 | Dependency review and Dependabot | Configuration inspected | Requires GitHub execution/settings |
 
@@ -104,6 +105,12 @@ actionlint and the MIT Gitleaks scanner, not a Limitless product dependency.
 The separately licensed Gitleaks GitHub Action is not used. zizmor's action and
 scanner version are pinned. Security-tool versions embedded in `run` commands
 need manual review when updating; Dependabot manages action references.
+
+The local Release app includes only its Swift executables, plist/icon resources,
+MIT license and AI skill. Its packaged CLI prints help successfully and rejects
+`run -- /usr/bin/printf should-not-run` with exit 69 before launching that command:
+an ad-hoc artifact cannot impersonate the signed production identity. No helper
+was installed or executed for this packaging check.
 
 No push has occurred, so no remote CI result is claimed. Native interaction tests, authenticated
 XPC checks, release signing/notarization and artifact provenance checks remain

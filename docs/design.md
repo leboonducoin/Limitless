@@ -51,7 +51,7 @@ Initial helper setup uses SMAppService and macOS's own approval interface. No
 password field. Register only in response to the setup button. Development builds
 without a trusted signing identity expose the UI but disable privileged actions.
 Debug previews are clearly labeled and cannot call the helper, register services,
-change login items or persist preferences.
+change login items or persist power policy.
 
 ## Design references and validation
 

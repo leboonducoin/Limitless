@@ -20,6 +20,8 @@
   exclusive option parsing, owned completion and a distributable AI skill.
 - Native SwiftUI menu-bar app, independent settings/login controls, original Swift
   icon artwork, observed-state presentation and read-only development previews.
+- Swift development-bundle builder with shared icon export, bundled service/CLI/
+  skill, ad-hoc signature validation and CI/CodeQL coverage of packaging tools.
 
 ## Unreleased
 
