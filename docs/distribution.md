@@ -4,6 +4,45 @@ Limitless is not yet published or qualified for privileged installation. The
 commands below create development artifacts, not a production installer. Do not
 register a development helper or bypass Gatekeeper to make it run.
 
+## Distribution without Apple Developer membership
+
+**User decision, 2026-09-16:** Apple Developer membership will come later. Limitless
+must also be usable through GitHub or a dedicated Homebrew tap before then. Users
+must never need their own developer membership. The Developer ID commands below
+remain an optional future channel, not the only acceptable product distribution.
+
+The current code is not ready for this route: `SignedIdentity` requires an
+Apple-backed Team ID, and setup uses `SMAppService.daemon`. The installed Apple
+SDK's public `SMAppService.h` explicitly requires notarization for apps containing
+LaunchDaemons. Simply removing the Team ID check would neither qualify installation
+nor preserve helper authentication. Ad-hoc development bundles remain disabled
+while that boundary is redesigned.
+
+The next implementation must retain a stable cryptographic identity without
+requiring an Apple-issued certificate, authenticate exact app/CLI/helper identities
+in both XPC directions, and keep native administrator approval. Apple's code-signing
+requirements support pinning a self-signed certificate; a bundle identifier or a
+UID alone is insufficient. This is a candidate trust mechanism, not yet implemented
+or proven as a complete installation flow.
+[Apple certificate requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
+
+The installation review must compare the current documented `SMAppService` contract
+with native alternatives, including the older public `SMJobBless` API, which is
+deprecated. No choice is considered qualified until signature exchange, approval,
+upgrade, restoration and full removal are exercised on a real Mac. Keep the shared
+session/controller/backend and all user limits; do not add a password field,
+passwordless sudoers rule, unsigned-client acceptance or an arbitrary root executor.
+[Apple SMJobBless contract](https://developer.apple.com/documentation/servicemanagement/smjobbless(_:_:_:_:)).
+
+For downloaded non-notarized apps, macOS may require a user decision in Privacy &
+Security; managed systems may disallow it. That choice must remain with the user.
+The app and cask must not remove quarantine, disable Gatekeeper or automate approval.
+[Apple opening policy](https://support.apple.com/en-gb/102445).
+The official `homebrew/cask` catalogue requires passing its Gatekeeper checks;
+distribution from our own reviewed tap is a distinct channel and cannot claim
+official-catalogue acceptance. No tap or downloadable release exists yet.
+[Homebrew acceptance policy](https://docs.brew.sh/Acceptable-Casks).
+
 ## Local app bundle
 
 From the repository root, using the selected Apple toolchain:
@@ -58,9 +97,9 @@ are absent from Release behavior. Draft controls remain inspectable, while all
 power, policy, helper and login mutations are disabled. See [testing](testing.md)
 for observed evidence and remaining keyboard/accessibility gates.
 
-## Production prerequisites and acceptance
+## Notarized-channel prerequisites and acceptance
 
-Production packaging still requires a Developer ID Application identity, confirmed
+The optional notarized channel requires a Developer ID Application identity, confirmed
 team/bundle identifiers, hardened-runtime signing of each executable, notarization
 and stapling, and verification on a clean Mac. Credentials stay in the keychain or
 protected CI secrets, outside Git. No artifact upload or release is authorized by
