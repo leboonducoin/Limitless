@@ -74,7 +74,22 @@ attempts and backoff, independent of activation backoff, so stop starts immediat
 An exhausted cleanup keeps the ownership record and reports a blocked state.
 Only explicit cleanup retry can reset that budget. Fault recovery never grants
 activation permission. The persistent journal implementation and helper transport
-are separate delivery steps; current controller tests substitute both OS and disk.
+are separate from the controller; controller tests substitute both OS and disk.
+The concrete journal is now tested with real temporary files; helper transport
+remains a separate delivery step.
+
+`SecureOwnershipJournal` uses the fixed production directory
+`/Library/Application Support/Limitless`, owned by root with mode 0700. It opens
+each parent with `openat`/`O_NOFOLLOW`, verifies ownership and permissions, and
+refuses extended ACLs instead of guessing whether they grant extra access. Journal
+and lock files must be regular, singly linked, mode 0600 and owned by the expected
+user. A lifetime `flock` prevents two helpers from holding the journal. Reads are
+bounded to 1024 bytes and reject unknown versions or malformed records. Claims
+use exclusive temporary files, atomic rename, metadata synchronization and macOS
+`F_FULLFSYNC` before acknowledgment. Confirmed restoration removes the record with
+the same durability barrier. It never changes existing permissions to make access
+work. A test-only, module-internal constructor uses private temporary directories
+under the test user's identity; it cannot be selected by a production client.
 
 Restoration of an owned hold writes `disablesleep 0`; it does not rewrite ordinary
 energy preferences or attempt to undo a foreign hold. On a Mac with an initially

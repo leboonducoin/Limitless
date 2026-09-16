@@ -6,15 +6,17 @@
 SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
-The two modules pass 41 Swift Testing tests (36 core, 5 system; including
+The two modules pass 48 Swift Testing tests (36 core, 12 system; including
 parameterized boundary cases), strict swift-format lint and a Release build.
-Separate Address Sanitizer and Thread Sanitizer runs also pass all 41 tests.
+Separate Address Sanitizer and Thread Sanitizer runs also pass all 48 tests.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
 System tests cover strict Boolean decoding, the real continuous clock and bounded
-unprivileged `true`/`false`/`sleep` subprocesses. Coverage profiles are generated.
+unprivileged `true`/`false`/`sleep` subprocesses. Journal tests use real temporary
+files to check reopening, exclusive ownership, atomic cleanup, malformed data,
+permissions, ACLs, symlinks, hard links and FIFOs. Coverage profiles are generated.
 Tests never call privileged power writes or create real sleep assertions. XPC,
-the persistent ownership journal, UI and physical sleep behavior remain untested.
+the root-path journal integration, UI and physical sleep behavior remain untested.
 
 Read-only inspection outside the tool sandbox found an absent `SleepDisabled`
 line in `pmset -g`, while IORegistry reported a Boolean false. The sandboxed pmset

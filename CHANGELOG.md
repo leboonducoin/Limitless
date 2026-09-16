@@ -9,6 +9,8 @@
   review, workflow lint and workflow security analysis.
 - Observed-state controller with owned restoration, bounded recovery, fault latching
   and simulated failure coverage; isolated IOKit/pmset backend and continuous clock.
+- Protected, durable ownership journal with exclusive locking and filesystem
+  boundary tests, including ACLs and link attacks.
 
 ## Unreleased
 
