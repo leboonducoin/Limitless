@@ -6,10 +6,11 @@
 SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
-The two modules pass 54 default Swift Testing tests (36 core, 18 system; including
-parameterized boundary cases), strict swift-format lint and a Release build.
+The two libraries and helper executable pass strict swift-format and a Release
+build. There are 63 default Swift Testing tests (43 core, 20 system, including
+parameterized boundary cases).
 One additional opt-in, read-only Mac integration test also passes on the inspected
-MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 55 tests
+MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 64 tests
 with that opt-in enabled.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
@@ -19,8 +20,12 @@ files to check reopening, exclusive ownership, atomic cleanup, malformed data,
 permissions, ACLs, symlinks, hard links and FIFOs. Coverage profiles are generated.
 Power-source tests cover scaling, AC discharge, missing or malformed fields and
 loss of a previously detected battery.
-Tests never call privileged power writes or create real sleep assertions. XPC,
-the root-path journal integration, UI and physical sleep behavior remain untested.
+Service tests cover role separation, connection capacity, console-user changes,
+expired leases, unextendable deadlines, transport bounds and malformed policy.
+Signature tests parse the exact requirements, reject injected team/identifier
+values, and confirm the test host cannot impersonate the production helper.
+Tests never call privileged power writes or create real sleep assertions. Live
+signed XPC, root-path journal integration, UI and physical sleep remain untested.
 
 Read-only inspection outside the tool sandbox found an absent `SleepDisabled`
 line in `pmset -g`, while IORegistry reported a Boolean false. The sandboxed pmset

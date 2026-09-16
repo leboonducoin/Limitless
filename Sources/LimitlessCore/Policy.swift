@@ -77,7 +77,7 @@ public struct UserPolicy: Codable, Equatable, Sendable {
 }
 
 /// Absence of a battery is different from failure to read one.
-public enum BatteryReading: Equatable, Sendable {
+public enum BatteryReading: Codable, Equatable, Sendable {
     case notPresent
     case available(percent: Int, isDischarging: Bool)
     case unavailable
@@ -88,7 +88,7 @@ public enum BatteryReading: Equatable, Sendable {
     }
 }
 
-public struct PowerSnapshot: Equatable, Sendable {
+public struct PowerSnapshot: Codable, Equatable, Sendable {
     public let source: PowerSource
     public let battery: BatteryReading
 

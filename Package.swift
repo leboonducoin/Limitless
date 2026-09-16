@@ -7,10 +7,13 @@ let package = Package(
     products: [
         .library(name: "LimitlessCore", targets: ["LimitlessCore"]),
         .library(name: "LimitlessSystem", targets: ["LimitlessSystem"]),
+        .executable(name: "LimitlessHelper", targets: ["LimitlessHelper"]),
     ],
     targets: [
         .target(name: "LimitlessCore"),
         .target(name: "LimitlessSystem", dependencies: ["LimitlessCore"]),
+        .executableTarget(
+            name: "LimitlessHelper", dependencies: ["LimitlessSystem", "LimitlessCore"]),
         .testTarget(name: "LimitlessCoreTests", dependencies: ["LimitlessCore"]),
         .testTarget(name: "LimitlessSystemTests", dependencies: ["LimitlessSystem"]),
     ],

@@ -16,9 +16,9 @@ exists. No public release or push is authorized by this document.
 | R06 | Presets, custom duration, date/time, command/process completion, unlimited | Clock, expiry, process and UI tests; long-duration device check | Clock and expiry tested; adapters/UI open |
 | R07 | Launch at login independent of activation | SMAppService integration and fresh-login inactive-state evidence | Open |
 | R08 | Restrained Liquid Glass UI, original icon, discreet motion | Light/dark, contrast, reduced-motion/transparency and visual evidence | Open |
-| R09 | Swift CLI and AI skill track actual work, release all completed tasks, obey user limits | Concurrent tasks, interruptions, stale owners, PID reuse and policy-boundary tests | Open |
+| R09 | Swift CLI and AI skill track actual work, release all completed tasks, obey user limits | Concurrent tasks, interruptions, stale owners, PID reuse and policy-boundary tests | Connection ownership and leases tested; CLI/process/skill open |
 | R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Open |
-| R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Open |
+| R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Helper and signature constraints compile; signed approval/exchange open |
 | R12 | Public-ready MIT repository with docs, tests, complete CI and security | Executed checks and release checklist, exact source/artifact linkage | Open |
 | R13 | All authored executable code Swift; no Node/Python product runtime | Source and packaged-artifact inventory | Open |
 | R14 | Public Apple APIs; isolate undocumented mechanism | Call-site audit, entitlement inspection and backend tests | Backend isolated; signed artifact audit open |

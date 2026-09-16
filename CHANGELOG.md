@@ -13,6 +13,9 @@
   boundary tests, including ACLs and link attacks.
 - Public IOPowerSources reader with conservative missing-data handling and an
   opt-in read-only Mac integration check.
+- Swift helper and XPC client with separate app/task privileges, reciprocal code
+  signature requirements, bounded messages, connection-owned leases and logout
+  revocation. Signed integration and registration remain release gates.
 
 ## Unreleased
 
