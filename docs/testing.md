@@ -6,9 +6,40 @@
 SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
-Product code and its executable check commands will be documented as they land.
-The upstream Sleepless source passed a type check in a temporary directory; this
-does not validate Limitless or closed-lid behavior.
+The deterministic session core passes 22 Swift Testing tests (including
+parameterized boundary cases), strict swift-format lint and a Release build.
+Separate Address Sanitizer and Thread Sanitizer runs also pass the 22 tests.
+This covers policy, clock semantics, ownership, simultaneous demands, source
+suspension, battery cutoff and revocation. It does not exercise a power backend,
+XPC, UI or physical sleep behavior.
+
+## Local commands
+
+With full Xcode selected for the process, from the repository root:
+
+```sh
+rtk proxy swift Tools/ProjectTool.swift check
+rtk proxy swift Tools/ProjectTool.swift asan
+rtk proxy swift Tools/ProjectTool.swift tsan
+```
+
+`check` runs whitespace checks, strict formatting, Release compilation and tests
+with coverage enabled. `asan` and `tsan` run separate instrumented test builds.
+The tool loads Apple's existing Swift Testing macro explicitly when the selected
+Command Line Tools contain it in the nested `plugins/testing` directory. It does
+not install a framework or modify the toolchain. Ordinary Xcode needs no override.
+
+On the inspected Mac, the Desktop file provider adds Finder metadata to generated
+test bundles, which codesign rejects. Keep build output outside that synced folder:
+
+```sh
+rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build swift Tools/ProjectTool.swift check
+```
+
+Use distinct scratch paths for simultaneous sanitizer builds. Do not disable code
+signing or strip security attributes to work around an installation failure.
+CLT also emits linker warnings for absent Xcode-style search directories; these
+are recorded environment warnings, not evidence that full Xcode was tested.
 
 ## Required validation layers
 

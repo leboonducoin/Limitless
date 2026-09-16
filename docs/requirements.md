@@ -10,10 +10,10 @@ exists. No public release or push is authorized by this document.
 | --- | --- | --- | --- |
 | R01 | Native Swift menu-bar app, SwiftUI/AppKit | Native build, UI inspection and keyboard/VoiceOver exercise | Open |
 | R02 | Keep awake, including lid closed without an external display when supported | Backend tests and real MacBook lid-closed runs, version/model recorded | Open |
-| R03 | Exclusive `-b`, `-c`, `-a` policies, enforced on source transitions | Policy/parser tests and physical AC/battery transitions | Open |
+| R03 | Exclusive `-b`, `-c`, `-a` policies, enforced on source transitions | Policy/parser tests and physical AC/battery transitions | Core policy tested; parser and hardware open |
 | R04 | Observe applied state and recover in a controlled way | Backend failure, unknown state, bounded retry and ownership tests | Open |
-| R05 | Battery floor 0–50, step 1; 0 disables custom protection with warning | Boundary/serialization tests and UI/CLI warning checks | Open |
-| R06 | Presets, custom duration, date/time, command/process completion, unlimited | Clock, expiry, process and UI tests; long-duration device check | Open |
+| R05 | Battery floor 0–50, step 1; 0 disables custom protection with warning | Boundary/serialization tests and UI/CLI warning checks | Core boundaries tested; UI/CLI open |
+| R06 | Presets, custom duration, date/time, command/process completion, unlimited | Clock, expiry, process and UI tests; long-duration device check | Clock and expiry tested; adapters/UI open |
 | R07 | Launch at login independent of activation | SMAppService integration and fresh-login inactive-state evidence | Open |
 | R08 | Restrained Liquid Glass UI, original icon, discreet motion | Light/dark, contrast, reduced-motion/transparency and visual evidence | Open |
 | R09 | Swift CLI and AI skill track actual work, release all completed tasks, obey user limits | Concurrent tasks, interruptions, stale owners, PID reuse and policy-boundary tests | Open |
