@@ -16,6 +16,8 @@
 - Swift helper and XPC client with separate app/task privileges, reciprocal code
   signature requirements, bounded messages, connection-owned leases and logout
   revocation. Signed integration and registration remain release gates.
+- Swift CLI for real foreground commands and identity-bound PID observation, with
+  exclusive option parsing, owned completion and a distributable AI skill.
 
 ## Unreleased
 
