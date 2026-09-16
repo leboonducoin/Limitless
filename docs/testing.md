@@ -6,11 +6,11 @@
 SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
-The two libraries and helper executable pass strict swift-format and a Release
-build. There are 63 default Swift Testing tests (43 core, 20 system, including
+The two libraries, helper and CLI executables pass strict swift-format and a Release
+build. There are 69 default Swift Testing tests (43 core, 23 system, 3 CLI, including
 parameterized boundary cases).
 One additional opt-in, read-only Mac integration test also passes on the inspected
-MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 64 tests
+MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 70 tests
 with that opt-in enabled.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
@@ -24,8 +24,16 @@ Service tests cover role separation, connection capacity, console-user changes,
 expired leases, unextendable deadlines, transport bounds and malformed policy.
 Signature tests parse the exact requirements, reject injected team/identifier
 values, and confirm the test host cannot impersonate the production helper.
+CLI tests cover conflicting modes/stop conditions, malformed options, unbounded
+representable durations, timezone-bearing dates and unchanged argument arrays.
+Real unprivileged process tests verify exit codes, termination, duplicate launch
+rejection, PID/start-time identity and owner changes. The built CLI's `--help`
+works; `run -- /usr/bin/printf should-not-run` returned 69 without launching that
+command because the development signature does not satisfy the production identity.
+The installed skill-creator validator accepted `skills/limitless/SKILL.md`.
 Tests never call privileged power writes or create real sleep assertions. Live
-signed XPC, root-path journal integration, UI and physical sleep remain untested.
+signed XPC, the complete CLI/service lifecycle, root-path journal integration,
+UI and physical sleep remain untested.
 
 Read-only inspection outside the tool sandbox found an absent `SleepDisabled`
 line in `pmset -g`, while IORegistry reported a Boolean false. The sandboxed pmset

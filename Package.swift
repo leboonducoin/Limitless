@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "LimitlessCore", targets: ["LimitlessCore"]),
         .library(name: "LimitlessSystem", targets: ["LimitlessSystem"]),
         .executable(name: "LimitlessHelper", targets: ["LimitlessHelper"]),
+        .executable(name: "limitless", targets: ["LimitlessCLI"]),
     ],
     targets: [
         .target(name: "LimitlessCore"),
@@ -15,6 +16,9 @@ let package = Package(
         .executableTarget(
             name: "LimitlessHelper", dependencies: ["LimitlessSystem", "LimitlessCore"]),
         .testTarget(name: "LimitlessCoreTests", dependencies: ["LimitlessCore"]),
+        .executableTarget(
+            name: "LimitlessCLI", dependencies: ["LimitlessSystem", "LimitlessCore"]),
+        .testTarget(name: "LimitlessCLITests", dependencies: ["LimitlessCLI"]),
         .testTarget(name: "LimitlessSystemTests", dependencies: ["LimitlessSystem"]),
     ],
     swiftLanguageModes: [.v6]

@@ -53,6 +53,13 @@ or SIGKILL relies on the subsequent helper start to restore the journaled hold.
 The executable and client compile locally. Signed XPC exchange, native service
 registration and privileged lifecycle tests have not yet been performed.
 
+The CLI uses native `Process` termination for foreground commands and public
+`proc_pidinfo` for existing processes. PID, UID, and start timestamp must continue
+to match. Command arguments stay in the unprivileged process and are never part
+of XPC or the journal. Normal completion requests an acknowledged release before
+closing; a failed confirmation is reported without changing the command's exit
+code. See [CLI and AI integration](cli.md) for the tracking boundary and signals.
+
 ## Power management
 
 Public IOKit assertions cover idle sleep prevention. Public IOPowerSources APIs
