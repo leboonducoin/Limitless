@@ -167,6 +167,15 @@ No push has occurred, so no remote CI result is claimed. Native interaction test
 authenticated XPC, release-tool positive paths, independent provenance attestation
 and the signed Homebrew lifecycle remain separate release gates.
 
+On 2026-09-17, the expanded README and contribution guide were checked against the
+actual CLI help, native control labels, core defaults and distribution commands.
+All 27 local Markdown link targets exist; anchors were reviewed separately.
+The complete local check passed again with the read-only opt-in (89 tests).
+Issue forms and their chooser were reviewed against GitHub's documented
+[form schema](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema)
+and [template configuration](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository).
+Their GitHub rendering has not been tested; no issue or pull request was submitted.
+
 ## Native interface inspection
 
 Read-only Debug previews were inspected through native accessibility automation on

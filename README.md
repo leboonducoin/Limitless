@@ -1,37 +1,131 @@
 # Limitless
 
-A native macOS menu-bar app for explicit, observable keep-awake sessions.
+A native macOS menu-bar app that keeps your Mac awake for the time or work you choose.
 
 By **Arthur Barreau**. [MIT](LICENSE), copyright © 2026 Arthur Barreau.
 
 **In development — not yet a published or hardware-qualified application.**
-The intended first release targets macOS 26 and Apple Silicon. No installer,
-download, notarization or closed-lid compatibility claim is available yet.
+The first release targets **macOS 26 or later on Apple Silicon**. The app, CLI,
+helper and distribution tooling are implemented, but there is no qualified public
+download or Homebrew tap yet. Native approval, signed integration and physical
+closed-lid operation remain release gates. See the [acceptance matrix](docs/requirements.md).
 
 Limitless is an independent Swift implementation inspired by
-[Sleepless](https://github.com/Aboudjem/Sleepless), not a renamed copy. It will use
-Apple APIs for ordinary power management and isolate the undocumented global
-`pmset disablesleep` mechanism needed for supported lid-closed operation.
+[Sleepless](https://github.com/Aboudjem/Sleepless). No Sleepless code or assets are
+included. Public Apple APIs handle idle-sleep assertions, power information,
+native authorization and process tracking. The undocumented global
+`pmset disablesleep` mechanism is isolated in one backend for lid-closed operation
+where the hardware and macOS permit it, without requiring an external display.
 
-The product includes battery/AC modes, battery protection, timed and task-bound
-sessions, native login support, a Swift CLI, an AI skill, and a narrowly scoped
-privileged helper. Distribution is planned through GitHub and Homebrew.
-No Node or Python runtime will be required to use it. A distribution usable without
-paid Apple Developer membership is required; notarization will be an optional later
-channel. Certificate-based helper authentication, native installation adapters and
-community packaging are implemented; the signed flow still needs real-Mac qualification.
-See the [distribution decision](docs/distribution.md#distribution-without-apple-developer-membership).
+## What Limitless does
+
+| Control | Behavior |
+| --- | --- |
+| Power source | Battery only (`-b`), power adapter only (`-c`), or both (`-a`); exactly one mode at a time |
+| Battery protection | Every integer from 0–50%; default 20%. A value of 0 disables custom protection and shows a warning |
+| Automatic stop | 13 presets from five minutes to 24 hours, custom duration, date/time, process completion, or no time limit |
+| Tracked commands | The Swift CLI holds a session while its foreground command exists and releases it on completion |
+| Concurrent work | Each task owns its session; the last eligible task releases the automatic hold |
+| Observed state | Displays confirmed, suspended, restoring and unavailable states; recovery has a bounded retry budget |
+| Login | Launch at login is independent of enabling keep-awake; active sessions never return after login or reboot |
+
+The SwiftUI/AppKit interface uses native materials, system typography and original
+icon artwork. The application, CLI, helper and maintenance tools are Swift, with
+no third-party Swift package dependency and **no Node or Python product runtime**.
+
+## Installation and signing
+
+Distribution is planned through GitHub releases and a dedicated Homebrew tap.
+There is no valid `brew install` command or release download to advertise yet.
+
+The community channel uses a stable publisher certificate and native macOS
+administrator consent without requiring paid Apple Developer membership from
+the maintainer or users. Users will receive the already signed app; they will not
+need to build it or create a certificate. Developer ID and notarization are an
+optional later channel. The community installer and packaging are implemented;
+their signed lifecycle still needs qualification on a real Mac.
+
+A downloaded non-notarized app may require an explicit decision in macOS Privacy
+& Security, and managed Macs may prevent opening it. Limitless and its cask do not
+remove quarantine or change Gatekeeper. Ad-hoc development builds cannot enable
+the helper or change power settings. See [distribution and trust](docs/distribution.md).
+
+## Using a qualified installation
+
+These steps describe the implemented controls; they are not a claim that the
+current development bundle is ready for privileged use.
+
+1. Open Limitless and choose **Enable Limitless**. macOS handles helper approval;
+   the app never asks for or stores your administrator password itself.
+2. In Settings, choose power sources and battery/duration limits, then **Apply limits**.
+   Enabling **Launch at login** does not start a session.
+3. Choose the menu panel's stop condition and start a session. A mismatched power
+   source suspends it; returning to an allowed source can resume it before its deadline.
+4. Use **Stop all** to revoke all current demands. Expiry, battery cutoff and
+   explicit stop end affected sessions; recovery cannot revive them.
+
+Stopping protection permits ordinary sleep. It does not force sleep or terminate
+your command. If restoration is unconfirmed, keep the app installed and follow
+its status guidance instead of assuming that quitting or rebooting fixed the flag.
+
+### CLI and AI tasks
+
+After installing the signed helper and explicitly allowing tracked tasks in Settings:
+
+```sh
+limitless status --json
+limitless run -c --for 90m -- swift test
+limitless run -a --unlimited -- my-command
+limitless watch -b --battery-floor 30 --pid 12345
+```
+
+Replace the command and PID with work you actually want to follow. CLI and AI
+requests can tighten your limits, never relax them. A foreground command's exit
+code is preserved. Process observation checks PID, owner and start time; it never
+kills the observed process. Commands are launched as your user, without elevation.
+
+The [AI skill](skills/limitless/SKILL.md) uses the same CLI. Each concurrent task
+must be tracked separately; an idle agent host, dummy command or detached wrapper
+is not evidence of ongoing work. A separate manual session remains independent.
+See [CLI syntax, signals and tracking limits](docs/cli.md).
+
+## Removal and upgrades
+
+Use **Settings → Prepare for removal…** before deleting a working installation.
+This ends sessions, confirms restoration of owned state, removes the helper and
+login registration, and checks the result. Commands themselves keep running.
+Optional preference removal is separate. If cleanup fails, keep the matching app
+and retry; do not delete the protected journal manually.
+
+The Homebrew recipe uses this guarded removal hook and stops if it fails. Upgrades
+also remove the old integrations: reopen the new app to enable the helper, login
+and automation again. No session is restored automatically. See the complete
+[removal and recovery procedure](docs/distribution.md#prepare-for-removal).
 
 ## Development
 
-The implemented components include the Swift policy/session core, power adapters,
-protected ownership journal, authenticated helper, command/process CLI and native
-menu-bar interface. The interface has read-only development previews; installation,
-signed integration and physical qualification remain open.
-Build and test with Xcode 26.2 or newer using
-`rtk proxy swift Tools/ProjectTool.swift check`.
-See [testing](docs/testing.md) for sanitizer commands and the CLT/synced-folder
-notes. There are no Swift package dependencies.
+Use the Apple Swift toolchain on macOS. CI is configured for Xcode 26.2; local
+checks also pass with Command Line Tools Swift 6.4. Commands below use the project's
+RTK development wrapper, which is not part of the delivered application.
+
+```sh
+rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
+rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview swift Tools/ProjectTool.swift bundle
+```
+
+The output directory must be new; existing files are never replaced. Keeping
+build artifacts outside a synced Desktop avoids FileProvider signing interference.
+`bundle` creates an ad-hoc inspection app without registering a helper or login item.
+The Debug app supports read-only native previews:
+
+```sh
+rtk proxy /private/tmp/limitless-preview/Limitless.app/Contents/MacOS/LimitlessApp --preview active
+```
+
+Use `community-bundle` to inspect the alternative helper layout. Signed release
+commands are documented separately and require an actual signing identity.
+See [testing and observed results](docs/testing.md) for ASan/TSan, read-only Mac
+checks and the unperformed integration gates. No GitHub CI result is claimed yet.
 
 ## Project documentation
 
@@ -49,6 +143,20 @@ notes. There are no Swift package dependencies.
 
 Lid-closed support depends on the Mac and macOS version. Reading a power flag is
 not proof of physical operation. Limitless must not claim that an unverified
-change succeeded, and an automatic stop permits normal sleep rather than forcing
-sleep or terminating a running task. Do not run privileged experiments without
-reviewing their restoration procedure.
+change succeeded. `disablesleep` is global: `-b` and `-c` are policies enforced by
+Limitless as power changes, not independent OS settings. Missing telemetry cannot
+be treated as successful protection or restoration. Another privileged utility
+can interfere with this global flag, and helper/OS failure can delay cleanup.
+
+No claim of thermal safety or universal closed-lid compatibility is made. Physical
+acceptance includes the Mac model, exact OS version, battery/AC transitions,
+crashes and confirmed restoration. Do not run privileged experiments without
+their explicit authorization and restoration procedure.
+
+## Contributing and reporting problems
+
+Follow [CONTRIBUTING.md](CONTRIBUTING.md) for focused changes and validation.
+Bug reports should identify the app commit/version, macOS version, Mac model,
+power conditions and observed result, without serial numbers or private commands.
+Report security vulnerabilities privately through [SECURITY.md](SECURITY.md).
+The [changelog](CHANGELOG.md) records implemented work; it does not imply a release.

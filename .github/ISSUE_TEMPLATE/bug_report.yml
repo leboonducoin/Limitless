@@ -1,0 +1,30 @@
+name: Bug report
+description: Describe behavior that did not match what Limitless reported or promised.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a security vulnerability, use [private reporting](https://github.com/leboonducoin/Limitless/security/advisories/new).
+        Do not include passwords, signing keys, serial numbers or private command arguments.
+        Limitless is in development; ad-hoc builds intentionally refuse privileged controls.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: App version or commit, macOS version/build, Mac model/chip, and installation source or signing channel.
+      placeholder: Include power source and external-display/lid state only when relevant. Do not include a serial number.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Steps, expected result and observed result
+      description: Include the selected limits and stop condition when relevant, plus any state or error shown by the app.
+      placeholder: Describe what happened and whether normal sleep was confirmed afterward. Do not repeat a privileged experiment just to complete this report.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Optional diagnostics
+      description: A relevant error, redacted screenshot or limitless status --json output. Review the contents before sharing; full system logs are not needed.

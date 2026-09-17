@@ -1,0 +1,15 @@
+name: Feature request
+description: Explain a task or workflow that Limitless does not handle yet.
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Task and current limitation
+      description: Describe what you want to accomplish and where the current behavior gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include alternatives you considered and any effect on power limits, tracked work, privacy or accessibility.
