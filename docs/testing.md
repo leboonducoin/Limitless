@@ -668,8 +668,16 @@ reciprocal pin/identifier refusals. No privileged service is installed by this t
 The corrected signed Debug CLI reached the absent service and returned 69
 (`unavailable`), rather than rejecting its own signature. A native window capture
 confirmed the prepared setup panel but exposed a truncated administrator-explanation
-sentence, still to fix. Full keyboard/VoiceOver remains unqualified. The no-helper
-removal hook returned 1 in both pre-change and corrected Debug **bundled** layouts:
+sentence. The setup container now preserves its full vertical size; a second native
+capture shows both complete lines, including the password assurance, at the same
+panel width. Accessibility exposes the complete text and the existing named controls.
+A PID-targeted Tab attempt left focus on the window and was inconclusive; full
+keyboard/VoiceOver remains unqualified. A fresh complete `check` passed all 91 tests
+after this one-line layout correction. The final launch log sample still contained
+AppIntents 4097, with no Security main-thread fault. No new UI framework, animation
+or policy path was added.
+
+The no-helper removal hook returned 1 in both pre-change and corrected Debug **bundled** layouts:
 SMAppService reported `notFound`, followed by unregister error 1. This separate
 existing cleanup defect remains open; it does not replace the community build 4
 removal evidence. The installed community app/archive are still build 4, without

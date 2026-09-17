@@ -55,6 +55,8 @@ without a trusted signing identity expose the UI but disable privileged actions.
 While the initial identity check is pending, show native preparation feedback and
 keep integration controls disabled; do not label that pending state as an untrusted
 development build. Signature validation must not block the interface thread.
+Setup explanations retain their full vertical size within the panel width, so
+administrator approval and password handling information are never truncated.
 Debug previews are clearly labeled and cannot call the helper, register services,
 change login items or persist power policy.
 
