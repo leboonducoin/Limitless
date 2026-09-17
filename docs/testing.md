@@ -326,6 +326,21 @@ existing request, installation and filesystem machinery with one extra operation
 no timeout-based deletion, unauthenticated channel or replacement installer was added.
 A signed native retry is the next gate.
 
+The build 3 retry unloaded the remaining job and all protected paths stayed absent,
+but returned failure at login-item cleanup: native logs reported status 3/notFound
+and unregister error 1 for an item never registered. The same signed app was then
+copied to an initially absent `/Applications/Limitless.app`. Its native Launch at
+login toggle successfully changed from off to on, then off, with no helper present.
+The official uninstall hook subsequently exited 0. No login/reboot was performed.
+Build 4 treats `notFound` as a previously unseen login service, as explained by
+[Apple DTS](https://developer.apple.com/forums/thread/719862), and avoids unregistering
+that nonexistent item. It still checks final status and rejects an unknown future
+state. Enabled and approval-pending services must complete native unregistration.
+The complete check, ASan and TSan passed all 89 tests after the login fix.
+The signed native cycle with this final login fix remains to be run. Graphify is
+current (599 nodes/1251 edges); the complexity review retained an inline check of
+native statuses, without another wrapper or dependency.
+
 ## Native interface inspection
 
 Read-only Debug previews were inspected through native accessibility automation on

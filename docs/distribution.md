@@ -315,7 +315,12 @@ requires proven path absence and a fresh allowed sleep observation; it never dis
 the certificate requirement or treats a transport error alone as successful cleanup.
 The app then uses native `SMJobRemove` with administrator consent for that job, or
 asynchronous `SMAppService.unregister()` for the bundled helper. Login removal
-always uses `SMAppService`. The app checks registration states and absence of the
+always uses `SMAppService`. A login item that macOS has never registered can report
+`notFound`; it needs no unregister call, like `notRegistered`. Enabled and
+approval-pending login items still require successful native unregistration.
+This interpretation is limited to the login item, never the helper's missing files
+or power telemetry. [Apple's explanation of a previously unseen login service](https://developer.apple.com/forums/thread/719862).
+The app checks registration states and absence of the
 fixed journal and installed files before reporting completion. A failed or
 unreadable check leaves an error. Finder cannot be prevented from deleting a file;
 keep the app installed until preparation succeeds. [Apple unregister API](https://developer.apple.com/documentation/servicemanagement/smappservice/unregister(completionhandler:)).
