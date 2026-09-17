@@ -760,6 +760,52 @@ runtime warnings, keyboard/accessibility or physical hardware gates are resolved
 The installed test app and local archive are now build 5; earlier build 4 evidence
 above remains specific to its own binaries.
 
+### Native process and date stop controls
+
+The same signed community build 5 was re-enabled through its native setup control
+on external power. The starting state had no session, allowed/unowned sleep,
+automation off, battery floor 20%, all power sources and no duration cap. Automation
+remained off throughout both manual tests; no CLI task session was requested.
+
+For **When a process ends**, the probe launched an unprivileged real
+`ProjectTool.swift check`, entered that process's PID in the native field, focused
+and confirmed the field, then pressed **Keep awake**. Signed status showed one
+active manual session while validation ran. At 20.84 s from the first observation,
+the process had exited successfully, its session was absent and sleep was
+allowed/unowned. Three further seconds showed no reacquisition. The workload
+passed all 92 tests. Limitless observed the process without terminating it.
+
+An earlier probe set the accessible field value but omitted native confirmation.
+The number was visible, but the app rejected the input and created no session;
+the workload still passed. This is an unsuccessful input simulation, not passing
+process tracking. Focusing and confirming the field fixed the probe; no product
+code or process-identity validation was changed.
+
+For **At a date & time**, the native date control was set to
+2026-09-17 16:15:00 Europe/Paris (14:15:00 UTC). Its accessible date and the helper's
+applied deadline matched: the initial remaining time was 94.40 s. At 94.71 s from
+observer startup the session was absent and sleep was allowed/unowned, with no
+reacquisition during three further seconds. The same now-past date was then
+submitted again: the native validation message appeared and signed status
+confirmed no session or hold. An initial attempt to press a control after the
+popover closed did not execute; presenting and submitting it in one scoped probe
+produced the actual refusal evidence.
+
+Both observers queried signed status about every 0.5 s, which also reconciles
+state. These times are observations, not isolated app-timer or watchdog latency.
+The probes used public Accessibility APIs against only the exact installed
+Limitless bundle and existing permissions. Native date-input and active-countdown
+captures were inspected: the control, complete labels and countdown fit the panel.
+This qualifies these native UI paths through Accessibility, not keyboard-only use,
+VoiceOver, a long-duration run or a physical power transition.
+
+Afterwards signed status confirmed automation off, floor 20%, no cap, zero sessions
+and allowed/unowned sleep. The GUI quit normally and the official removal hook
+exited 0. Protected helper/plist/journal paths were absent and independent
+IORegistry observation was `SleepDisabled = No`. The targeted runtime-log sample
+still contained AppIntents 4097 during the removal hook, with no logged fault;
+this is not an assertion that all framework warnings are resolved.
+
 ## Required validation layers
 
 1. Swift Testing for deterministic core policy, transport validation and time.
