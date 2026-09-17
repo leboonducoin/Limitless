@@ -82,6 +82,10 @@ Never invent tool commands or force an installation rejected by security control
 - Current Swift checks: `rtk proxy swift Tools/ProjectTool.swift check`, plus
   `asan` and `tsan` for instrumented runs. See `docs/testing.md` for a separate
   scratch path on a synced Desktop and the local security-tool evidence.
+- `Tests/NativeMac/ObserveHelperRestart.swift --observe-armed-restart` is a manual,
+  non-root observer, typechecked but never run by CI. Read its protocol in
+  `docs/testing.md` before use. An actual helper interruption requires separate
+  operator coordination; the observer never sends a signal or starts a session.
 - Build a local ad-hoc app with `rtk proxy swift Tools/ProjectTool.swift bundle`.
   It refuses an existing output directory and never registers a helper or login item.
   See `docs/distribution.md`; a development bundle is not a releasable artifact.
