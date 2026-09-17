@@ -1,9 +1,12 @@
 # Command-line and AI integration
 
-The Swift `limitless` executable implements the commands below. The current
-development build is not signed with a release identity and intentionally refuses
-privileged communication. A signed app/helper installation and app-authorized
-automation are prerequisites for real keep-awake sessions.
+The Swift `limitless` executable implements the commands below. Ad-hoc development
+builds intentionally refuse privileged communication. A certificate-signed app/helper
+installation and app-authorized automation are prerequisites for real keep-awake
+sessions; the community channel does not require paid Apple Developer membership.
+The local signed test build has passed native task/limit trials, as recorded in
+[testing evidence](testing.md#live-task-limits-and-idle-observation). Downloaded
+GitHub/Homebrew distribution remains unqualified.
 
 ```sh
 limitless status

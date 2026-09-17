@@ -3,11 +3,13 @@
 ## Current evidence
 
 2026-09-16 environment inspection: macOS 26.6.2, Apple M1 Pro, CLT Swift 6.4,
-SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
-power settings, login items or privileged services have been changed by this work.
-On 2026-09-17, the user authorized creation of a dedicated local test identity and
-signing of test bundles. Those checks are recorded separately below; no Apple
-membership, trust-store exception or privileged installation was used.
+SDK 27.0. Full Xcode and a valid signing identity were not detected initially.
+On 2026-09-17, the user authorized a dedicated local test identity, test signatures
+and native integration/power trials. Signed installation, task tracking, power
+restoration and removal now have local evidence below. No paid Apple membership
+or trust-store exception was used. The final cleanup left no helper, login item
+or owned hold; the test app remains in Applications. Downloaded Gatekeeper and
+clean-Mac Homebrew qualification remain open.
 
 The two libraries, app, helper and CLI executables pass strict swift-format and a Release
 build. There are 88 default Swift Testing tests (45 core, 37 system, 3 CLI, 3 app, including
@@ -33,7 +35,7 @@ A replacement at an already removed path blocks further cleanup. Reconstructed
 cleanup accepts only confirmed absent entries, while a dangling link remains an
 error; these interrupted-removal states are also tested on temporary files.
 Production uses Security's strict signature verification instead of the fixture verifier;
-positive signed deletion and ServiceManagement removal still require integration.
+the separate native trials below exercise signed deletion and ServiceManagement removal.
 Both Release development layouts passed icon/plist/signature checks and expected
 Developer ID/community release rejection on 2026-09-17. Community checks inspect
 the actual embedded Mach-O plists and Security's signed Info.plist view. The modern
@@ -57,7 +59,7 @@ Both native installation adapters also reject registration/removal from an ad-ho
 test host before native consent or mutation. Tool self-checks reject malformed
 certificate selectors, versions, truncated Mach-O metadata, unsafe signing flags
 and entitlements; only the community channel accepts a missing secure timestamp.
-No native authorization dialogue, signed SMJobBless exchange or removal was tested.
+These ordinary tests never exercise native authorization or mutate a real installation.
 CLI tests cover conflicting modes/stop conditions, malformed options, unbounded
 representable durations, timezone-bearing dates and unchanged argument arrays.
 Real unprivileged process tests verify exit codes, termination, duplicate launch
@@ -67,10 +69,10 @@ command because the development signature does not satisfy the production identi
 The installed skill-creator validator accepted `skills/limitless/SKILL.md`.
 App tests reject misleading active/inactive presentation, invalid saved limits and
 preview attempts to control the helper, automation, login items or removal.
-Tests never call privileged power writes or create real sleep assertions. The
-complete signed CLI/helper lifecycle, root-path journal integration and physical
-sleep remain untested. Non-root signed XPC evidence and native presentation inspection are recorded below;
-it does not qualify privileged controls or physical power behavior.
+Ordinary tests never call privileged power writes or create real sleep assertions.
+Signed root-helper/CLI trials and native presentation inspection are recorded
+separately below. Observing the global flag does not qualify physical lid-closed
+execution, source transitions or restart behavior.
 
 Read-only inspection outside the tool sandbox found an absent `SleepDisabled`
 line in `pmset -g`, while IORegistry reported a Boolean false. The sandboxed pmset
@@ -149,7 +151,8 @@ MIT license and AI skill. Its packaged CLI prints help successfully and rejects
 an ad-hoc artifact cannot impersonate the signed production identity. No helper
 was installed or executed for this packaging check.
 The app's `--prepare-uninstall` hook also returned 1 with the expected signed-build
-requirement before any removal action. Actual service unregistration remains untested.
+requirement before any removal action. Signed service unregistration is covered
+separately in the native lifecycle results below.
 
 Release-tool self-checks reject malformed/injected Team IDs, nonnumeric versions,
 invalid digests and ad-hoc artifacts. Synthetic signing-information checks reject
@@ -167,8 +170,8 @@ The separate `brew style --help` probe was unable to create Homebrew's cache in
 the restricted environment; it did not install a dependency. Full Homebrew
 style/audit and install/upgrade/uninstall qualification are not claimed.
 
-No push has occurred, so no remote CI result is claimed. Native interaction tests,
-privileged XPC, Developer ID release paths, independent provenance attestation
+No push has occurred, so no remote CI result is claimed. The complete physical and
+accessibility matrix, Developer ID release paths, independent provenance attestation
 and the signed Homebrew lifecycle remain separate release gates.
 
 On 2026-09-17, the expanded README and contribution guide were checked against the
@@ -199,6 +202,15 @@ entitlements and re-verification after extracting the actual ZIP. The local
 manifest, checksum and draft cask exist; no download URL has been published.
 The signed CLI's `status` returned 69 (`unavailable`) with no crash while the
 privileged helper was absent. No application integration control was activated.
+
+After the native lifecycle fixes, build 4 at
+`d884835c77d6aea6551eb9d1c288ed4de44395dc` was packaged again from its clean checkout.
+`community-package` passed strict verification of the installed app and the actual
+re-extracted ZIP. The local `Limitless-0.1.0-arm64.zip` SHA-256 is
+`860d1d4bbf71ea7e96c4e9b3c0d4e635fc4ce5b27702594253566d62bc42f46a`.
+Its manifest records that exact source, the real test certificate, community
+channel and `notarized: false`; its draft cask is unpublished. This supersedes the
+earlier archive for local testing, without qualifying publisher or download trust.
 
 The separate reproducible test uses the production `SignedConnection.swift`
 directly and a fixed-message, non-root XPC service embedded in a test bundle.
@@ -324,7 +336,7 @@ The complete local check, ASan and TSan each passed all 89 tests after this orde
 fix. Graphify is current (598 nodes/1245 edges). The complexity review retained the
 existing request, installation and filesystem machinery with one extra operation;
 no timeout-based deletion, unauthenticated channel or replacement installer was added.
-A signed native retry is the next gate.
+The subsequent signed native retry is recorded next.
 
 The build 3 retry unloaded the remaining job and all protected paths stayed absent,
 but returned failure at login-item cleanup: native logs reported status 3/notFound
@@ -337,7 +349,7 @@ Build 4 treats `notFound` as a previously unseen login service, as explained by
 that nonexistent item. It still checks final status and rejects an unknown future
 state. Enabled and approval-pending services must complete native unregistration.
 The complete check, ASan and TSan passed all 89 tests after the login fix.
-The signed native cycle with this final login fix remains to be run. Graphify is
+The signed native cycle with this final login fix is recorded next. Graphify is
 current (599 nodes/1251 edges); the complexity review retained an inline check of
 native statuses, without another wrapper or dependency.
 
@@ -375,8 +387,51 @@ continued to completion with all 89 tests passing and exit 0. Independent inspec
 confirmed `IOPMrootDomain.SleepDisabled = No`, no launchctl job, and no journal,
 daemon plist or installed helper. This verifies active removal without terminating
 tracked user work. No active helper or login item remains after these trials.
-Actual lid closure, AC transitions, expiry during work and reboot remain separate
+Actual lid closure, AC transitions and reboot remain separate
 gates; the successful flag observation alone does not prove lid-closed execution.
+
+## Live task limits and idle observation
+
+Further authorized trials used the same signed build 4 on battery, with the lid
+open, no maximum duration initially, floor 20% and automation explicitly enabled.
+Each tracked workload was a real `swift Tools/ProjectTool.swift check`, with the
+read-only integration opt-in and a scratch directory outside the repository. All four workloads
+reported complete local-check success (89 tests). A temporary non-root Swift
+observer sampled authenticated CLI status about every 0.5 seconds; status requests
+also reconcile the helper, so these timings do not bound standalone watchdog latency.
+
+| Trial | Observed result |
+| --- | --- |
+| `run -c --for 2m` while on battery | The accepted session stayed suspended for `powerSource`; the flag stayed allowed and unowned. CLI printed the suspension warning; work exited 0 and left no session. |
+| `run -a --for 3s` | Initially active/disabled/owned; at the 3.35-second sample it was inactive/allowed with zero sessions while work continued. Work finished at about 22 seconds with exit 0 and no reacquisition. |
+| `watch -b --for 2m --pid` against the observer's real validation process | One active hold persisted while that specific process ran; watcher and work exited 0, followed by zero sessions and allowed/unowned state at about 17 seconds. The watcher did not signal the work. |
+| `run -a --unlimited` with an app-applied six-second maximum | Authenticated policy confirmed the cap. At the 6.62-second sample, protection had ended while work continued. It stayed ended through validation completion at about 12 seconds; CLI reported that work could continue but protection would not restart. |
+
+With user floor 20%, requesting 19% was refused with exit 69/`sessionRejected`
+before command launch; 51% was rejected by the parser with exit 64. The native
+stepper was then exercised from 20% to 0% and back, verifying each single-percent
+step. An unapplied 0% draft left the helper at 20%. After explicit Apply, both the
+native warning and signed CLI warning were observed; `run --battery-floor 0
+--for 3s -- /usr/bin/swift --version` exited 0. The floor was restored to 20%.
+This checks warning and policy behavior, not actual discharge to a cutoff.
+
+The native maximum-minutes field uses the system decimal separator. On this Mac
+(`en_US@rg=frzzzz`), `0,1` applied six seconds. The attempted dot-decimal entry was
+invalid and did not apply; reading authenticated helper policy prevented treating
+a draft as an applied limit. The maximum was removed again after the trial.
+
+With both windows closed, no sessions and the helper installed, four `top` samples
+ten seconds apart showed app CPU at 0.1–0.3% after the initial sample and helper CPU
+rounded to 0.0%. CPU time increased about 0.09 and 0.02 seconds respectively; memory
+was 47 MB for the app and 4528 KB for the helper. This thirty-second sample does
+not measure wakeups, sustained energy use, thermal behavior or battery autonomy.
+
+Finally automation was revoked, authenticated status confirmed floor 20%, no cap,
+zero sessions and inactive/allowed/unowned state, and the app quit normally.
+The official removal hook exited 0. Independent IORegistry read returned
+`SleepDisabled = No`, launchctl returned service-not-found (113), and the helper,
+daemon plist and state directory were all absent. No login item, active test
+process or privileged installation was left behind.
 
 ## Native interface inspection
 
@@ -421,6 +476,17 @@ events did not establish changed values or reliable Command-W/Command-comma beha
 even with event-posting permission already present. AXPress can operate independently
 of keyboard delivery, so these results do not qualify keyboard-only navigation or
 prove a shortcut bug. No application behavior was changed to accommodate the tool.
+
+The later signed-app probe found that hardcoded US key positions are incorrect on
+this Mac's AZERTY layout: an intended Select All initially sent Quit. AppKit logs
+confirmed normal termination, not a crash. The probe now resolves character keys
+through the active public keyboard-layout APIs and uses the current decimal
+separator. A retry with in-process activation still did not establish Command-W
+or Command-comma behavior; the native close button and Settings menu action did
+work. Keep full keyboard and VoiceOver qualification open, without adding an app
+workaround for inconclusive injected events. Signed-runtime error samples also
+contained Apple's TextInputUI ViewBridge cancellation and inputAnalytics connection
+interruption; no Limitless-originated error was identified in that limited sample.
 
 Runtime-log review found Apple AppIntents `com.apple.linkd.autoShortcut` connection
 errors (4097), BaseBoard task-port messages and cache-file lookup messages during
