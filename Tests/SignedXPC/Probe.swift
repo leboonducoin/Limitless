@@ -5,6 +5,7 @@ final class ProbeServer: NSObject, NSXPCListenerDelegate, LimitlessXPC {
     let requirement: String
     private let lock = NSLock()
     private var connections: [NSXPCConnection] = []
+    var admissionCount: Int { lock.withLock { connections.count } }
 
     init(requirement: String) { self.requirement = requirement }
 
@@ -34,6 +35,76 @@ enum ProbeResult: Sendable {
 }
 
 @main struct Probe {
+    @MainActor static func exchange(_ connection: NSXPCConnection) async -> ProbeResult {
+        await withCheckedContinuation { continuation in
+            let pending = OSAllocatedUnfairLock(initialState: Optional(continuation))
+            let finish: @Sendable (ProbeResult) -> Void = { result in
+                let current = pending.withLock { value in
+                    defer { value = nil }
+                    return value
+                }
+                current?.resume(returning: result)
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 5) { finish(.timeout) }
+            guard
+                let proxy = connection.remoteObjectProxyWithErrorHandler({ @Sendable error in
+                    let error = error as NSError
+                    finish(.refused(error.domain, error.code))
+                }) as? any LimitlessXPC
+            else {
+                finish(.refused("Probe", -1))
+                return
+            }
+            proxy.request(Data("signed-xpc-probe".utf8)) { finish(.reply($0)) }
+        }
+    }
+
+    @MainActor static func verifyAdmission(identity: SignedIdentity, wrongPin: String) async throws
+    {
+        let correct = try identity.requirement(for: LimitlessIdentity.commandLine)
+        for (name, requirement, expectedCount) in [
+            ("matching", correct, 1),
+            (
+                "wrong-pin",
+                correct.replacingOccurrences(of: identity.certificateFingerprint, with: wrongPin), 0
+            ),
+            ("wrong-id", try identity.requirement(for: LimitlessIdentity.application), 0),
+        ] {
+            let server = ProbeServer(requirement: requirement)
+            let listener = NSXPCListener.anonymous()
+            listener.setConnectionCodeSigningRequirement(requirement)
+            listener.delegate = server
+            listener.activate()
+            let connection = NSXPCConnection(listenerEndpoint: listener.endpoint)
+            connection.setCodeSigningRequirement(correct)
+            connection.remoteObjectInterface = NSXPCInterface(with: LimitlessXPC.self)
+            connection.activate()
+            let result = await exchange(connection)
+            connection.invalidate()
+            listener.invalidate()
+            guard server.admissionCount == expectedCount else {
+                print(
+                    "FAIL admission \(name): delegate ran \(server.admissionCount) times, expected \(expectedCount)"
+                )
+                exit(1)
+            }
+            switch result {
+            case .reply(let data):
+                guard expectedCount == 1, data == Data("probe:\(getpid()):\(geteuid())".utf8) else {
+                    exit(1)
+                }
+            case .refused(let domain, let code):
+                guard expectedCount == 0, domain == NSCocoaErrorDomain,
+                    [NSXPCConnectionInterrupted, NSXPCConnectionInvalid].contains(code)
+                else { exit(1) }
+            case .timeout:
+                print("FAIL admission \(name): timeout")
+                exit(1)
+            }
+            print("PASS admission \(name): delegate ran \(expectedCount) times")
+        }
+    }
+
     static func main() async {
         do {
             guard geteuid() != 0, let identifier = Bundle.main.bundleIdentifier else {
@@ -61,6 +132,7 @@ enum ProbeResult: Sendable {
                 withExtendedLifetime(server) { listener.resume() }
                 return
             }
+            if mode == "valid" { try await verifyAdmission(identity: identity, wrongPin: wrongPin) }
             let connection = NSXPCConnection(serviceName: LimitlessIdentity.helper)
             var requirement = try identity.requirement(for: LimitlessIdentity.helper)
             if mode == "reject-server-pin" {
@@ -72,27 +144,7 @@ enum ProbeResult: Sendable {
             connection.setCodeSigningRequirement(requirement)
             connection.remoteObjectInterface = NSXPCInterface(with: LimitlessXPC.self)
             connection.activate()
-            let result: ProbeResult = await withCheckedContinuation { continuation in
-                let pending = OSAllocatedUnfairLock(initialState: Optional(continuation))
-                let finish: @Sendable (ProbeResult) -> Void = { result in
-                    let current = pending.withLock { value in
-                        defer { value = nil }
-                        return value
-                    }
-                    current?.resume(returning: result)
-                }
-                DispatchQueue.global().asyncAfter(deadline: .now() + 5) { finish(.timeout) }
-                guard
-                    let proxy = connection.remoteObjectProxyWithErrorHandler({ @Sendable error in
-                        let error = error as NSError
-                        finish(.refused(error.domain, error.code))
-                    }) as? any LimitlessXPC
-                else {
-                    finish(.refused("Probe", -1))
-                    return
-                }
-                proxy.request(Data("signed-xpc-probe".utf8)) { finish(.reply($0)) }
-            }
+            let result = await exchange(connection)
             connection.invalidate()
             switch result {
             case .reply(let data):

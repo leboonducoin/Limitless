@@ -224,12 +224,27 @@ workflow compiles them for analysis without signing/execution (hosted run pendin
 | Server expects a different client identifier | No reply; connection interrupted, Cocoa error 4097 |
 | Client expects a different server identifier | No reply; code-signing requirement failure, Cocoa error 4102 |
 
-All five cases passed on the inspected Mac. Mismatched pins deliberately change
+All five cross-process cases passed on the inspected Mac. Mismatched pins deliberately change
 one hexadecimal digit of the expected fingerprint; no second signing key was
 created. Native XPC logs also recorded code-signing requirement refusals with
 Security status -67050. This proves these checks on the local non-root transport,
 not the production helper's privileged endpoint, console-user rules, administrator
 approval, installation/removal or closed-lid behavior.
+
+The same runner also checks three anonymous-listener admission cases within one
+signed process. A matching peer reaches the delegate once; a wrong pin or wrong
+identifier never reaches it. The initial experiment with only per-connection
+requirements failed this assertion: a wrong pin reached the delegate once before
+its message was rejected. Adding `setConnectionCodeSigningRequirement` before
+listener activation made all three admission cases pass. The helper now sets this
+native filter on both of its Mach listeners before any connection can trigger
+reconciliation or owner allocation. Per-message checks are retained. The installed
+SDK documents rejection before consulting the delegate; this API supports Mach and
+anonymous listeners, not the singleton bundled-service listener used by the other
+five cases. See [Apple's listener requirement API](https://developer.apple.com/documentation/foundation/nsxpclistener/setconnectioncodesigningrequirement(_:)).
+These eight native cases remain separate from the 89 Swift Testing tests and do
+not install the production helper. After the listener change, the complete local
+check, Address Sanitizer and Thread Sanitizer each passed all 89 tests again.
 
 ## Native interface inspection
 

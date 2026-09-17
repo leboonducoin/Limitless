@@ -28,6 +28,11 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     }
 
     func start() throws {
+        // Reject foreign peers before the delegate can reconcile state or allocate an owner.
+        control.setConnectionCodeSigningRequirement(
+            try identity.requirement(for: LimitlessIdentity.application))
+        tasks.setConnectionCodeSigningRequirement(
+            try identity.requirement(for: LimitlessIdentity.commandLine))
         try queue.sync { runtime = try HelperRuntime(identity: identity) }
         control.delegate = self
         tasks.delegate = self

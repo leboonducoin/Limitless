@@ -22,6 +22,9 @@ ad-hoc signatures have no certificate. The helper binds owners to connections an
 current console UID. Automation starts disabled after service startup or user
 switch; a task cannot configure policy, rearm recovery or release another owner.
 Ad-hoc builds fail closed. No test-only authentication bypass is shipped.
+Listener-level requirements reject foreign clients before the admission delegate
+can reconcile state or allocate a connection owner; per-message requirements still
+protect the accepted channel. Role-specific pins apply to both control and task listeners.
 
 The stable certificate pin replaces the earlier Apple-only Team ID boundary.
 Certificate selection uses the SHA-1 fingerprint mandated by Apple's requirement

@@ -26,6 +26,12 @@ and certificate fingerprints accept exactly 40 ASCII hexadecimal characters.
 Apple's requirement language uses SHA-1 as its certificate selector; release
 archives use SHA-256. No PID-only signature check or private audit-token API is used.
 
+Before activation, both Mach listeners also apply their role's requirement with
+`setConnectionCodeSigningRequirement`. Foundation rejects a foreign peer before
+calling the admission delegate, which otherwise reconciles power state and allocates
+an owner. Setting only the per-connection requirement protects messages but permits
+that earlier callback. Per-message checks remain in place after admission.
+
 Pinning establishes that peers have the same signer, not that Apple or a third
 party has reviewed the app. Native admin approval must establish the installed
 helper's trust. Certificate rotation requires removing the old installation with
@@ -63,7 +69,10 @@ or SIGKILL relies on the subsequent helper start to restore the journaled hold.
 The opt-in signed probe compiles the production `SignedConnection.swift` directly
 and exchanges a fixed message with a separate non-root bundled XPC service.
 Matching identities pass; mismatched certificate pins and identifiers are refused
-in both directions. It does not instantiate `HelperRuntime`, install a daemon or
+in both directions. Three additional anonymous-listener cases count admission
+callbacks: one for a matching peer, zero for a wrong pin or identifier. These three
+cases run within one signed process, separately from the five cross-process cases.
+The probe does not instantiate `HelperRuntime`, install a daemon or
 exercise the privileged service lifecycle. Native registration and app/helper
 lifecycle tests remain open; see [test evidence](testing.md#signed-community-and-xpc-tests).
 

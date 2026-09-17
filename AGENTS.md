@@ -95,8 +95,9 @@ Never invent tool commands or force an installation rejected by security control
   Signature creation and Apple uploads need explicit authorization. Never invent
   a release digest, upload result, available download URL or successful CI run.
 - With explicit signing authorization, `rtk proxy swift Tests/SignedXPC/Run.swift
-  CERT_SHA1 NEW_OUTPUT_DIRECTORY` checks five non-root signed XPC cases using the
-  production identity source. Ordinary `check` only typechecks these files; CodeQL
+  CERT_SHA1 NEW_OUTPUT_DIRECTORY` checks five non-root cross-process XPC cases and
+  three listener-admission cases using the production identity source. Ordinary
+  `check` only typechecks these files; CodeQL
   compiles them without signing or executing. This probe does not qualify helper
   installation, power changes or Gatekeeper acceptance. See `docs/testing.md`.
 - Validate workflow edits with actionlint and zizmor; scan staged changes and Git
