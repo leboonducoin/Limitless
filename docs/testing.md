@@ -128,6 +128,12 @@ The checked-in workflows run on pull requests, pushes to `main`, and manual
 dispatch. Security also runs weekly. Actions are pinned to verified full commit
 IDs; checkout credentials are not persisted. Jobs have individual minimum
 permissions and timeouts. No job installs the helper or changes power settings.
+Read-only GitHub inspection on 2026-09-17 returned zero registered workflows,
+workflow runs and releases for `leboonducoin/Limitless`. In the table, "configured"
+means committed locally, not uploaded or executed on GitHub. Private vulnerability
+reporting, secret scanning, push protection and Dependabot security updates were
+enabled; `main` had no classic protection or applicable branch rules. No remote
+setting was changed. See [SECURITY.md](../SECURITY.md) for publication prerequisites.
 
 | Check | Local evidence through 2026-09-17 | GitHub execution |
 | --- | --- | --- |

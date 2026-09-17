@@ -4,7 +4,7 @@ Limitless is in development. There is no supported public release yet. Do not
 install development privileged helpers on a machine you cannot recover safely.
 
 Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/leboonducoin/Limitless/security/advisories/new).
-It was verified enabled on 2026-09-16; recheck availability before release. Do not post
+It was verified enabled on 2026-09-17; recheck availability before release. Do not post
 credentials, exploit details or private command arguments in public issues.
 
 ## Required boundaries
@@ -74,9 +74,11 @@ source provenance and, for the Developer ID channel, notarization separately.
 The community channel must explicitly identify itself as not notarized.
 Never bypass a security control.
 
-Read-only GitHub inspection on 2026-09-16 confirmed a public repository with private
+Read-only GitHub inspection on 2026-09-17 confirmed a public repository with private
 vulnerability reporting, secret scanning, secret push protection and Dependabot
 security updates enabled. The `main` branch had neither classic protection nor
-applicable ruleset rules. Required CI/security checks and protected release controls
-must be configured before publication; no remote settings were changed by this
-inspection. Reverify these settings rather than relying on this dated snapshot.
+applicable ruleset rules. GitHub reported zero workflows, workflow runs and releases;
+the committed CI definitions exist locally and have not been pushed. Required
+CI/security checks and protected release controls must be configured before
+publication; no remote settings were changed by this inspection. Reverify these
+settings rather than relying on this dated snapshot.
