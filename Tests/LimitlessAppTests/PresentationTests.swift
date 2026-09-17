@@ -42,10 +42,22 @@ private func status(
 }
 
 #if DEBUG
+    @Test @MainActor func startupNeverGrantsControlBeforeBuildVerification() async {
+        let model = AppModel()
+        #expect(model.buildTrust == .checking)
+        #expect(!model.trustedBuild && !model.canControl)
+        await model.prepareForLaunch()
+        #expect(model.buildTrust == .untrusted)
+        #expect(!model.trustedBuild && !model.canControl)
+        #expect(model.status == nil && !model.removalComplete)
+    }
+
     @Test @MainActor func previewCannotControlPowerOrAuthorizeAutomation() async {
         let model = AppModel.preview("active")
         let before = model.status
         #expect(model.isPreview && !model.canControl)
+        await model.prepareForLaunch()
+        #expect(model.buildTrust == .untrusted)
         await model.stopAll()
         await model.setAutomation(false)
         await model.registerHelper()

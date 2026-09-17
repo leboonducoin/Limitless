@@ -110,7 +110,13 @@ enum ProbeResult: Sendable {
             guard geteuid() != 0, let identifier = Bundle.main.bundleIdentifier else {
                 throw CocoaError(.coderValueNotFound)
             }
-            let identity = try SignedIdentity(expectedIdentifier: identifier)
+            let identity: SignedIdentity
+            if identifier == LimitlessIdentity.helper {
+                // Preserve the embedded NSRunLoop service's synchronous bootstrap.
+                identity = try SignedIdentity(expectedIdentifier: identifier)
+            } else {
+                identity = try await SignedIdentity.current(expectedIdentifier: identifier)
+            }
             let mode =
                 Bundle.main.object(forInfoDictionaryKey: "LimitlessProbeCase") as? String ?? "valid"
             let wrongPin =

@@ -26,6 +26,16 @@ and certificate fingerprints accept exactly 40 ASCII hexadecimal characters.
 Apple's requirement language uses SHA-1 as its certificate selector; release
 archives use SHA-256. No PID-only signature check or private audit-token API is used.
 
+Reading signing information can synchronously evaluate certificate trust. App
+startup and client construction therefore await `SignedIdentity.current`, whose
+`@concurrent` isolation keeps that work off the main actor. The same certificate,
+identifier and validity checks still run; cancellation is checked before and after
+validation. The UI grants no controls while its build identity is pending, and the
+removal hook waits for that validation too. A newly connected app client is closed
+if quitting or a newer operation superseded its asynchronous setup. The helper's
+synchronous bootstrap and native installation adapters retain their existing paths.
+See Apple's [blocking trust-evaluation guidance](https://developer.apple.com/library/archive/technotes/tn2232/).
+
 Before activation, both Mach listeners also apply their role's requirement with
 `setConnectionCodeSigningRequirement`. Foundation rejects a foreign peer before
 calling the admission delegate, which otherwise reconciles power state and allocates

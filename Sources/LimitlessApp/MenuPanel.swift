@@ -187,7 +187,9 @@ struct MenuPanel: View {
 
     private var setupControls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if model.removalComplete {
+            if model.buildTrust == .checking {
+                ProgressView("Preparing Limitless…").controlSize(.small)
+            } else if model.removalComplete {
                 Text("Ready to remove").font(.callout.weight(.semibold))
                 Text("Quit Limitless, then uninstall with Homebrew or move the app to the Trash.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(

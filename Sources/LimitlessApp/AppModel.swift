@@ -6,12 +6,15 @@ import Observation
 import ServiceManagement
 
 @MainActor @Observable final class AppModel {
+    enum BuildTrust { case checking, trusted, untrusted }
+
     private(set) var status: ServiceStatus?
     private(set) var busy = false
     private(set) var connectionError: String?
     private(set) var helperStatus: SMAppService.Status = .notRegistered
     private(set) var loginStatus: SMAppService.Status = .notRegistered
-    private(set) var trustedBuild = false
+    private(set) var buildTrust = BuildTrust.checking
+    var trustedBuild: Bool { buildTrust == .trusted }
     private(set) var removalComplete = false
     var message: String?
     var draft = PolicyDraft()
@@ -43,9 +46,17 @@ import ServiceManagement
             draft = PolicyDraft(policy)
             baseline = draft
         }
-        trustedBuild =
-            helper != nil
-            && (try? SignedIdentity(expectedIdentifier: LimitlessIdentity.application)) != nil
+    }
+
+    func prepareForLaunch() async {
+        guard !isPreview, buildTrust == .checking else { return }
+        guard helper != nil else {
+            buildTrust = .untrusted
+            return
+        }
+        let identity = try? await SignedIdentity.current(
+            expectedIdentifier: LimitlessIdentity.application)
+        buildTrust = identity == nil ? .untrusted : .trusted
     }
 
     var canControl: Bool {
@@ -63,7 +74,7 @@ import ServiceManagement
     var draftChanged: Bool { draft != baseline }
 
     func beginMonitoring() {
-        guard monitoring == nil, !isPreview else { return }
+        guard monitoring == nil, !isPreview, !quitting else { return }
         monitoring = Task { [weak self] in
             var tick = 0
             while !Task.isCancelled {
@@ -99,7 +110,14 @@ import ServiceManagement
         defer { refreshing = false }
         let currentRevision = revision
         do {
-            if client == nil { client = try ServiceClient(role: .application) }
+            if client == nil {
+                let connected = try await ServiceClient(role: .application)
+                guard currentRevision == revision, !quitting else {
+                    await connected.close()
+                    return
+                }
+                client = connected
+            }
             guard let client else { return }
             let reply = try await client.send(.status)
             guard currentRevision == revision else { return }
@@ -256,7 +274,7 @@ import ServiceManagement
                 try SecureOwnershipJournal.isStateDirectoryAbsent()
                 && InstalledHelperFiles.areAbsent()
             if helperStatus == .enabled, !filesRemoved {
-                if client == nil { client = try ServiceClient(role: .application) }
+                if client == nil { client = try await ServiceClient(role: .application) }
                 guard let client else { throw ServiceError.unavailable }
                 try accept(await client.send(.prepareRemoval))
                 guard let status, status.removal == .ready, status.canRemoveService,
@@ -338,7 +356,7 @@ import ServiceManagement
         static func preview(_ state: String) -> AppModel {
             let model = AppModel()
             model.isPreview = true
-            model.trustedBuild = false
+            model.buildTrust = .untrusted
             model.helperStatus = .enabled
             let active = state == "active"
             let waiting = state == "suspended"

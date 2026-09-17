@@ -1,4 +1,5 @@
 import Foundation
+import LimitlessCore
 import Security
 import Testing
 
@@ -44,5 +45,12 @@ import Testing
 @Test func testHostCannotImpersonateTheSignedProductionHelper() {
     #expect(throws: SignatureError.untrustedIdentity) {
         try SignedIdentity(expectedIdentifier: LimitlessIdentity.helper)
+    }
+}
+
+@Test(arguments: [ClientRole.application, .task]) @MainActor
+func asynchronousClientSetupRejectsTheTestHost(role: ClientRole) async {
+    await #expect(throws: SignatureError.untrustedIdentity) {
+        try await ServiceClient(role: role)
     }
 }

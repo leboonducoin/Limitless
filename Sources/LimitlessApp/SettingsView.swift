@@ -117,7 +117,7 @@ struct SettingsView: View {
                     Text(message).font(.callout).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if !model.trustedBuild && !model.isPreview {
+            if model.buildTrust == .untrusted && !model.isPreview {
                 Section {
                     Text("This development build cannot change power settings or login items.")
                         .font(.callout).foregroundStyle(.secondary)
