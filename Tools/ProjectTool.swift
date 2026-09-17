@@ -791,13 +791,14 @@ do {
             environment: buildEnvironment)
     } else {
         try selfTest()
-        // Compile the opt-in signed probe without creating keys, signing or launching it in CI.
+        // Typecheck opt-in integration tools without signing, launching or changing the host.
         for sources in [
             [
                 "-parse-as-library", "Sources/LimitlessSystem/SignedConnection.swift",
                 "Tests/SignedXPC/Probe.swift",
             ],
             ["Tests/SignedXPC/Run.swift"],
+            ["Tests/NativeMac/ObserveHelperRestart.swift"],
         ] {
             _ = try run(
                 "/usr/bin/xcrun",

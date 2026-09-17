@@ -135,8 +135,8 @@ permissions and timeouts. No job installs the helper or changes power settings.
 | Development app bundle, icon export, plist and strict ad-hoc signature verification | Both Release layouts passed; modern Debug previously passed | Both Release layouts configured; not run |
 | Release input validation, Homebrew template syntax, ad-hoc release rejection | Passed | Included in check and bundle; not run |
 | Address / Thread Sanitizer, separate builds | Both passed; runtime libraries verified in binaries | Configured; not run |
-| actionlint 1.7.12 | Passed again after community CI edit | Configured; not run |
-| zizmor 1.30.1, pedantic | Offline audit passed again after community CI edit | Online audit configured; not run |
+| actionlint 1.7.12 | Passed again after adding the manual restart observer to analysis | Configured; not run |
+| zizmor 1.30.1, pedantic | Offline audit passed again after adding the manual restart observer | Online audit configured; not run |
 | Gitleaks 8.30.1 | Full local history and staged changes passed | Full fetched history configured; not run |
 | CodeQL Swift and GitHub Actions, extended security | Not available locally with this CLT toolchain | Configured; not run |
 | Dependency review and Dependabot | Configuration inspected | Requires GitHub execution/settings |
@@ -805,6 +805,60 @@ exited 0. Protected helper/plist/journal paths were absent and independent
 IORegistry observation was `SleepDisabled = No`. The targeted runtime-log sample
 still contained AppIntents 4097 during the removal hook, with no logged fault;
 this is not an assertion that all framework warnings are resolved.
+
+## Manual helper restart observer
+
+`Tests/NativeMac/ObserveHelperRestart.swift` prepares a reproducible, opt-in Mac
+test of journal restoration after an abrupt helper restart. Ordinary `check`
+typechecks it with Swift 6 and warnings as errors; CodeQL's workflow builds it
+for analysis. Neither path runs the observer or interrupts a service.
+
+Use only an explicitly authorized test installation whose signatures and source
+revision have already passed the appropriate artifact verifier. Keep the matching
+app installed and open for restoration or cleanup. With the operator ready:
+
+1. Enable the helper through the app's native setup. Start a bounded manual session
+   with at least five minutes selected; verify active/disabled/owned status.
+2. Run the observer as the normal console user from the repository:
+
+   ```sh
+   rtk proxy swift Tests/NativeMac/ObserveHelperRestart.swift --observe-armed-restart
+   ```
+
+3. Only after it prints `READY` with the current helper PID, the operator performs
+   the authorized interruption in a separate Terminal, within 60 seconds:
+
+   ```sh
+   rtk proxy sudo /bin/launchctl kill SIGKILL system/io.github.leboonducoin.Limitless.helper
+   ```
+
+4. Keep the app open without rearming or starting another session until observation
+   finishes. Afterwards use the normal guarded removal flow and verify allowed
+   sleep, absent root paths and absent launchd job. If restoration is unconfirmed,
+   use the app's restoration controls and preserve the journal and installed app.
+
+The observer requires an active owned hold with at least two minutes remaining.
+It obtains signed status before the interruption, then observes only the fixed
+launchd job's PID and a strict Boolean IORegistry value while waiting. It requires
+a replacement PID, allowed sleep for ten seconds, and final authenticated status
+with zero sessions, automation off, no ownership and the latched `interrupted`
+fault. It makes no activation, stop, installation or signal request. Its private
+0600 JSON-lines trace records observations; unknown telemetry or timeout fails.
+The timing window is not a hard real-time guarantee for native subprocess calls.
+This gate is distinct from reboot, physical lid/source tests and proving that a
+separate user workload continues after loss of the helper.
+
+On 2026-09-17 this observer passed strict typechecking and both negative entry
+checks: missing explicit option and unavailable helper each exited 1, before
+creating a trace or changing an integration. The complete local `check` passed
+92 tests, and actionlint/zizmor passed after the workflow edit. The live abrupt
+restart **has not run**. Swift 6.4 rejects `AuthorizationExecuteWithPrivileges`
+as unavailable; a read-only `sudo -n /usr/bin/id -u` check confirmed no existing
+shell authorization. Operator coordination was requested. No private API,
+alternate-language launcher or privilege-grant workaround was introduced.
+Read-only accessibility inspection also confirmed full keyboard access and
+event-posting permission enabled, with VoiceOver disabled; these settings alone
+do not qualify keyboard event delivery or VoiceOver use.
 
 ## Required validation layers
 
