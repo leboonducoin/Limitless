@@ -611,6 +611,58 @@ This verifies same-version local reinstallation and scoped zap for build 4 with
 inactive integrations. It does not verify an upgrade, active-helper cask removal,
 the latest build's complete cask lifecycle or a download on a clean Mac.
 
+### Build 5 active cask removal and repeat installation
+
+The current build 5 archive was then tested through the separate local tap
+`limitless-local/build5-20260917` and app directory
+`/private/tmp/limitless-homebrew-build5`, using its real generated checksum.
+The unmodified generated build 5 cask also passed `brew style --cask` (one file,
+zero offenses) and `brew audit --cask --strict` in a separate temporary local tap.
+These offline checks do not validate the unpublished download URL.
+Its installed copy passed `community-verify` for source
+`1cfaffca03de61e4f152c128739e3c62d76b8845`; quarantine remained present. The app
+was eventually observed running after a normal opening request and initial AMFI
+rejection. The native first-open decision itself was not inspected or automated;
+`spctl` still returned 3/rejected. This was the same test Mac, not a clean-machine
+Gatekeeper qualification.
+
+The actual Enable button installed the helper through the native adapter. Its
+hash matched the signed bundle. Authenticated status initially showed automation
+off, zero sessions, allowed sleep and no ownership. Automation was enabled through
+the native Settings control, then confirmed through signed status with mode `all`,
+battery floor 20 and no user time cap. The Mac was on battery at 87%.
+
+The signed CLI ran the repository's real complete `check` with a two-minute task
+limit. After signed status and independent IORegistry observation confirmed one
+active owned hold, the trial started normal `brew uninstall --cask`. Homebrew quit
+the GUI and ran the mandatory cleanup hook. Relative to the task launch, sleep
+was observed allowed at **1.81 s**; Homebrew had exited 0 at **5.30 s**, while the
+tracked work was still running. Sleep stayed allowed through task completion.
+The work exited 0 with **92 tests** and the remaining local checks passing. The
+trial verified absence of the system job, helper files, root journal, app, CLI
+link and receipt. During removal it observed IORegistry without polling signed
+status; these timestamps describe this run, not guaranteed cleanup latency.
+Trace and workload/removal logs were retained under
+`/private/tmp/Limitless-homebrew-active-66741B46-0DFC-4BD8-A944-F0E0061E7684`.
+
+A fresh installation preserved preferences and did not recreate the helper or
+hold. Its first CLI execution and normal reinstall hook were killed by macOS;
+the failed reinstall exited 1 and retained the app, link and receipt. After that
+exact GUI copy was observed running, it showed **Setup required**, and signed CLI
+status exited 69/unavailable. A normal reinstall retry exited 0 with preferences
+unchanged. No force or quarantine removal was used. Subsequent `brew uninstall
+--cask --zap` exited 0 and removed all three declared preference/cache/saved-state
+paths; the two previously absent directories contained only test markers.
+
+Original preferences were restored from the private pre-test backup and compared
+equal. The temporary cask trust, tap and empty app directory were removed normally,
+with auto-update, analytics, autoremove and install cleanup disabled throughout.
+The primary build 5 app in `/Applications` was preserved and verified again.
+Final checks found no GUI instance, system job, helper files or root journal and
+`SleepDisabled = No`. This qualifies local build 5 active removal, same-version
+reinstallation and scoped zap. A real upgrade, clean-Mac download/opening flow,
+approval revocation and interruption during removal remain open.
+
 ## Native interface inspection
 
 Read-only Debug previews were inspected through native accessibility automation on
