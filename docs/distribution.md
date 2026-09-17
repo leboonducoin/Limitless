@@ -68,8 +68,18 @@ The app and cask must not remove quarantine, disable Gatekeeper or automate appr
 [Apple opening policy](https://support.apple.com/en-gb/102445).
 The official `homebrew/cask` catalogue requires passing its Gatekeeper checks;
 distribution from our own reviewed tap is a distinct channel and cannot claim
-official-catalogue acceptance. No tap or downloadable release exists yet.
+official-catalogue acceptance. No public tap or downloadable release exists yet.
 [Homebrew acceptance policy](https://docs.brew.sh/Acceptable-Casks).
+
+The local Homebrew trial preserved quarantine and passed certificate verification,
+but Gatekeeper initially rejected execution and killed the cleanup hook before
+launch. Homebrew correctly kept the app and receipt. After the exact copy was
+observed open through macOS, its CLI worked and normal Homebrew removal passed.
+No opening exception was automated and no quarantine was removed by the tooling.
+A successful cask install alone therefore does not prove opening or removal;
+the manual opening flow still needs qualification on a clean Mac. Do not remove
+quarantine or skip the cleanup hook to make it pass.
+See [the exact trial](testing.md#homebrew-cask-validation).
 
 ## Local app bundle
 
@@ -192,10 +202,10 @@ protected CI secrets, outside Git. No artifact upload or release is authorized b
 this document. A source hash, version and signed artifact digest must agree before
 publication. Do not publish the ad-hoc bundle or invent a downloadable release URL.
 
-The Swift release tooling and Homebrew template are implemented; they have not
-produced a signed or notarized release. The native removal flow is implemented,
-with session/filesystem tests; its signed ServiceManagement lifecycle has not
-been exercised.
+The Swift release tooling and Homebrew template are implemented. A locally signed
+community archive and its non-quarantined native lifecycle have passed; no public
+or notarized release exists. The downloaded/quarantined Homebrew lifecycle remains
+a separate gate, including the first-open decision and blocked-cleanup case.
 Installation must preserve macOS approval; a cask must not run `sudo pmset`, install
 passwordless sudoers rules or disable quarantine. Native first launch separately
 requests helper approval and offers launch at login.
@@ -277,10 +287,14 @@ and a matching universal/Intel recipe require separate evidence.
 
 The cask is generated from `Packaging/limitless.rb.in`. Its GitHub URL follows the
 planned `vVERSION` tag and exact ZIP filename; generation **does not create that
-release or make the URL available**. No tap has been created. After an authorized
-release actually exists, the matching generated cask can be distributed through a
-reviewed tap or installed as a local cask file with Homebrew. Never use the template
-itself as an installable cask, substitute a dummy digest, or use `--no-quarantine`.
+release or make the URL available**. No public tap has been created. After an
+authorized release actually exists, place the matching generated `limitless.rb`
+in a reviewed tap's `Casks` directory. Validate it with `brew style --cask
+OWNER/TAP/limitless` and `brew audit --cask --strict OWNER/TAP/limitless` before
+publication; replace `OWNER/TAP` with that actual tap. Homebrew's audit rejects
+loose `.rb` paths, and style needs the cask/tap context. These checks do not prove
+download or installation. Never use the template itself as an installable cask,
+substitute a dummy digest, or use `--no-quarantine`.
 
 The source record is covered by the app signature; the digest binds the archive.
 Neither proves an independently reproducible build or a GitHub artifact
