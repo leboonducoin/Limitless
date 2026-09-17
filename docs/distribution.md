@@ -20,8 +20,11 @@ disabled; removing the Team ID requirement does not remove authentication.
 
 Certificate-signed, non-root XPC probes now verify a real cross-process reply and
 reject mismatched certificate pins and identifiers in both directions. A bundle
-identifier or UID alone remains insufficient. Native administrator approval and
-the privileged app/helper exchange still need integration evidence. Apple's
+identifier or UID alone remains insufficient. The first authorized SMJobBless
+installation and authenticated app/CLI exchanges with the root helper succeeded
+on the test Mac. The first removal exposed a plist validation bug; see
+[the integration record](testing.md#privileged-installation-trial).
+Apple's
 code-signing requirements support a self-signed certificate pin; that does not
 prove a complete installation flow.
 [Apple certificate requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
@@ -33,8 +36,10 @@ requesting administrator consent through Authorization Services. The helper
 has guarded cleanup for the two fixed files that SMJobBless installs, using the
 running executable's signed identity; temporary-file tests cover replacement,
 unsafe paths and interrupted removal. This does not qualify a real installation.
-Signature exchange, approval, upgrade, restoration and full removal still require
-real-Mac evidence. Keep the shared session/controller/backend and all user limits;
+Cancellation, upgrade, restoration and full removal still require real-Mac evidence.
+The removal validator accepts the optional `Program` key written by SMJobBless only
+when it equals the fixed helper path, alongside the exact `ProgramArguments` array.
+Keep the shared session/controller/backend and all user limits;
 do not add a password field,
 passwordless sudoers rule, unsigned-client acceptance or an arbitrary root executor.
 [Apple SMJobBless contract](https://developer.apple.com/documentation/servicemanagement/smjobbless(_:_:_:_:)).

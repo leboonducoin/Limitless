@@ -271,6 +271,41 @@ This evidence applies to this test artifact. It does not establish compatibility
 across macOS releases, Gatekeeper acceptance, privileged installation or hardware
 behavior. Repeat the inventory for the artifact selected for publication.
 
+## Privileged installation trial
+
+On 2026-09-17, after explicit user authorization, the signed community bundle at
+`0428a053426a94f139d61510161f55e818cab3de` was opened and its actual Enable Limitless
+button invoked through native accessibility. Authorization Services and SMJobBless
+installed the helper. launchctl reported a running system job and both expected
+Mach endpoints. The signed CLI returned an authenticated inactive status:
+`observed=allowed`, zero sessions, automation disabled. No keep-awake session or
+login item was activated. The installed executable and plist were root-owned,
+without group/world write permission; the state directory was root-owned 0700.
+Security's strict/all-architectures check with the exact identifier/certificate
+requirement succeeded on both the installed and source helper (OSStatus 0).
+
+The actual `LimitlessApp --prepare-uninstall` then exited 1. Status remained
+inactive/allowed with `removal=preparing`. Inspection found that SMJobBless added
+`Program` pointing to the fixed helper path. The validator incorrectly required
+this key to be absent. The existing idempotent-removal test now exercises both
+forms; the installed form failed before the fix with `unexpectedContents` and
+passes after it. A different Program remains rejected by the existing negative
+test. Build number 2 identifies the corrected helper for native replacement.
+
+The old test job was unloaded through a one-off local Swift call to the public
+SMJobRemove API with native administrator authorization, after checking the pinned
+helper/CLI signatures and the authenticated inactive/preparing status before and
+after the dialogue. It deleted no files and changed no power setting. This was
+test recovery, not a successful product uninstall; the corrected installer must
+repair the same-certificate unloaded installation and complete guarded removal.
+No trust policy, quarantine, Gatekeeper, SIP or TCC setting was changed.
+
+The complete local `check`, ASan and TSan passed all 89 tests after the fix (the
+additional Program form is a case of an existing test). The corrected native cycle
+is pending at this checkpoint. The Graphify structure is current. The complexity
+review retained the existing validator and parameterized test; no new product
+abstraction or dependency was added.
+
 ## Native interface inspection
 
 Read-only Debug previews were inspected through native accessibility automation on
