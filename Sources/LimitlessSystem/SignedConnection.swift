@@ -57,7 +57,8 @@ public struct SignedIdentity: Sendable {
         try Self.requirement(identifier: identifier, certificateFingerprint: certificateFingerprint)
     }
 
-    func verifyExecutable(at url: URL, identifier: String) throws {
+    @discardableResult
+    func verifyExecutable(at url: URL, identifier: String) throws -> [String: Any] {
         let value = try requirement(for: identifier)
         var requirement: SecRequirement?
         var code: SecStaticCode?
@@ -68,6 +69,14 @@ public struct SignedIdentity: Sendable {
                 code, SecCSFlags(rawValue: kSecCSStrictValidate | kSecCSCheckAllArchitectures),
                 requirement) == errSecSuccess
         else { throw SignatureError.untrustedIdentity }
+        var information: CFDictionary?
+        guard
+            SecCodeCopySigningInformation(
+                code, SecCSFlags(rawValue: kSecCSSigningInformation), &information)
+                == errSecSuccess,
+            let details = information as? [String: Any]
+        else { throw SignatureError.untrustedIdentity }
+        return details
     }
 
     static func requirement(identifier: String, certificateFingerprint: String) throws -> String {

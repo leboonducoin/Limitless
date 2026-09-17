@@ -11,6 +11,7 @@
     <key>CFBundleVersion</key><string>1</string>
     <key>CFBundleIconFile</key><string>Limitless</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
+    <key>LimitlessHelperInstallation</key><string>bundled</string>
     <key>LSUIElement</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Arthur Barreau. MIT License.</string>
