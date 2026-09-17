@@ -205,8 +205,10 @@ publication. Do not publish the ad-hoc bundle or invent a downloadable release U
 
 The Swift release tooling and Homebrew template are implemented. A locally signed
 community archive and its non-quarantined native lifecycle have passed; no public
-or notarized release exists. The downloaded/quarantined Homebrew lifecycle remains
-a separate gate, including the first-open decision and blocked-cleanup case.
+or notarized release exists. The local quarantined cask trial covered installation,
+a blocked cleanup before first opening, then successful CLI use and inactive
+uninstall after native opening. Clean-Mac downloads and the full Homebrew lifecycle
+remain separate gates, including qualification of the first-open decision.
 Installation must preserve macOS approval; a cask must not run `sudo pmset`, install
 passwordless sudoers rules or disable quarantine. Native first launch separately
 requests helper approval and offers launch at login.
@@ -363,6 +365,7 @@ preserves them. User-created skill copies and external links are not silently de
 The cask must quit the app before invoking this hook with `must_succeed: true`,
 then let Homebrew remove its app and CLI link. Optional `zap` handles this user's
 preferences/cache/saved-window state. Do not use blanket deletion rules for the
-protected journal or ignore a failed hook. Install, upgrade/reinstall and uninstall
-remain signed-Mac tests, including approval loss and a helper restart between
-cleanup and unregistration. [Homebrew cask rules](https://docs.brew.sh/Cask-Cookbook#stanza-uninstall).
+protected journal or ignore a failed hook. Local cask installation and inactive
+uninstall passed. Upgrade/reinstall, active-helper cask removal and zap remain
+signed-Mac tests, as do approval loss and a helper restart between cleanup and
+unregistration. [Homebrew cask rules](https://docs.brew.sh/Cask-Cookbook#stanza-uninstall).
