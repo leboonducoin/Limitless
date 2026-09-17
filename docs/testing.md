@@ -693,7 +693,7 @@ without an unregister attempt; AppIntents 4097 messages remained. No helper or l
 item was created. Independent checks confirmed launchctl 113, all three protected
 paths absent, no remaining Limitless GUI and `SleepDisabled = No`. This qualifies
 the never-installed bundled cleanup path, not a notarized SMAppService installation.
-The installed community app/archive are still build 4, without these source changes.
+The later community build 5 trial below includes these source changes.
 
 LLDB reproduced the layout warning at `_NSDetectedLayoutRecursion` in the Debug
 bundle, with and without `--preview active`. Its stack passes through AppKit's
@@ -717,6 +717,48 @@ Motion review using the installed `review-animations` skill:
 **Approve the source-level motion scope.** Native reduced-motion behavior still
 requires the manual gate above. Ponytail complexity review: lean already; no extra
 UI framework, duplicated policy engine or animation layer to remove.
+
+## Community build 5 qualification
+
+Release build 5 (version 0.1.0, protocol 3) was produced from clean source
+`1cfaffca03de61e4f152c128739e3c62d76b8845`, including asynchronous identity checks,
+the setup text correction and guarded absent-helper removal. `community-sign`,
+`community-verify` and `community-package` passed with the same authorized local
+test certificate. The archive was extracted and verified again before its digest,
+manifest and draft cask were written. Nothing was published. Its ZIP SHA-256 is
+`b1822b871ec7f478f5bd2dd9f45c236d7980ac933b736bb05826ca5ef7dc14c7`.
+The previous installed build 4 was preserved before copying build 5 to Applications.
+A direct sandboxed codesign check reported `CSSMERR_TP_NOT_TRUSTED`; the normal
+community verifier outside that sandbox then passed on the exact installed copy.
+No trust setting or signature requirement was changed to obtain this result.
+
+Native Enable completed SMJobBless installation. The installed helper SHA-256
+matched the bundled helper:
+`0b44f3850ca2fcd99596f1e8c6c28c57e43c55f580a44b45ec3fbbda18708ff5`.
+Both the app and CLI obtained authenticated status. Initial policy was automation
+off, battery floor 20%, all sources, no duration cap; no session or hold was restored
+at startup. The Mac was on external power for this trial.
+
+After enabling automation through native Settings, two separately tracked real
+`ProjectTool.swift check` workloads each exited 0 with 92 tests:
+
+| Trial | Observation |
+| --- | --- |
+| `run -a --for 3s` on external power | One active session and disabled sleep; at 3.07 s, zero sessions and allowed/unowned sleep while validation continued. Validation finished at 22.66 s without reacquisition. |
+| `run -b --for 2m` on external power | One session suspended for power source, allowed/unowned sleep throughout; validation finished at 11.41 s and the session disappeared. |
+
+The observer queried signed status about every 0.5 s; these queries also reconcile
+state, so the timings are not isolated watchdog-latency measurements. External
+power was already present; this does not qualify an active AC attach/detach transition.
+Automation was revoked afterwards and confirmed off with the floor unchanged at
+20%, no cap, zero sessions and allowed/unowned sleep. After normal GUI termination,
+the official removal hook exited 0, then a repeated call also exited 0. Independent
+checks confirmed launchctl 113, the three protected paths absent, no remaining GUI
+and `IOPMrootDomain.SleepDisabled = No`. Targeted startup/installation and removal
+log samples contained no Security main-thread fault. This is no claim that all
+runtime warnings, keyboard/accessibility or physical hardware gates are resolved.
+The installed test app and local archive are now build 5; earlier build 4 evidence
+above remains specific to its own binaries.
 
 ## Required validation layers
 
