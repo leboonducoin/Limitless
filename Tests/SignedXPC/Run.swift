@@ -82,7 +82,9 @@ func main() throws {
         try run("/usr/bin/codesign", ["--verify", "--strict", "--deep", app.path])
         try run(app.appendingPathComponent("Contents/MacOS/Probe").path, [])
     }
-    print("All five signed cross-process XPC cases passed. No privileged service was installed.")
+    print(
+        "Five signed cross-process cases and three listener admission cases passed. No privileged service was installed."
+    )
 }
 
 do { try main() } catch {
