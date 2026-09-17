@@ -199,8 +199,26 @@ The final dialog's explicit Cancel action was also exercised with Escape.
 
 Command-comma and Command-W did not produce an observable action through this
 automation session; keep shortcut verification open. VoiceOver speech, full
-keyboard-only use, actual menu-bar popover placement, Reduce Motion and Reduce
-Transparency preferences remain manual qualification gates.
+keyboard-only use, Reduce Motion and Reduce Transparency preferences remain manual
+qualification gates.
+
+On 2026-09-17, a fresh Debug inspection bundle was launched in the read-only active
+fixture. A temporary Swift inspector used public Accessibility and CoreGraphics
+APIs with the Mac's existing permissions; no permission was requested or changed.
+It targeted only that bundle's process. AXPress opened the real menu-bar item,
+whose accessible title was `Limitless: Staying awake`. The resulting native popover
+measured 360 × 407 points at screen position (934, 35); its captured dark appearance
+showed all content and controls without clipping. This validates one actual
+menu-bar presentation, not every display/appearance combination. The separate
+520 × 640-point settings window also rendered its visible controls correctly.
+Protected controls remained disabled. Inspection screenshots are temporary local
+evidence, not supplied artwork or a claim of real keep-awake state.
+
+The inspector could focus the battery stepper, but injected per-process keyboard
+events did not establish changed values or reliable Command-W/Command-comma behavior,
+even with event-posting permission already present. AXPress can operate independently
+of keyboard delivery, so these results do not qualify keyboard-only navigation or
+prove a shortcut bug. No application behavior was changed to accommodate the tool.
 
 Runtime-log review found Apple AppIntents `com.apple.linkd.autoShortcut` connection
 errors (4097), BaseBoard task-port messages and cache-file lookup messages during
@@ -208,6 +226,11 @@ the development previews. No Limitless-originated error was identified in that
 sample. A GUI launch inside the command sandbox aborted; the authorized native
 preview outside that sandbox ran and exited normally. Recheck logs with the signed
 installed app; these observations are not a claim of an error-free production run.
+The 2026-09-17 preview again emitted Apple AppIntents 4097 and BaseBoard messages,
+plus an AppKit `layoutSubtreeIfNeeded` re-entrant-layout warning during startup and
+an Apple Siri eligibility message. The layout warning is not resolved or attributed
+to a specific Limitless call site; it needs reproduction and diagnosis during native
+qualification. The inspected preview quit normally after the check.
 
 Motion review using the installed `review-animations` skill:
 
