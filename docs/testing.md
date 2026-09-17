@@ -564,11 +564,52 @@ failure, but `brew list --versions` confirmed both remained installed (2.1.13 an
 affecting unrelated packages. No other formula removal was attempted.
 
 The offline strict audit does not validate the unpublished GitHub URL, online
-acceptance, the complete first-open flow on a clean Mac, upgrades, active Homebrew
-removal or zap. This local test used an already tested certificate and an on-disk
-archive; it cannot substitute for those gates.
+acceptance, the complete first-open flow on a clean Mac, upgrades or active Homebrew
+removal. This local test used an already tested certificate and an on-disk archive;
+it cannot substitute for those gates. Reinstallation and zap were exercised later,
+as recorded below.
 See [Homebrew command definitions](https://docs.brew.sh/Manpage)
 and [Apple's manual opening decision](https://support.apple.com/en-gb/102445).
+
+### Local reinstallation and zap
+
+A second trial on 2026-09-17 used the same build 4 archive, checksum and temporary
+tap/app directory. The build 5 app in `/Applications` stayed in place. No helper,
+login registration or awake session was created. Before testing, the existing
+Limitless preferences were exported to a private temporary backup; its cache and
+saved-application-state directories did not exist.
+
+Installation exited 0 with quarantine present. The first direct CLI/help and
+cleanup-hook executions were killed with signal 9 (exit 137). Scoped AMFI logs
+reported error -423, an unknown signing chain, and AppleSystemPolicy denial for
+those exact executables. Gatekeeper assessment returned 3/rejected. The subsequent
+normal `brew reinstall --cask --require-sha --no-ask` nevertheless exited 0: its
+mandatory cleanup hook ran successfully before Homebrew replaced the app and CLI
+link. CLI help then exited 0 and the app's quarantine value was unchanged. The
+cause of this change in execution acceptance was not observed; no security
+exception or quarantine removal was automated. This sequence does not qualify
+the first-open flow or establish a dependable workaround for a blocked app.
+
+After reinstallation, the saved preferences matched the backup. Two test-only
+directories with marker files were then created at the previously absent cache
+and saved-state paths. `brew uninstall --cask --zap` exited 0, ran the mandatory
+hook and trashed all three declared zap paths. Independent filesystem checks
+confirmed absence of the app, CLI link, receipt, preferences, cache and saved state.
+The original preferences were then restored and their persistent domain compared
+equal to the backup, preserving settings for the retained build 5 app.
+
+All install/reinstall/removal commands set `HOMEBREW_NO_AUTO_UPDATE=1`,
+`HOMEBREW_NO_ANALYTICS=1`, `HOMEBREW_NO_AUTOREMOVE=1` and
+`HOMEBREW_NO_INSTALL_CLEANUP=1`. The temporary cask trust, tap and empty app directory
+were removed normally. The developer mode automatically enabled by `tap-new` was
+turned off again. `libevent` and `unbound` remained installed at their original
+versions. Final checks found no Limitless GUI process, system job, installed helper
+files or root journal, and `SleepDisabled = No`. The retained build 5 passed
+`community-verify`. No force, adopt, quarantine bypass or publication was used.
+
+This verifies same-version local reinstallation and scoped zap for build 4 with
+inactive integrations. It does not verify an upgrade, active-helper cask removal,
+the latest build's complete cask lifecycle or a download on a clean Mac.
 
 ## Native interface inspection
 
