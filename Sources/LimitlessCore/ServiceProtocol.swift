@@ -15,10 +15,11 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
     case rearm
     case retryRestoration
     case prepareRemoval
+    case finishRemoval
 
     public var requiresApplication: Bool {
         switch self {
-        case .configure, .stopAll, .rearm, .retryRestoration, .prepareRemoval: true
+        case .configure, .stopAll, .rearm, .retryRestoration, .prepareRemoval, .finishRemoval: true
         case .status, .start, .stop, .heartbeat: false
         }
     }
@@ -109,7 +110,7 @@ public struct ServiceReply: Codable, Sendable {
 
 /// NSData is the only XPC payload type; decoding and semantic validation happen in the helper.
 public enum ServiceWire {
-    public static let version = 2
+    public static let version = 3
     public static let maximumMessageBytes = 131_072
 
     public static func decodeRequest(_ data: Data) throws -> ServiceRequest {

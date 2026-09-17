@@ -252,13 +252,21 @@ import ServiceManagement
         while refreshing { try? await Task.sleep(for: .milliseconds(50)) }
         do {
             helperStatus = helper.status
-            if helperStatus == .enabled {
+            let filesRemoved =
+                try SecureOwnershipJournal.isStateDirectoryAbsent()
+                && InstalledHelperFiles.areAbsent()
+            if helperStatus == .enabled, !filesRemoved {
                 if client == nil { client = try ServiceClient(role: .application) }
                 guard let client else { throw ServiceError.unavailable }
                 try accept(await client.send(.prepareRemoval))
                 guard let status, status.removal == .ready, status.canRemoveService,
-                    try InstalledHelperFiles.areAbsent()
+                    try SecureOwnershipJournal.isStateDirectoryAbsent()
                 else { throw ServiceError.restorationRequired }
+                if try !InstalledHelperFiles.areAbsent() {
+                    // Unlinking the executable can invalidate its XPC signature before a reply.
+                    // Only proven file absence permits unregistration after this request.
+                    _ = try? await client.send(.finishRemoval)
+                }
             } else {
                 guard try SecureOwnershipJournal.isStateDirectoryAbsent(),
                     try InstalledHelperFiles.areAbsent()

@@ -306,6 +306,26 @@ is pending at this checkpoint. The Graphify structure is current. The complexity
 review retained the existing validator and parameterized test; no new product
 abstraction or dependency was added.
 
+The signed build 2 at `5504b56` repaired the unloaded same-certificate installation;
+SHA-256 of its source and installed helper matched. The next removal deleted both
+installed files and the journal, but the app exited 1 and the job stayed loaded.
+Native logs show that the reply was forbidden by the XPC code-signing requirement
+after the executable was unlinked. This exposed a separate ordering defect.
+
+Protocol 3/build 3 separates authenticated restoration/journal preparation from
+`finishRemoval`. File deletion remains application-only and is refused before
+preparation; existing authorization and protocol round-trip tests cover the new
+operation. The helper rechecks its ready state, retired journal, observed restoration
+and absent idle assertion before deleting the captured files. The app accepts no
+unverified final reply: it checks protected-path absence and the native installer
+checks an allowed sleep flag, including after administrator consent. This also lets
+an interrupted removal resume when all protected files are already absent.
+The complete local check, ASan and TSan each passed all 89 tests after this ordering
+fix. Graphify is current (598 nodes/1245 edges). The complexity review retained the
+existing request, installation and filesystem machinery with one extra operation;
+no timeout-based deletion, unauthenticated channel or replacement installer was added.
+A signed native retry is the next gate.
+
 ## Native interface inspection
 
 Read-only Debug previews were inspected through native accessibility automation on

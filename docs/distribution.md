@@ -307,8 +307,12 @@ files, a still-owned/corrupt journal, changed permissions or replaced links bloc
 cleanup. There is no recursive root deletion. The retired journal cannot accept
 new writes. A partial failure can be retried without recreating a demand.
 
-The helper also removes its two fixed installed files in the community channel,
-with certificate and filesystem checks described in [architecture](architecture.md#removal).
+In the community channel, preparation acknowledges restoration while the executable
+still exists. A separate application-only request removes the two fixed installed
+files with the checks described in [architecture](architecture.md#removal). Its reply
+may fail XPC signature validation after unlinking the executable. The app therefore
+requires proven path absence and a fresh allowed sleep observation; it never disables
+the certificate requirement or treats a transport error alone as successful cleanup.
 The app then uses native `SMJobRemove` with administrator consent for that job, or
 asynchronous `SMAppService.unregister()` for the bundled helper. Login removal
 always uses `SMAppService`. The app checks registration states and absence of the
