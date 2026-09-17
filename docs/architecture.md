@@ -208,6 +208,8 @@ not command-line arguments. Before retiring the journal it captures and validate
 both files; after journal cleanup it revalidates and unlinks only these two entries,
 syncing their directories and volume. Replaced entries block removal; partially
 removed entries remain tracked for retry. No parent directory is deleted.
+An entry already absent when cleanup is reconstructed is accepted only on ENOENT;
+its parent still needs validation and a later replacement blocks the retry.
 Ready status requires completion of both journal and installed-file cleanup.
 The app independently verifies absence of both fixed installed paths before
 unregistration and before reporting completion, including when the helper is

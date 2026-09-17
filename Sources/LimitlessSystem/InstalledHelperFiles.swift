@@ -59,19 +59,22 @@ public final class InstalledHelperFiles {
             let parent = openat(library, directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
             guard parent >= 0 else { throw JournalError.system(errno) }
             let file = openat(parent, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK)
-            if file < 0 {
+            if file < 0, errno != ENOENT {
                 let code = errno
                 close(parent)
                 throw JournalError.system(code)
             }
-            entries.append(Entry(directory: directory, name: name, parent: parent, file: file))
+            entries.append(
+                Entry(
+                    directory: directory, name: name, parent: parent, file: file, removed: file < 0)
+            )
         }
         try validateRemaining()
     }
 
     deinit {
         for entry in entries {
-            close(entry.file)
+            if entry.file >= 0 { close(entry.file) }
             close(entry.parent)
         }
         close(library)
@@ -96,7 +99,9 @@ public final class InstalledHelperFiles {
                 }
                 entries[index].removed = true
             }
-            guard fsync(entry.parent) == 0, fcntl(entry.file, F_FULLFSYNC) == 0 else {
+            guard fsync(entry.parent) == 0,
+                entry.file < 0 || fcntl(entry.file, F_FULLFSYNC) == 0
+            else {
                 throw JournalError.system(errno)
             }
         }
