@@ -169,7 +169,8 @@ publishes a download or bypasses Gatekeeper. On 2026-09-17, explicit user consen
 authorized a dedicated local test identity and test signatures. The resulting
 community bundle and re-extracted ZIP passed the verifiers with no trust-store
 changes. This is a test certificate, not a qualified publisher identity or release.
-Clean-Mac approval and the Homebrew lifecycle remain untested. See
+Clean-Mac approval, upgrades, active-helper Homebrew removal and zap remain open;
+the local cask installation and inactive removal passed after native first opening. See
 [signed test evidence](testing.md#signed-community-and-xpc-tests).
 
 An untrusted self-signed identity may be absent from `security find-identity -v`
