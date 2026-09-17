@@ -278,10 +278,12 @@ import ServiceManagement
             guard helper.status == .notRegistered else { throw ServiceError.unavailable }
             await client?.close()
             client = nil
-            if SMAppService.mainApp.status != .notRegistered {
+            // A login item never registered with ServiceManagement reports notFound.
+            let absentLoginStates: [SMAppService.Status] = [.notRegistered, .notFound]
+            if !absentLoginStates.contains(SMAppService.mainApp.status) {
                 try await SMAppService.mainApp.unregister()
             }
-            guard SMAppService.mainApp.status == .notRegistered,
+            guard absentLoginStates.contains(SMAppService.mainApp.status),
                 try SecureOwnershipJournal.isStateDirectoryAbsent(),
                 try InstalledHelperFiles.areAbsent()
             else { throw ServiceError.restorationRequired }
