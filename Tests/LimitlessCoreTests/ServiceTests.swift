@@ -23,7 +23,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     let now = try serviceClock(0)
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
-        .stopAll, .rearm, .retryRestoration, .prepareRemoval,
+        .stopAll, .rearm, .retryRestoration, .prepareRemoval, .finishRemoval,
     ] {
         #expect(throws: ServiceError.unauthorized) {
             try value.apply(operation, owner: task, now: now)
@@ -127,7 +127,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     }
     for operation in [
         ServiceOperation.status, .heartbeat, .stop(UUID()), .rearm, .retryRestoration,
-        .stopAll, .prepareRemoval, .configure(try UserPolicy()),
+        .stopAll, .prepareRemoval, .finishRemoval, .configure(try UserPolicy()),
         .start(SessionRequest(end: .after(seconds: 60))),
     ] {
         #expect(
@@ -139,11 +139,15 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
 @Test func removalRevokesWorkAndCannotBeUndoneByAnotherClientOrConsoleChange() throws {
     var (value, app, task) = try service()
     let now = try serviceClock(0)
+    #expect(throws: ServiceError.restorationRequired) {
+        try value.apply(.finishRemoval, owner: app, now: now)
+    }
     _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
     _ = try value.apply(.start(SessionRequest()), owner: task, now: now)
     _ = try value.apply(.start(SessionRequest()), owner: app, now: now)
     _ = try value.apply(.prepareRemoval, owner: app, now: now)
     #expect(value.isRemoving && value.registry.sessions.isEmpty)
+    _ = try value.apply(.finishRemoval, owner: app, now: now)
     #expect(!value.registry.policy.allowsAutomation)
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),

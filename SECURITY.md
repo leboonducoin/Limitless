@@ -47,7 +47,11 @@ and a real certificate-signed lifecycle remain qualification gates.
 Removal is application-only and first revokes all demands. A protected ownership
 record is never deleted to bypass a failed restoration. Journal cleanup refuses
 unknown contents and replaced directories/locks, uses no recursive deletion, and
-retires the writer. Service unregistration and final absence checks must succeed
+retires the writer. Restoration is acknowledged before the separate, application-only
+file-deletion request: unlinking the executable can invalidate its final XPC reply.
+Certificate checks remain enabled. Proven absence of the fixed protected paths
+and a fresh allowed sleep observation gate unregistration, including interrupted
+retries after deletion. Service unregistration and final absence checks must succeed
 before a packaging hook reports success. The unprivileged CLI cannot request removal.
 
 The lid-closed mechanism uses an undocumented global OS setting. A successful read

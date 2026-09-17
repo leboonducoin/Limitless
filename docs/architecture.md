@@ -45,7 +45,7 @@ are rejected. Switching users or logging out drops all demands and resets policy
 to safe defaults, including disabled automation. Reconnecting never restores a
 previous session or its authorization.
 
-Requests use protocol version 2 and bounded JSON inside an XPC `Data` message. There are no
+Requests use protocol version 3 and bounded JSON inside an XPC `Data` message. There are no
 command, executable or path fields. The control endpoint can set policy, stop all,
 explicitly rearm or retry cleanup. The task endpoint can only request a constrained
 session, inspect state, renew liveness and release its own session. Owner UUIDs
@@ -233,21 +233,27 @@ files without ACLs or special mode bits, parent identities, daemon label/program
 Mach services, and the helper's exact signing certificate. The certificate and
 actual executable path come from Security's validated running-code information,
 not command-line arguments. Before retiring the journal it captures and validates
-both files; after journal cleanup it revalidates and unlinks only these two entries,
+both files. Preparation retires the journal and returns authenticated ready status
+while the signed executable still exists. Only the application-only `finishRemoval`
+operation then revalidates and unlinks these two entries,
 syncing their directories and volume. Replaced entries block removal; partially
 removed entries remain tracked for retry. No parent directory is deleted.
 An entry already absent when cleanup is reconstructed is accepted only on ENOENT;
 its parent still needs validation and a later replacement blocks the retry.
-Ready status requires completion of both journal and installed-file cleanup.
-The app independently verifies absence of both fixed installed paths before
-unregistration and before reporting completion, including when the helper is
-unavailable. The community adapter then requests native authorization to remove
+Ready status proves restoration and journal cleanup, not installed-file deletion.
+The final reply can fail signature validation after the executable is unlinked;
+this never relaxes the XPC certificate requirement. The app independently verifies
+absence of the journal and both fixed installed paths before unregistration and
+before reporting completion, including an interrupted retry with those paths gone.
+The installer additionally requires a fresh allowed sleep observation before and
+after native authorization. An unknown/disabled flag prevents unregistration.
+The community adapter then requests native authorization to remove
 the loaded job, checks file absence again after consent, calls `SMJobRemove` with
 wait enabled, and requires both job and files to be absent. The notarized adapter
-uses asynchronous `SMAppService.unregister()`. Positive signed installation and
-removal remain untested; filesystem checks use unprivileged temporary fixtures.
+uses asynchronous `SMAppService.unregister()`. See the [integration record](testing.md#privileged-installation-trial)
+for actual signed lifecycle evidence; filesystem tests use temporary fixtures.
 
-The app unregisters both native services only after acknowledged cleanup, then
+The app unregisters both native services only after these cleanup proofs, then
 checks registration and absence again. The task endpoint has no removal privilege.
 No executable, path or password crosses this boundary. See [distribution](distribution.md)
 for the app hook, failure behavior and signed integration gates.

@@ -74,8 +74,16 @@ final class HelperRuntime {
                     installedFiles = try InstalledHelperFiles(identity: identity)
                 }
                 try journal.removeUnownedDirectory()
-                try installedFiles?.remove()
                 removalReady = true
+            }
+            if request.operation == .finishRemoval {
+                let status = try reconcile(owner: owner)
+                guard removalReady, journal.isRemoved, status.canRemoveService,
+                    !backend.hasIdleAssertion
+                else { throw ServiceError.restorationRequired }
+                // Acknowledge restoration before unlinking our signing identity.
+                // The app proves final deletion through the fixed root-owned paths.
+                try installedFiles?.remove()
             }
             return ServiceReply(status: try reconcile(owner: owner), startedSession: started)
         } catch {

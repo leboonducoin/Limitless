@@ -35,8 +35,9 @@ public protocol HelperInstallation: Sendable {
 }
 
 private func requireRemovedFiles() throws {
+    var backend = MacSleepBackend()
     guard try SecureOwnershipJournal.isStateDirectoryAbsent(),
-        try InstalledHelperFiles.areAbsent()
+        try InstalledHelperFiles.areAbsent(), backend.observe() == .allowed
     else { throw HelperInstallationError.unconfirmedRemoval }
 }
 

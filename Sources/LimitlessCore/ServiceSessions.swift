@@ -67,7 +67,9 @@ public struct ServiceSessions: Sendable {
         if isRemoving {
             switch operation {
             case .configure, .start, .rearm: throw ServiceError.removalInProgress
-            case .status, .stop, .stopAll, .heartbeat, .retryRestoration, .prepareRemoval: break
+            case .status, .stop, .stopAll, .heartbeat, .retryRestoration, .prepareRemoval,
+                .finishRemoval:
+                break
             }
         }
         client.lastContact = now.continuous
@@ -93,6 +95,8 @@ public struct ServiceSessions: Sendable {
         case .prepareRemoval:
             try registry.stopAll()
             isRemoving = true
+        case .finishRemoval:
+            guard isRemoving else { throw ServiceError.restorationRequired }
         case .status, .heartbeat, .rearm, .retryRestoration: break
         }
         return nil
