@@ -117,6 +117,8 @@ Never invent tool commands or force an installation rejected by security control
   keys from the active keyboard layout and numeric input from the current locale;
   US keycodes and dot-decimal assumptions are not portable. Confirm applied limits
   through authenticated helper status, not an edited field alone.
+  Keep inspection probes read-only. Use separate, reviewable source for explicitly
+  authorized UI mutations.
 - Read `docs/design.md` before UI changes. Use native materials, system typography,
   original assets, semantic colors, reduced-motion/transparency support, and subtle
   purposeful animation. No Unicode emoji as built-in controls or decorative icons.

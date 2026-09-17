@@ -436,6 +436,38 @@ The official removal hook exited 0. Independent IORegistry read returned
 daemon plist and state directory were all absent. No login item, active test
 process or privileged installation was left behind.
 
+## Live interruption and owner loss
+
+Four more authorized build 4 trials ran on battery with floor 20%, no user duration
+cap and an initially empty session registry. The two `watch` trials observed a real
+`ProjectTool.swift check`; the two `run` trials launched real Release compilations
+into distinct, new scratch directories. Only CLI processes created by the temporary
+Swift observer were signaled. The helper and unrelated processes were never signaled.
+
+| Case | Observed result |
+| --- | --- |
+| SIGTERM to `watch -b --for 2m` | Signal sent at 1.20 s; inactive/allowed with zero sessions at 1.79 s; watcher exited normally with status 143. The watched validation continued and passed all 89 tests, exit 0, at about 22 s. |
+| SIGKILL to `watch -b --for 2m` | Signal sent at 1.22 s; watcher dead and inactive/allowed at 1.81 s. Its termination reason was uncaught signal 9. The watched validation continued and passed all 89 tests, exit 0, at about 16 s. |
+| SIGTERM to `run -b --for 60s` | Signal sent after the actual Release-build startup at 2.38 s; the wrapper exited normally with propagated build status 143 and inactive/allowed state at 2.98 s. |
+| SIGINT to `run -b --for 60s` | Signal sent after actual build startup at 1.19 s; the wrapper exited normally with propagated build status 130 and inactive/allowed state at 1.79 s. |
+
+Each case first observed an active, disabled hold, then confirmed zero sessions
+and no owned global hold. Protection never restarted during the surviving watched
+work. A process search limited to the two unique build scratch paths found no
+remaining Swift/Clang compiler from the interrupted `run` trials. Those cancelled
+builds are signal tests, not successful build results. The two uninterrupted
+`check` workloads supplied complete-check evidence separately.
+
+Status was sampled about every 0.5 s and also causes reconciliation; the timings
+are observations under polling, not a standalone watchdog guarantee. These trials
+qualify live CLI signal handling and connection-owner loss, not a helper crash,
+root-journal recovery, foreign power writes, restart or reboot.
+
+Automation was revoked after the trials. Authenticated status confirmed floor 20%,
+no cap, no sessions and allowed/unowned state. The app quit normally and the official
+removal hook exited 0. Independent checks confirmed launchctl 113, all three root
+helper/state paths absent, and `IOPMrootDomain.SleepDisabled = No`.
+
 ## Homebrew cask validation
 
 Homebrew 7.0.2 was exercised on the same Mac on 2026-09-17. The authorized `style`
