@@ -761,6 +761,17 @@ privileged keyboard actions, VoiceOver speech and system reduced-motion/contrast
 transparency preferences still require qualification. The earlier inconclusive
 shortcut probes are not evidence of an application defect.
 
+The subsequent menu-panel-only attempt remained inconclusive. The native UI
+driver timed out even with the real setup panel exposed. A temporary, scoped Swift
+probe could open that panel, but a Tab sent in the same process left AX focus on
+the window; separate calls found the app inactive and refused key delivery. The
+probe passed Swift 6 typechecking with warnings as errors. No setup button was
+activated, helper installed or power session started. Normal app termination was
+confirmed with zero remaining instances, helper job absent (113) and
+`SleepDisabled = No`. Do not repeat these injection attempts as a substitute for
+an operator's keyboard walkthrough; the active panel's start/stop path remains
+unqualified.
+
 ### Earlier preview diagnostics
 
 Runtime-log review found Apple AppIntents `com.apple.linkd.autoShortcut` connection
