@@ -23,7 +23,9 @@ import ServiceManagement
     var confirmingRemoval = false
     var erasePreferencesOnRemoval = false
     private let preferences: UserDefaults
-    private let helper = SMAppService.daemon(plistName: LimitlessIdentity.daemonPlist)
+    private let helper: (any HelperInstallation)? =
+        (Bundle.main.object(forInfoDictionaryKey: "LimitlessHelperInstallation") as? String)
+        .flatMap(HelperInstallationKind.init(rawValue:))?.service
     private var client: ServiceClient?
     private var monitoring: Task<Void, Never>?
     private var watchedProcess: ProcessIdentity?
@@ -42,7 +44,8 @@ import ServiceManagement
             baseline = draft
         }
         trustedBuild =
-            (try? SignedIdentity(expectedIdentifier: LimitlessIdentity.application)) != nil
+            helper != nil
+            && (try? SignedIdentity(expectedIdentifier: LimitlessIdentity.application)) != nil
     }
 
     var canControl: Bool {
@@ -80,7 +83,7 @@ import ServiceManagement
 
     func refresh() async {
         guard !isPreview, !busy, !refreshing, !quitting else { return }
-        helperStatus = helper.status
+        helperStatus = helper?.status ?? .notFound
         loginStatus = SMAppService.mainApp.status
         guard trustedBuild, helperStatus == .enabled else {
             if status != nil {
@@ -203,11 +206,11 @@ import ServiceManagement
     }
 
     func registerHelper() async {
-        guard trustedBuild, !isPreview, !busy, !removalComplete else { return }
+        guard trustedBuild, !isPreview, !busy, !removalComplete, let helper else { return }
         busy = true
-        do { try helper.register() } catch {
+        do { try await helper.register() } catch {
             message =
-                "macOS did not enable the helper. Review Limitless in Login Items & Extensions."
+                "The helper could not be enabled. Complete the macOS approval before retrying."
         }
         helperStatus = helper.status
         busy = false
@@ -238,7 +241,7 @@ import ServiceManagement
     /// Shared by the native settings action and the signed app's Homebrew removal hook.
     /// No app files, external CLI links or user-created skill copies are deleted here.
     func removeIntegration(erasePreferences: Bool = false) async -> Bool {
-        guard trustedBuild, !isPreview, !busy else {
+        guard trustedBuild, !isPreview, !busy, let helper else {
             message = "Removal requires a correctly signed Limitless installation."
             return false
         }

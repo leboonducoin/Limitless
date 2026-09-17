@@ -5,7 +5,7 @@
 Limitless has a native menu-bar app, an unprivileged CLI, and a privileged Swift
 helper. The common core contains deterministic policy/session logic, validation,
 and the typed transport contract. Concrete types are the default; interfaces exist
-only at OS boundaries that require test substitutes.
+only at OS boundaries that need native variants or test substitutes.
 
 The helper owns reconciliation and deadlines independently of the panel. App and
 CLI requests cross an authenticated XPC boundary. The CLI runs user commands under
@@ -64,6 +64,23 @@ The Security requirement compiler and Foundation's XPC requirement setter accept
 the certificate constraints in local tests. The executable and client compile
 locally. Real same-signer/wrong-signer XPC exchange, native service
 registration and privileged lifecycle tests have not yet been performed.
+
+The signed bundle selects one of two native `HelperInstallation` adapters through
+`LimitlessHelperInstallation`: `bundled` uses `SMAppService`, and `blessed` uses
+the public deprecated `SMJobBless`/`SMJobRemove` APIs. Both validate the app's
+certificate and current console user before any mutation. The community adapter
+also checks the bundled helper's matching certificate, embedded version and exact
+reciprocal requirements before requesting native authorization. Authorization
+references remain local to the blocking operation and are destroyed afterward;
+passwords are never handled by Limitless. Legacy API deprecation stays confined to
+that adapter, without suppressing compiler warnings elsewhere.
+
+Installation refuses a loaded competing job. It rechecks registration after the
+native authorization dialogue; channel changes and upgrades must first use the
+old matching app's guarded removal. No live helper replacement or automatic
+migration is attempted. A loaded job is only presence, never proof of authenticated
+readiness: the app must still receive an XPC response. Both adapters reject an
+ad-hoc test host before reaching Authorization Services or service mutation.
 
 The CLI uses native `Process` termination for foreground commands and public
 `proc_pidinfo` for existing processes. PID, UID, and start timestamp must continue
@@ -213,8 +230,11 @@ its parent still needs validation and a later replacement blocks the retry.
 Ready status requires completion of both journal and installed-file cleanup.
 The app independently verifies absence of both fixed installed paths before
 unregistration and before reporting completion, including when the helper is
-unavailable. The SMJobBless installer/bundle routing remains to be implemented;
-these paths are exercised only through unprivileged temporary-file tests so far.
+unavailable. The community adapter then requests native authorization to remove
+the loaded job, checks file absence again after consent, calls `SMJobRemove` with
+wait enabled, and requires both job and files to be absent. The notarized adapter
+uses asynchronous `SMAppService.unregister()`. Positive signed installation and
+removal remain untested; filesystem checks use unprivileged temporary fixtures.
 
 The app unregisters both native services only after acknowledged cleanup, then
 checks registration and absence again. The task endpoint has no removal privilege.
