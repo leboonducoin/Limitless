@@ -8,7 +8,7 @@ exists. No public release or push is authorized by this document.
 
 | ID | Requirement | Required evidence | Status |
 | --- | --- | --- | --- |
-| R01 | Native Swift menu-bar app, SwiftUI/AppKit | Native build, UI inspection and keyboard/VoiceOver exercise | Builds and preview inspected; complete keyboard/VoiceOver open |
+| R01 | Native Swift menu-bar app, SwiftUI/AppKit | Native build, UI inspection and keyboard/VoiceOver exercise | Builds, previews and Settings keyboard navigation/inputs/shortcuts verified; complete keyboard/VoiceOver open |
 | R02 | Keep awake, including lid closed without an external display when supported | Backend tests and real MacBook lid-closed runs, version/model recorded | Live battery activation/restoration verified; physical lid-closed gate open |
 | R03 | Exclusive `-b`, `-c`, `-a` policies, enforced on source transitions | Policy/parser tests and physical AC/battery transitions | Live activation plus AC-only suspension on battery and battery-only suspension on AC verified; physical source transitions open |
 | R04 | Observe applied state and recover in a controlled way | Backend failure, unknown state, bounded retry and ownership tests | Live flag/ownership activation and restoration verified; fault/recovery simulations pass, live fault gate open |

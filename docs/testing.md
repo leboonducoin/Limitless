@@ -684,8 +684,9 @@ preview. The destructive confirmation is disabled there; opening and dismissing
 the dialogue changes only presentation state. No real removal was performed.
 The final dialog's explicit Cancel action was also exercised with Escape.
 
-Command-comma and Command-W did not produce an observable action through this
-automation session; keep shortcut verification open. VoiceOver speech, full
+Command-comma and Command-W did not produce an observable action through that
+automation session; the later Settings trial below resolved this gap. VoiceOver
+speech, full
 keyboard-only use, Reduce Motion and Reduce Transparency preferences remain manual
 qualification gates.
 
@@ -717,6 +718,50 @@ work. Keep full keyboard and VoiceOver qualification open, without adding an app
 workaround for inconclusive injected events. Signed-runtime error samples also
 contained Apple's TextInputUI ViewBridge cancellation and inputAnalytics connection
 interruption; no Limitless-originated error was identified in that limited sample.
+
+### Settings keyboard qualification
+
+A later build 5 inspection on the same Mac verified Settings navigation, draft
+inputs and shortcuts. The installed app had no helper or awake session. The native
+UI driver timed out while the menu-bar app had no ordinary window, although its
+process had finished launching. A scoped Swift Accessibility action opened
+Settings and verified activation; the UI driver then inspected and operated that
+window successfully. No permission, system accessibility setting or product code
+was changed to make the inspection work.
+
+Tab and Shift-Tab moved through the selected power-source segment, battery stepper,
+duration toggle, login toggle and removal controls; disabled controls were skipped.
+Up/Down changed the battery draft from 20 to 21 and back to 20. Space exposed the
+maximum-duration field; the field retained the current locale's `1,5` after Tab,
+then showed the restored `120` before the limit was switched off again. These were
+draft edits only: Apply was disabled and the saved preferences remained unchanged. A native dark
+screenshot showed the visible keyboard focus ring and readable controls.
+
+The driver's `super+a` unexpectedly quit the app, consistent with the previously
+identified AZERTY mapping problem: the active layout maps key code 0 to Q and 12
+to A. Character shortcuts were therefore checked separately using the public
+keyboard-layout API and events sent only to the active Limitless PID. Adding a
+Unicode text payload to a correctly resolved Command-W event still produced no
+close action. Removing that unnecessary payload let macOS interpret the native
+key: Command-W (code 6) closed Settings and Command-comma (46) reopened it.
+Command-A (12) selected the entire `120` value after Right had collapsed the
+selection. The corrected probe passed Swift 6 typechecking with warnings as errors.
+
+Tab reached Prepare for removal, Space opened its native confirmation with Cancel
+focused, and Escape dismissed it and returned focus to the originating button.
+The destructive action was never invoked. Login and automation remained off.
+Normal Quit completed; final checks found no app process or helper job and
+`SleepDisabled = No`. Scoped error/fault logs contained Apple's AppIntents 4097,
+BaseBoard task-port and TextInputUI ViewBridge messages; no Limitless-originated
+error was identified in that sample.
+
+This qualifies the exercised Settings paths after opening its window, not an
+entire keyboard-only journey from the system menu bar. Menu-panel controls,
+privileged keyboard actions, VoiceOver speech and system reduced-motion/contrast/
+transparency preferences still require qualification. The earlier inconclusive
+shortcut probes are not evidence of an application defect.
+
+### Earlier preview diagnostics
 
 Runtime-log review found Apple AppIntents `com.apple.linkd.autoShortcut` connection
 errors (4097), BaseBoard task-port messages and cache-file lookup messages during

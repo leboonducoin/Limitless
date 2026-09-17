@@ -119,8 +119,12 @@ Never invent tool commands or force an installation rejected by security control
   gap. A screenshot or a simulated test does not prove lid-closed operation.
 - Scope native automation to the inspected Limitless process. Resolve character
   keys from the active keyboard layout and numeric input from the current locale;
-  US keycodes and dot-decimal assumptions are not portable. Confirm applied limits
-  through authenticated helper status, not an edited field alone.
+  US keycodes and dot-decimal assumptions are not portable. A UI driver's logical
+  letter names may still use US positions. For CGEvent modifier shortcuts, let
+  macOS derive characters from the resolved key code; reserve Unicode payloads
+  for text input. See the [keyboard trial](docs/testing.md#settings-keyboard-qualification).
+  Confirm applied limits through authenticated helper status, not an edited field
+  alone.
   Keep inspection probes read-only. Use separate, reviewable source for explicitly
   authorized UI mutations.
 - Read `docs/design.md` before UI changes. Use native materials, system typography,
