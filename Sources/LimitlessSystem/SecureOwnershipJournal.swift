@@ -208,7 +208,7 @@ public final class SecureOwnershipJournal: OwnershipJournal {
         retirement = .removed
     }
 
-    private static func requireSameEntry(_ parent: Int32, name: String, descriptor: Int32) throws {
+    static func requireSameEntry(_ parent: Int32, name: String, descriptor: Int32) throws {
         var actual = stat()
         var expected = stat()
         guard fstat(descriptor, &expected) == 0,
@@ -225,7 +225,7 @@ public final class SecureOwnershipJournal: OwnershipJournal {
         guard fcntl(lockFD, F_FULLFSYNC) == 0 else { throw JournalError.system(errno) }
     }
 
-    private static func validateDirectory(_ file: Int32, owner: uid_t, privateOnly: Bool) throws {
+    static func validateDirectory(_ file: Int32, owner: uid_t, privateOnly: Bool) throws {
         var info = stat()
         guard fstat(file, &info) == 0 else { throw JournalError.system(errno) }
         guard info.st_mode & S_IFMT == S_IFDIR, info.st_uid == owner,
@@ -244,7 +244,7 @@ public final class SecureOwnershipJournal: OwnershipJournal {
         try rejectExtendedAccess(file)
     }
 
-    private static func rejectExtendedAccess(_ file: Int32) throws {
+    static func rejectExtendedAccess(_ file: Int32) throws {
         guard let acl = acl_get_fd_np(file, ACL_TYPE_EXTENDED) else {
             // On macOS, a valid descriptor with no extended ACL reports ENOENT.
             if errno == ENOENT { return }

@@ -198,6 +198,22 @@ Cleanup uses held directory descriptors, inode/device comparisons and nonrecursi
 unlink operations. Unknown contents or ownership retain the directory. Once
 cleanup begins, that journal instance permanently refuses new ownership writes.
 
+For a helper running at the fixed SMJobBless installation path,
+`InstalledHelperFiles` also captures its installed executable and launchd plist.
+It validates root ownership, non-writable shared permissions, regular single-link
+files without ACLs or special mode bits, parent identities, daemon label/program/
+Mach services, and the helper's exact signing certificate. The certificate and
+actual executable path come from Security's validated running-code information,
+not command-line arguments. Before retiring the journal it captures and validates
+both files; after journal cleanup it revalidates and unlinks only these two entries,
+syncing their directories and volume. Replaced entries block removal; partially
+removed entries remain tracked for retry. No parent directory is deleted.
+Ready status requires completion of both journal and installed-file cleanup.
+The app independently verifies absence of both fixed installed paths before
+unregistration and before reporting completion, including when the helper is
+unavailable. The SMJobBless installer/bundle routing remains to be implemented;
+these paths are exercised only through unprivileged temporary-file tests so far.
+
 The app unregisters both native services only after acknowledged cleanup, then
 checks registration and absence again. The task endpoint has no removal privilege.
 No executable, path or password crosses this boundary. See [distribution](distribution.md)

@@ -253,10 +253,13 @@ import ServiceManagement
                 if client == nil { client = try ServiceClient(role: .application) }
                 guard let client else { throw ServiceError.unavailable }
                 try accept(await client.send(.prepareRemoval))
-                guard let status, status.removal == .ready, status.canRemoveService
+                guard let status, status.removal == .ready, status.canRemoveService,
+                    try InstalledHelperFiles.areAbsent()
                 else { throw ServiceError.restorationRequired }
             } else {
-                guard try SecureOwnershipJournal.isStateDirectoryAbsent() else {
+                guard try SecureOwnershipJournal.isStateDirectoryAbsent(),
+                    try InstalledHelperFiles.areAbsent()
+                else {
                     throw ServiceError.restorationRequired
                 }
             }
@@ -268,7 +271,8 @@ import ServiceManagement
                 try await SMAppService.mainApp.unregister()
             }
             guard SMAppService.mainApp.status == .notRegistered,
-                try SecureOwnershipJournal.isStateDirectoryAbsent()
+                try SecureOwnershipJournal.isStateDirectoryAbsent(),
+                try InstalledHelperFiles.areAbsent()
             else { throw ServiceError.restorationRequired }
             if erasePreferences {
                 preferences.removePersistentDomain(forName: LimitlessIdentity.application)

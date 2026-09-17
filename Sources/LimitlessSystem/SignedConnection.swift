@@ -22,6 +22,7 @@ public enum SignatureError: Error, Sendable {
 /// A self-signed identity is sufficient; ad-hoc signatures have no certificate and are rejected.
 public struct SignedIdentity: Sendable {
     public let certificateFingerprint: String
+    let executableURL: URL
 
     public init(expectedIdentifier: String) throws {
         var code: SecCode?
@@ -35,6 +36,7 @@ public struct SignedIdentity: Sendable {
             let details = information as? [String: Any],
             let certificates = details[kSecCodeInfoCertificates as String] as? [SecCertificate],
             let leaf = certificates.first,
+            let executable = details[kSecCodeInfoMainExecutable as String] as? URL,
             details[kSecCodeInfoIdentifier as String] as? String == expectedIdentifier
         else { throw SignatureError.untrustedIdentity }
         // Apple's requirement language selects certificates with a SHA-1 fingerprint.
@@ -48,10 +50,24 @@ public struct SignedIdentity: Sendable {
             let parsed, SecCodeCheckValidity(code, [], parsed) == errSecSuccess
         else { throw SignatureError.untrustedIdentity }
         certificateFingerprint = fingerprint
+        executableURL = executable
     }
 
     public func requirement(for identifier: String) throws -> String {
         try Self.requirement(identifier: identifier, certificateFingerprint: certificateFingerprint)
+    }
+
+    func verifyExecutable(at url: URL, identifier: String) throws {
+        let value = try requirement(for: identifier)
+        var requirement: SecRequirement?
+        var code: SecStaticCode?
+        guard SecRequirementCreateWithString(value as CFString, [], &requirement) == errSecSuccess,
+            let requirement,
+            SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code,
+            SecStaticCodeCheckValidity(
+                code, SecCSFlags(rawValue: kSecCSStrictValidate | kSecCSCheckAllArchitectures),
+                requirement) == errSecSuccess
+        else { throw SignatureError.untrustedIdentity }
     }
 
     static func requirement(identifier: String, certificateFingerprint: String) throws -> String {

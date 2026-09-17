@@ -28,7 +28,7 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     }
 
     func start() throws {
-        try queue.sync { runtime = try HelperRuntime() }
+        try queue.sync { runtime = try HelperRuntime(identity: identity) }
         control.delegate = self
         tasks.delegate = self
         queue.sync {
