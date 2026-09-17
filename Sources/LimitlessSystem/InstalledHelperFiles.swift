@@ -147,7 +147,8 @@ public final class InstalledHelperFiles {
                 let value = try PropertyListSerialization.propertyList(from: data, format: nil)
                     as? [String: Any],
                 value["Label"] as? String == LimitlessIdentity.helper,
-                value["Program"] == nil,
+                // SMJobBless may add Program as well as ProgramArguments.
+                value["Program"] == nil || value["Program"] as? String == Self.executablePath,
                 value["ProgramArguments"] as? [String] == [Self.executablePath],
                 value["UserName"] as? String == "root",
                 let services = value["MachServices"] as? [String: Any],

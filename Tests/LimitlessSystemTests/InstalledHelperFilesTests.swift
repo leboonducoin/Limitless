@@ -4,7 +4,9 @@ import Testing
 
 @testable import LimitlessSystem
 
-private func withInstalledFiles(_ body: (URL, URL, URL) throws -> Void) throws {
+private func withInstalledFiles(
+    includesProgram: Bool = false, _ body: (URL, URL, URL) throws -> Void
+) throws {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("LimitlessInstalledFilesTest-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: root) }
@@ -19,7 +21,7 @@ private func withInstalledFiles(_ body: (URL, URL, URL) throws -> Void) throws {
         .appendingPathComponent(LimitlessIdentity.daemonPlist)
     try Data("test helper".utf8).write(to: helper)
     #expect(chmod(helper.path, 0o755) == 0)
-    let plist: [String: Any] = [
+    var plist: [String: Any] = [
         "Label": LimitlessIdentity.helper,
         "UserName": "root",
         "ProgramArguments": [InstalledHelperFiles.executablePath],
@@ -27,6 +29,7 @@ private func withInstalledFiles(_ body: (URL, URL, URL) throws -> Void) throws {
             LimitlessIdentity.controlService: true, LimitlessIdentity.taskService: true,
         ],
     ]
+    if includesProgram { plist["Program"] = InstalledHelperFiles.executablePath }
     try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         .write(to: daemon)
     #expect(chmod(daemon.path, 0o644) == 0)
@@ -40,8 +43,9 @@ private func verifyTestHelper(_ url: URL) throws {
     }
 }
 
-@Test func installedFileRemovalIsIdempotentAndPreservesUnrelatedFiles() throws {
-    try withInstalledFiles { root, helper, daemon in
+@Test(arguments: [false, true])
+func installedFileRemovalIsIdempotentAndPreservesUnrelatedFiles(_ includesProgram: Bool) throws {
+    try withInstalledFiles(includesProgram: includesProgram) { root, helper, daemon in
         let unrelated = daemon.deletingLastPathComponent().appendingPathComponent("other.plist")
         try Data("preserve".utf8).write(to: unrelated)
         let files = try InstalledHelperFiles(testRoot: root, verifyHelper: verifyTestHelper)
