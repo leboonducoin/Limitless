@@ -10,6 +10,9 @@ restoration and removal now have local evidence below. No paid Apple membership
 or trust-store exception was used. The final cleanup left no helper, login item
 or owned hold; the test app remains in Applications. Downloaded Gatekeeper and
 clean-Mac Homebrew qualification remain open.
+The later Homebrew trial below passed local installation and removal after an
+initial Gatekeeper block. Its test app, link, receipt, tap and Homebrew trust entry
+were removed. No privileged integration was created by that trial.
 
 The two libraries, app, helper and CLI executables pass strict swift-format and a Release
 build. There are 88 default Swift Testing tests (45 core, 37 system, 3 CLI, 3 app, including
@@ -166,9 +169,9 @@ local test identity, as recorded below. Developer ID/timestamp, Apple submission
 stapling, Gatekeeper and publisher release qualification remain unexecuted.
 This Mac has Command Line Tools, not full Xcode; full Xcode is not required by
 the community signing command. No notarization upload or published cask is claimed.
-The separate `brew style --help` probe was unable to create Homebrew's cache in
-the restricted environment; it did not install a dependency. Full Homebrew
-style/audit and install/upgrade/uninstall qualification are not claimed.
+An initial `brew style --help` probe could not create Homebrew's cache in the
+restricted environment. The later authorized run passed style and strict audit
+in a temporary tap; installation, the initial block and completed removal are below.
 
 No push has occurred, so no remote CI result is claimed. The complete physical and
 accessibility matrix, Developer ID release paths, independent provenance attestation
@@ -432,6 +435,71 @@ The official removal hook exited 0. Independent IORegistry read returned
 `SleepDisabled = No`, launchctl returned service-not-found (113), and the helper,
 daemon plist and state directory were all absent. No login item, active test
 process or privileged installation was left behind.
+
+## Homebrew cask validation
+
+Homebrew 7.0.2 was exercised on the same Mac on 2026-09-17. The authorized `style`
+run installed Homebrew's own Ruby development gems; these are outside Limitless
+and add no runtime to its app, helper or CLI. Running on a loose Ruby file first
+reported generic Sorbet/frozen-string comments. The same bytes placed in the
+standard `Casks` directory received the actual tap/cask rules and passed without
+changing the recipe. Homebrew no longer accepts a path argument for `audit`.
+
+The original build 4 generated cask was copied byte-for-byte into a new local tap
+created with `brew tap-new --no-git limitless-local/checks-20260917`. Both commands
+below exited 0; style reported one file and no offenses:
+
+```sh
+rtk proxy env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_DEVELOPER=1 brew style --cask limitless-local/checks-20260917/limitless
+rtk proxy env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_DEVELOPER=1 brew audit --cask --strict limitless-local/checks-20260917/limitless
+```
+
+For an isolated install trial, only the temporary cask's URL was then changed to
+the local build 4 ZIP. Its actual SHA-256 and all artifacts, removal directives
+and caveats were unchanged. The source template and generated release cask were
+not modified. Normal `brew install --cask --require-sha --no-ask` with
+`--appdir=/private/tmp/limitless-homebrew-install` exited 0, installed the app and
+linked `/opt/homebrew/bin/limitless` to that exact copy. Those destinations and
+the cask receipt did not exist beforehand. No existing app was adopted/overwritten.
+Homebrew recorded version 0.1.0/build 4 and the real archive checksum.
+
+Quarantine was present on the installed app. `community-verify` passed its strict
+signature, certificate, architecture and metadata checks. Gatekeeper assessment
+(`spctl --assess --type execute --verbose=4`) nevertheless returned **3/rejected**.
+The official `brew uninstall --cask` then returned **1**: macOS killed
+`LimitlessApp --prepare-uninstall` before it could run. `must_succeed` preserved
+the app, CLI link and receipt. Scoped system logs confirmed AMFI error -423
+(unknown certificate chain), a Gatekeeper denial and AppleSystemPolicy refusing
+that exact executable. No alternate launcher, removed quarantine, certificate-trust
+change or forced uninstall was used. This is a tested pre-approval removal block,
+not successful Homebrew removal or proof of the first-launch user-decision flow.
+
+The user was asked to perform the native macOS opening decision manually. Later,
+the exact Homebrew copy was observed running as the normal GUI app, without the
+assistant launching it or changing security settings. The button sequence itself was not
+inspected or automated. Its linked CLI then printed help with exit 0 and returned
+69/`unavailable` for status, as expected with no installed helper. No helper or
+power hold was created by simply opening this copy.
+
+A second normal Homebrew uninstall exited **0**. Homebrew itself successfully
+quit the running GUI, invoked the mandatory hook, then removed the app, CLI link
+and cask receipt. Their absence was checked independently. The temporary cask's
+Homebrew trust entry was removed with `brew untrust --cask`, then its tap was
+removed with `brew untap`, without force; both absences were checked. The empty
+test app directory was also removed. The original app in Applications is intact.
+
+Homebrew announced autoremove candidates `libevent` and `unbound` after its first
+failure, but `brew list --versions` confirmed both remained installed (2.1.13 and
+1.26.1), including after final teardown. The retry used, and future teardown must use,
+`HOMEBREW_NO_AUTOREMOVE=1` as well as `HOMEBREW_NO_INSTALL_CLEANUP=1` to avoid
+affecting unrelated packages. No other formula removal was attempted.
+
+The offline strict audit does not validate the unpublished GitHub URL, online
+acceptance, the complete first-open flow on a clean Mac, upgrades, active Homebrew
+removal or zap. This local test used an already tested certificate and an on-disk
+archive; it cannot substitute for those gates.
+See [Homebrew command definitions](https://docs.brew.sh/Manpage)
+and [Apple's manual opening decision](https://support.apple.com/en-gb/102445).
 
 ## Native interface inspection
 

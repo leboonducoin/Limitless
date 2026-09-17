@@ -102,6 +102,12 @@ Never invent tool commands or force an installation rejected by security control
   installation, power changes or Gatekeeper acceptance. See `docs/testing.md`.
 - Validate workflow edits with actionlint and zizmor; scan staged changes and Git
   history with Gitleaks. Never silently skip an unavailable security gate.
+- Validate generated Homebrew casks in a tap's `Casks` directory with `brew style
+  --cask OWNER/TAP/limitless` and `brew audit --cask --strict OWNER/TAP/limitless`.
+  Loose-file style uses the wrong context; audit rejects paths. Keep test taps local,
+  preserve quarantine, and set `HOMEBREW_NO_AUTOREMOVE=1` and
+  `HOMEBREW_NO_INSTALL_CLEANUP=1` for teardown. A blocked cleanup hook must not be
+  forced; record pending app/receipt paths and the manual macOS decision required.
 - Keep `docs/testing.md` accurate about executable commands, results, unavailable
   tools, and separate Mac-only/manual gates. No invented coverage percentages.
 - UI work requires native visual inspection, keyboard and accessibility checks and
