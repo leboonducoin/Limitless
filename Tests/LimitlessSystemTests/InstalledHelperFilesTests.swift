@@ -65,6 +65,27 @@ private func verifyTestHelper(_ url: URL) throws {
     }
 }
 
+@Test(arguments: ["daemon", "helper", "both"])
+func restartedRemovalAcceptsOnlyProvenAbsentEntries(_ missing: String) throws {
+    try withInstalledFiles { root, helper, daemon in
+        if missing != "helper" { try FileManager.default.removeItem(at: daemon) }
+        if missing != "daemon" { try FileManager.default.removeItem(at: helper) }
+        let files = try InstalledHelperFiles(testRoot: root, verifyHelper: verifyTestHelper)
+        // A dangling link is an existing entry, even when open() would find no target.
+        let absent = missing == "helper" ? helper : daemon
+        try FileManager.default.createSymbolicLink(
+            at: absent, withDestinationURL: root.appendingPathComponent("missing"))
+        #expect(throws: JournalError.unexpectedContents) { try files.remove() }
+        #expect(throws: (any Error).self) {
+            _ = try InstalledHelperFiles(testRoot: root, verifyHelper: verifyTestHelper)
+        }
+        try FileManager.default.removeItem(at: absent)
+        try files.remove()
+        #expect(!FileManager.default.fileExists(atPath: helper.path))
+        #expect(!FileManager.default.fileExists(atPath: daemon.path))
+    }
+}
+
 @Test(arguments: ["symlink", "hardlink", "fifo", "writable", "setuid", "replacement"])
 func installedFileRemovalRejectsUnsafeFiles(_ kind: String) throws {
     try withInstalledFiles { root, helper, daemon in

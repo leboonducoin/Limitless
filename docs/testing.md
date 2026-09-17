@@ -7,10 +7,10 @@ SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
 The two libraries, app, helper and CLI executables pass strict swift-format and a Release
-build. There are 86 default Swift Testing tests (45 core, 35 system, 3 CLI, 3 app, including
+build. There are 87 default Swift Testing tests (45 core, 36 system, 3 CLI, 3 app, including
 parameterized boundary cases).
 One additional opt-in, read-only Mac integration test also passes on the inspected
-MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 87 tests
+MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 88 tests
 with that opt-in enabled at the 2026-09-17 installed-file cleanup checkpoint.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
@@ -26,8 +26,10 @@ Installed-helper filesystem tests use private temporary roots and an explicit
 test verifier, never a root installation. They cover idempotent removal, unrelated
 files, changed binary contents, symbolic/hard links, FIFOs, writable/special modes,
 replaced parents, wrong daemon identity and a partial unlink failure with retry.
-A replacement at an already removed path blocks further cleanup. The real helper
-uses Security's strict signature verification instead of the fixture verifier;
+A replacement at an already removed path blocks further cleanup. Reconstructed
+cleanup accepts only confirmed absent entries, while a dangling link remains an
+error; these interrupted-removal states are also tested on temporary files.
+Production uses Security's strict signature verification instead of the fixture verifier;
 positive signed deletion and ServiceManagement removal still require integration.
 The final Release development bundle also passed icon/plist/signature checks and
 the expected Developer ID rejection on 2026-09-17. Ponytail review removed an
