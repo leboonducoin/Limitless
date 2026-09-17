@@ -232,6 +232,19 @@ an Apple Siri eligibility message. The layout warning is not resolved or attribu
 to a specific Limitless call site; it needs reproduction and diagnosis during native
 qualification. The inspected preview quit normally after the check.
 
+LLDB reproduced the layout warning at `_NSDetectedLayoutRecursion` in the Debug
+bundle, with and without `--preview active`. Its stack passes through AppKit's
+window-frame and view-layout updates, FrontBoard scene delivery and the normal
+SwiftUI application loop; it does not identify a custom Limitless layout method.
+One later identical run did not reach the breakpoint before an explicit normal
+quit, so reproduction is intermittent. Removing the Settings scene's explicit
+`contentMinSize` policy did not prevent it; that experiment was reverted.
+Two short standalone SwiftUI controls (a text WindowGroup, then a MenuBarExtra
+with Settings) exited normally without the layout breakpoint, while also emitting
+the Apple AppIntents messages. These comparisons do not establish the cause or
+prove a framework-only bug. Debugger/probe processes were stopped after inspection;
+no experimental product code, permission changes or system-power writes remain.
+
 Motion review using the installed `review-animations` skill:
 
 | Before | After | Why |
