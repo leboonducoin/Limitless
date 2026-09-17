@@ -213,6 +213,7 @@ struct MenuPanel: View {
                     .buttonStyle(.borderedProminent).disabled(model.busy)
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
