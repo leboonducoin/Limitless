@@ -21,8 +21,9 @@ disabled; removing the Team ID requirement does not remove authentication.
 Certificate-signed, non-root XPC probes now verify a real cross-process reply and
 reject mismatched certificate pins and identifiers in both directions. A bundle
 identifier or UID alone remains insufficient. The first authorized SMJobBless
-installation and authenticated app/CLI exchanges with the root helper succeeded
-on the test Mac. The first removal exposed a plist validation bug; see
+installation, authenticated app/CLI exchanges and complete inactive removal succeeded
+on the test Mac after correcting plist validation, XPC teardown ordering and an
+unseen login-item state; see
 [the integration record](testing.md#privileged-installation-trial).
 Apple's
 code-signing requirements support a self-signed certificate pin; that does not
@@ -36,7 +37,10 @@ requesting administrator consent through Authorization Services. The helper
 has guarded cleanup for the two fixed files that SMJobBless installs, using the
 running executable's signed identity; temporary-file tests cover replacement,
 unsafe paths and interrupted removal. This does not qualify a real installation.
-Cancellation, upgrade, restoration and full removal still require real-Mac evidence.
+Cancellation and distribution upgrades still require real-Mac evidence. Build 4
+passed local inactive and active removal, including confirmed restoration while
+the tracked command continued. Download/Homebrew and physical compatibility gates
+remain open.
 The removal validator accepts the optional `Program` key written by SMJobBless only
 when it equals the fixed helper path, alongside the exact `ProgramArguments` array.
 Keep the shared session/controller/backend and all user limits;

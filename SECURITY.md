@@ -31,8 +31,9 @@ Certificate selection uses the SHA-1 fingerprint mandated by Apple's requirement
 language, not an archive integrity digest. The release verifier also requires the
 same actual certificate bytes on all three executables. A local signed probe
 verifies cross-process authentication and rejects mismatched pins/identifiers in
-both directions. Native installation and the privileged lifecycle without Apple
-membership still require qualification.
+both directions. Local native installation, privileged status, live battery hold
+and inactive/active removal passed without Apple membership or added certificate
+trust. Downloaded artifacts and the complete release matrix remain unqualified.
 This identity does not establish Apple notarization. No identifier-only acceptance
 or automatic Gatekeeper exception is authorized by the no-account requirement.
 
@@ -41,8 +42,8 @@ Authorization Services. Both peers' exact certificate requirements and helper
 metadata are checked before consent. The authorization reference is destroyed
 after each operation; no password is read or stored. A loaded installation must
 be drained and removed through the matching app before an upgrade or channel
-change. The embedded development requirements authorize nobody. Native consent
-and a real certificate-signed lifecycle remain qualification gates.
+change. The embedded development requirements authorize nobody. Consent cancellation,
+revocation, restart and release-artifact qualification remain open gates.
 
 Removal is application-only and first revokes all demands. A protected ownership
 record is never deleted to bypass a failed restoration. Journal cleanup refuses

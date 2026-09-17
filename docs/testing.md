@@ -341,6 +341,43 @@ The signed native cycle with this final login fix remains to be run. Graphify is
 current (599 nodes/1251 edges); the complexity review retained an inline check of
 native statuses, without another wrapper or dependency.
 
+**Build 4 native result:** the signed bundle at `d884835` was installed into
+`/Applications/Limitless.app` and its native Enable action installed the root helper.
+Source and installed helper SHA-256 matched
+`6e056f375ea4075487cbd6c884835c3fbfb0738b0566940d8c68214c6c00d10e`.
+The signed CLI returned inactive/allowed, no sessions, automation off and a real
+battery reading. After quitting the inactive app, its official
+`--prepare-uninstall` hook exited **0**. Independent checks confirmed launchctl
+service-not-found (113) and ENOENT for the executable, launchd plist and state
+directory. This completes the local signed **inactive** installation/status/removal
+cycle, without paid membership or added certificate trust. It does not qualify
+active-session restoration, a real login/reboot, Gatekeeper downloads, Homebrew
+distribution or closed-lid behavior. The test app bundle remains in Applications;
+no helper or login item remains registered at this checkpoint.
+
+The same hook also exited 0 when repeated from the other signed build 4 copy with
+all integrations absent. The helper was then reinstalled for authorized live power
+tests. With automation off, `limitless run -- /usr/bin/swift --version` returned 69/
+`sessionRejected` before launching the command. After the actual app toggle enabled
+automation, `limitless run --for 2m -- /usr/bin/swift Tools/ProjectTool.swift check`
+ran the real validation task (89 tests). On battery, status showed one active task,
+`observed=disabled`, `ownsGlobalHold=true`, floor 20% and a 120-second deadline.
+The command exited 0; subsequent status showed zero sessions, inactive/allowed,
+and no owned global hold. The floor stayed at 20% throughout.
+
+Two further real validations ran concurrently through `run -b`, bounded to 120
+and 90 seconds, using separate SwiftPM scratch paths: a clean full check and a
+shorter TSan run. Both sessions were observed active together. After the TSan
+command exited 0, the full check still had one active session and the flag remained
+disabled. The official uninstall hook then exited 0 while that command was still
+running. The CLI reported that protection ended and would not restart; the command
+continued to completion with all 89 tests passing and exit 0. Independent inspection
+confirmed `IOPMrootDomain.SleepDisabled = No`, no launchctl job, and no journal,
+daemon plist or installed helper. This verifies active removal without terminating
+tracked user work. No active helper or login item remains after these trials.
+Actual lid closure, AC transitions, expiry during work and reboot remain separate
+gates; the successful flag observation alone does not prove lid-closed execution.
+
 ## Native interface inspection
 
 Read-only Debug previews were inspected through native accessibility automation on

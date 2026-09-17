@@ -7,8 +7,10 @@ By **Arthur Barreau**. [MIT](LICENSE), copyright © 2026 Arthur Barreau.
 **In development — not yet a published or hardware-qualified application.**
 The first release targets **macOS 26 or later on Apple Silicon**. The app, CLI,
 helper and distribution tooling are implemented, but there is no qualified public
-download or Homebrew tap yet. Native approval, signed integration and physical
-closed-lid operation remain release gates. See the [acceptance matrix](docs/requirements.md).
+download or Homebrew tap yet. Local signed trials verified native installation,
+live battery keep-awake, concurrent tasks and restoration/removal. Physical
+closed-lid operation, clean-Mac distribution and the remaining security scenarios
+are still release gates. See the [acceptance matrix](docs/requirements.md).
 
 Limitless is an independent Swift implementation inspired by
 [Sleepless](https://github.com/Aboudjem/Sleepless). No Sleepless code or assets are
@@ -43,7 +45,8 @@ administrator consent without requiring paid Apple Developer membership from
 the maintainer or users. Users will receive the already signed app; they will not
 need to build it or create a certificate. Developer ID and notarization are an
 optional later channel. The community installer and packaging are implemented;
-their signed lifecycle still needs qualification on a real Mac.
+the local signed installation/active-removal cycle passed without paid membership
+or added certificate trust. Clean-Mac download/Homebrew qualification is pending.
 
 A downloaded non-notarized app may require an explicit decision in macOS Privacy
 & Security, and managed Macs may prevent opening it. Limitless and its cask do not
