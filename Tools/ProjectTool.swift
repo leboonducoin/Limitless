@@ -791,6 +791,18 @@ do {
             environment: buildEnvironment)
     } else {
         try selfTest()
+        // Compile the opt-in signed probe without creating keys, signing or launching it in CI.
+        for sources in [
+            [
+                "-parse-as-library", "Sources/LimitlessSystem/SignedConnection.swift",
+                "Tests/SignedXPC/Probe.swift",
+            ],
+            ["Tests/SignedXPC/Run.swift"],
+        ] {
+            _ = try run(
+                "/usr/bin/xcrun",
+                ["swiftc", "-typecheck", "-swift-version", "6", "-warnings-as-errors"] + sources)
+        }
         _ = try run(
             "/usr/bin/xcrun", ["swift", "build", "-c", "release"] + buildPath + compilerFlags,
             environment: buildEnvironment)

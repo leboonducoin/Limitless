@@ -17,13 +17,13 @@ exists. No public release or push is authorized by this document.
 | R07 | Launch at login independent of activation | SMAppService integration and fresh-login inactive-state evidence | Independent native control implemented; real registration/login open |
 | R08 | Restrained Liquid Glass UI, original icon, discreet motion | Light/dark, contrast, reduced-motion/transparency and visual evidence | Original Swift artwork and native light/dark previews inspected; accessibility gates open |
 | R09 | Swift CLI and AI skill track actual work, release all completed tasks, obey user limits | Concurrent tasks, interruptions, stale owners, PID reuse and policy-boundary tests | CLI, process adapter and leases tested; skill validated; signed end-to-end open |
-| R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Both bundle channels, guarded removal, release tooling and cask template implemented; signed artifacts and real lifecycle open |
-| R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Native installation adapters compile and reject ad-hoc callers; signed approval/exchange open |
+| R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Both channels implemented; community test certificate bundle and extracted archive verified; real lifecycle open |
+| R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Five non-root signed XPC cases pass; native approval and privileged exchange open |
 | R12 | Public-ready MIT repository with docs, tests, complete CI and security | Executed checks and release checklist, exact source/artifact linkage | Public docs and issue/PR templates implemented; local checks pass; hosted CI, provenance and release qualification open |
 | R13 | All authored executable code Swift; no Node/Python product runtime | Source and packaged-artifact inventory | Source and local Debug/Release bundle inventoried; signed release audit open |
 | R14 | Public Apple APIs; isolate undocumented mechanism | Call-site audit, entitlement inspection and backend tests | Backend isolated; signed artifact audit open |
 | R15 | Frequent local commits, maintained AGENTS.md, RTK for terminal work | Git history and maintained contributor instructions | In progress |
-| R16 | Usable distribution without the maintainer or users holding a paid Apple Developer membership; Developer ID is optional later | No-account authentication/installation review, GitHub download and dedicated Homebrew tap tested on a clean Mac | Certificate pinning, native installer, cleanup and community packaging implemented; development metadata verified; real certificate and installation qualification open |
+| R16 | Usable distribution without the maintainer or users holding a paid Apple Developer membership; Developer ID is optional later | No-account authentication/installation review, GitHub download and dedicated Homebrew tap tested on a clean Mac | Community test certificate, artifact and non-root XPC verified without membership or trust exceptions; installation/download qualification open |
 
 ## Delivery sequence
 
@@ -76,5 +76,7 @@ and notarization credentials are prerequisites only for the optional notarized
 channel. End users never need developer membership. Do not silently reduce the
 closed-lid, initial native admin approval, XPC authentication or removal requirements
 to satisfy R16. See [distribution decisions](distribution.md#distribution-without-apple-developer-membership).
-The development environment currently has CLT Swift 6.4 and no detected usable
-signing identity or full Xcode. Revalidate this before claiming a blocker persists.
+The development environment has CLT Swift 6.4 and no full Xcode. A dedicated local
+test identity was created with explicit consent on 2026-09-17 and successfully
+signed the community artifacts and XPC probes. Publisher identity management and
+the native installation gates remain separate. Revalidate before claiming a blocker.
