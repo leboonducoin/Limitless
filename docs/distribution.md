@@ -169,11 +169,11 @@ publishes a download or bypasses Gatekeeper. On 2026-09-17, explicit user consen
 authorized a dedicated local test identity and test signatures. The resulting
 community bundle and re-extracted ZIP passed the verifiers with no trust-store
 changes. This is a test certificate, not a qualified publisher identity or release.
-Clean-Mac approval, upgrades and active-helper Homebrew removal remain open;
-local cask installation, inactive removal, same-version reinstallation and scoped
-zap passed. The repeated trial also observed an initial execution block followed
+Clean-Mac approval and upgrades remain open; local cask installation, inactive and
+active removal, same-version reinstallation and scoped zap passed on build 5.
+The repeated trials also observed initial execution blocks followed
 by successful execution without establishing the cause of that change. See
-[the reinstallation and zap trial](testing.md#local-reinstallation-and-zap).
+[the build 5 cask trials](testing.md#build-5-active-cask-removal-and-repeat-installation).
 
 An untrusted self-signed identity may be absent from `security find-identity -v`
 while still supporting exact-certificate code-signing requirements. Do not add a
@@ -209,8 +209,9 @@ The Swift release tooling and Homebrew template are implemented. A locally signe
 community archive and its non-quarantined native lifecycle have passed; no public
 or notarized release exists. The local quarantined cask trial covered installation,
 a blocked cleanup before first opening, then successful CLI use and inactive
-uninstall after native opening. A later build 4 trial passed same-version
-reinstallation and scoped zap. Clean-Mac downloads and the full Homebrew lifecycle
+uninstall after native opening. Later build 4 and 5 trials passed same-version
+reinstallation and scoped zap; build 5 also passed cask removal during tracked work.
+Clean-Mac downloads and the full Homebrew lifecycle
 remain separate gates, including qualification of the first-open decision; see
 [the local trials](testing.md#homebrew-cask-validation).
 Installation must preserve macOS approval; a cask must not run `sudo pmset`, install
@@ -221,7 +222,7 @@ Removal must revoke all sessions, confirm restoration of Limitless-owned state,
 unregister the helper and login item, then remove the app, CLI link and optional
 preferences/skill. An unresolved ownership journal must stop destructive removal.
 Never promise that deleting an app or rebooting clears the undocumented global
-flag. Active-session uninstall, upgrade, approval rejection and interrupted cleanup
+flag. Upgrade, approval rejection and interrupted cleanup
 remain required tests before a Homebrew release is usable.
 
 ## Maintainer release commands
@@ -369,8 +370,8 @@ preserves them. User-created skill copies and external links are not silently de
 The cask must quit the app before invoking this hook with `must_succeed: true`,
 then let Homebrew remove its app and CLI link. Optional `zap` handles this user's
 preferences/cache/saved-window state. Do not use blanket deletion rules for the
-protected journal or ignore a failed hook. Local cask installation, inactive
-uninstall, same-version reinstallation and scoped zap passed on build 4. Upgrade
-and active-helper cask removal remain signed-Mac tests, as do approval loss and a
-helper restart between cleanup and unregistration.
+protected journal or ignore a failed hook. Local cask installation, inactive and
+active uninstall, same-version reinstallation and scoped zap passed on build 5.
+Upgrade remains a signed-Mac test, as do approval loss and a helper restart between
+cleanup and unregistration.
 [Homebrew cask rules](https://docs.brew.sh/Cask-Cookbook#stanza-uninstall).
