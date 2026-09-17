@@ -246,6 +246,31 @@ These eight native cases remain separate from the 89 Swift Testing tests and do
 not install the production helper. After the listener change, the complete local
 check, Address Sanitizer and Thread Sanitizer each passed all 89 tests again.
 
+## Signed artifact inventory
+
+The community bundle at source `0428a053426a94f139d61510161f55e818cab3de`
+was inventoried after signing and successful archive extraction/verification.
+It contains nine regular files and no symbolic links: three ARM64 Mach-O
+executables (app, CLI, helper), the Info.plist, Build.json, original ICNS artwork,
+MIT license, AI skill Markdown and the resource-signature manifest. There is no
+embedded interpreter, framework bundle, test probe or maintenance executable.
+The tracked source inventory contains 44 Swift files; the remaining tracked files
+are documentation, configuration, license and the Homebrew DSL template.
+
+`otool -L` on all three executables lists only Apple system frameworks and libraries
+under `/System/Library/Frameworks` and `/usr/lib`, including macOS's Swift runtime.
+No Node/Python runtime, third-party dylib or private framework is linked directly.
+A targeted source review found no manual `dlopen`/`dlsym`, private symbol binding
+or selector-based dispatch. The undocumented `SleepDisabled` property and
+`pmset disablesleep` invocation remain confined to `MacSleepBackend.swift`; the
+policy/controller depend on its typed boundary. No power command was run for
+this inventory. Earlier release-verifier results cover the signatures, runtime
+flags and absence of entitlements on these exact binaries.
+
+This evidence applies to this test artifact. It does not establish compatibility
+across macOS releases, Gatekeeper acceptance, privileged installation or hardware
+behavior. Repeat the inventory for the artifact selected for publication.
+
 ## Native interface inspection
 
 Read-only Debug previews were inspected through native accessibility automation on
