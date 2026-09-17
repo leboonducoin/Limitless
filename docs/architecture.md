@@ -263,7 +263,12 @@ after native authorization. An unknown/disabled flag prevents unregistration.
 The community adapter then requests native authorization to remove
 the loaded job, checks file absence again after consent, calls `SMJobRemove` with
 wait enabled, and requires both job and files to be absent. The notarized adapter
-uses asynchronous `SMAppService.unregister()`. See the [integration record](testing.md#privileged-installation-trial)
+uses asynchronous `SMAppService.unregister()` for enabled or approval-pending services.
+Both adapters share a removal proof: native status must be `notRegistered` or
+`notFound`, the fixed system job must independently be absent, the protected paths
+must be absent, and the observed sleep flag must be allowed. `notFound` alone never
+proves removal. A never-installed or already-removed helper satisfying all these
+checks needs no unregister call. See the [integration record](testing.md#privileged-installation-trial)
 for actual signed lifecycle evidence; filesystem tests use temporary fixtures.
 
 The app unregisters both native services only after these cleanup proofs, then

@@ -15,11 +15,11 @@ initial Gatekeeper block. Its test app, link, receipt, tap and Homebrew trust en
 were removed. No privileged integration was created by that trial.
 
 The two libraries, app, helper and CLI executables pass strict swift-format and a Release
-build. There are 90 default Swift Testing tests (45 core, 38 system, 3 CLI, 4 app, including
+build. There are 91 default Swift Testing tests (45 core, 39 system, 3 CLI, 4 app, including
 parameterized boundary cases).
 One additional opt-in, read-only Mac integration test also passes on the inspected
-MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 91 tests
-with that opt-in enabled at the 2026-09-17 asynchronous-signature checkpoint.
+MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 92 tests
+with that opt-in enabled at the 2026-09-17 absent-helper removal checkpoint.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
 System tests cover strict Boolean decoding, the real continuous clock and bounded
@@ -678,12 +678,22 @@ AppIntents 4097, with no Security main-thread fault. No new UI framework, animat
 or policy path was added.
 
 The no-helper removal hook returned 1 in both pre-change and corrected Debug **bundled** layouts:
-SMAppService reported `notFound`, followed by unregister error 1. This separate
-existing cleanup defect remains open; it does not replace the community build 4
-removal evidence. The installed community app/archive are still build 4, without
-this source change. No helper or login item was created, launchctl returned 113,
-no Limitless GUI remained, and independent IORegistry observation was
-`SleepDisabled = No` after the diagnostic work.
+SMAppService reported `notFound`, followed by unregister error 1. This exposed a
+separate existing cleanup defect. The shared removal proof now accepts a missing
+native service only when the fixed system job is independently absent, the protected
+journal and installed paths are absent, and a fresh sleep observation is allowed.
+Enabled or approval-pending services still require successful native unregistration;
+an unknown job, remaining files or unreadable/disabled power state still blocks completion.
+One parameterized regression exercises nine combinations of native and system-job status.
+The complete `check`, ASan and TSan each passed 92 tests after this correction.
+
+A fresh Debug bundled app, signed with the authorized local certificate, then ran
+`--prepare-uninstall` twice: both calls exited 0. Native logs still reported status 3
+without an unregister attempt; AppIntents 4097 messages remained. No helper or login
+item was created. Independent checks confirmed launchctl 113, all three protected
+paths absent, no remaining Limitless GUI and `SleepDisabled = No`. This qualifies
+the never-installed bundled cleanup path, not a notarized SMAppService installation.
+The installed community app/archive are still build 4, without these source changes.
 
 LLDB reproduced the layout warning at `_NSDetectedLayoutRecursion` in the Debug
 bundle, with and without `--preview active`. Its stack passes through AppKit's
