@@ -52,6 +52,9 @@ for the notarized channel or SMJobBless with Authorization Services for the comm
 channel. macOS owns the consent interface; there is no app password field.
 Register only in response to the setup button. Development builds
 without a trusted signing identity expose the UI but disable privileged actions.
+While the initial identity check is pending, show native preparation feedback and
+keep integration controls disabled; do not label that pending state as an untrusted
+development build. Signature validation must not block the interface thread.
 Debug previews are clearly labeled and cannot call the helper, register services,
 change login items or persist power policy.
 

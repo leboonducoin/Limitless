@@ -12,7 +12,7 @@ struct LimitlessCLI {
             case .help: print(help)
             case .version: print("Limitless \(LimitlessIdentity.version)")
             case .status(let json):
-                let client = try ServiceClient(role: .task)
+                let client = try await ServiceClient(role: .task)
                 do {
                     guard let status = try await client.send(.status).status else {
                         throw ServiceError.unavailable
@@ -56,7 +56,7 @@ struct LimitlessCLI {
     @MainActor private static func follow(
         command: TrackedCommand?, process: ProcessIdentity?, request: SessionRequest
     ) async throws -> Int32 {
-        let client = try ServiceClient(role: .task)
+        let client = try await ServiceClient(role: .task)
         do {
             let reply = try await client.send(.start(request))
             guard let id = reply.startedSession, let status = reply.status,

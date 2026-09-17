@@ -7,9 +7,9 @@ public actor ServiceClient {
     private let connection: NSXPCConnection
     private var closed = false
 
-    public init(role: ClientRole) throws {
+    public init(role: ClientRole) async throws {
         let isApp = role == .application
-        let identity = try SignedIdentity(
+        let identity = try await SignedIdentity.current(
             expectedIdentifier:
                 isApp ? LimitlessIdentity.application : LimitlessIdentity.commandLine)
         let connection = NSXPCConnection(

@@ -62,8 +62,9 @@ struct LimitlessApp: App {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         NSApp.applicationIconImage = BrandArt.appIcon(size: 256)
-        if CommandLine.arguments.contains("--prepare-uninstall") {
-            Task {
+        Task {
+            await model.prepareForLaunch()
+            if CommandLine.arguments.contains("--prepare-uninstall") {
                 let success = await model.removeIntegration(
                     erasePreferences: CommandLine.arguments.contains("--erase-preferences"))
                 let output = (model.message ?? "Removal was not confirmed.") + "\n"
@@ -71,9 +72,8 @@ struct LimitlessApp: App {
                     Data(output.utf8))
                 exit(success ? 0 : 1)
             }
-            return
+            model.beginMonitoring()
         }
-        model.beginMonitoring()
         #if DEBUG
             if model.isPreview {
                 if CommandLine.arguments.contains("--light") {

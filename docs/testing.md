@@ -15,11 +15,11 @@ initial Gatekeeper block. Its test app, link, receipt, tap and Homebrew trust en
 were removed. No privileged integration was created by that trial.
 
 The two libraries, app, helper and CLI executables pass strict swift-format and a Release
-build. There are 88 default Swift Testing tests (45 core, 37 system, 3 CLI, 3 app, including
+build. There are 90 default Swift Testing tests (45 core, 38 system, 3 CLI, 4 app, including
 parameterized boundary cases).
 One additional opt-in, read-only Mac integration test also passes on the inspected
-MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 89 tests
-with that opt-in enabled at the 2026-09-17 native installation checkpoint.
+MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 91 tests
+with that opt-in enabled at the 2026-09-17 asynchronous-signature checkpoint.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
 System tests cover strict Boolean decoding, the real continuous clock and bounded
@@ -634,9 +634,48 @@ qualification. The inspected preview quit normally after the check.
 The signed build 4 manual-session run also emitted the same startup layout warning,
 Apple AppIntents 4097 and a BaseBoard message. Its targeted error/fault log contained
 Security runtime diagnostics warning against a main-thread method call and
-SMAppService status lookup error 22 around helper setup. The log does not identify
-the Security call site or quantify a UI stall; attribution and responsiveness
-investigation remain open despite successful session and removal operations.
+SMAppService status lookup error 22 around helper setup. The Security warning was
+subsequently attributed and corrected as described below; this does not resolve
+the other diagnostics or quantify a sustained UI stall.
+
+### Asynchronous signature validation
+
+A certificate-signed Debug control reproduced the Security fault under LLDB.
+The runtime logger identified `SecTrustEvaluateThreadRuntimeCheck`; a breakpoint
+on `SecTrustEvaluateIfNecessary` then showed the originating main-thread stack:
+`SecCodeCopySigningInformation` → `SignedIdentity.init` → `AppModel.init`.
+The ad-hoc Debug control did not reach the same fault. No trust store, entitlement,
+Gatekeeper or other system security setting was changed for this comparison.
+
+App startup and `ServiceClient` initialization now await the shared `@concurrent`
+identity check. On the corrected certificate-signed Debug copy, the same native
+breakpoint ran on `com.apple.root.user-initiated-qos.cooperative` through
+`SignedIdentity.current` and `AppModel.prepareForLaunch`. Its normal GUI launch and
+menu opening emitted no Security main-thread fault in the targeted log sample;
+Apple AppIntents 4097 messages remained. This demonstrates the thread change, not
+an error-free app or a measured latency improvement. All Debug targets were stopped.
+
+The complete local `check`, ASan and TSan runs each passed all 91 tests. New
+regressions cover pending/untrusted startup controls and asynchronous rejection of
+the test host for both client roles. The eight signed XPC cases also passed with
+the client using the asynchronous identity API. Initially moving the embedded test
+service's bootstrap across an await caused a real libxpc crash:
+`_xpc_objc_main() is not supposed to return`, through `NSXPCListener.resume`.
+Its original synchronous bootstrap was retained, matching the production helper;
+the successful repeat still exercises asynchronous client verification and all
+reciprocal pin/identifier refusals. No privileged service is installed by this test.
+
+The corrected signed Debug CLI reached the absent service and returned 69
+(`unavailable`), rather than rejecting its own signature. A native window capture
+confirmed the prepared setup panel but exposed a truncated administrator-explanation
+sentence, still to fix. Full keyboard/VoiceOver remains unqualified. The no-helper
+removal hook returned 1 in both pre-change and corrected Debug **bundled** layouts:
+SMAppService reported `notFound`, followed by unregister error 1. This separate
+existing cleanup defect remains open; it does not replace the community build 4
+removal evidence. The installed community app/archive are still build 4, without
+this source change. No helper or login item was created, launchctl returned 113,
+no Limitless GUI remained, and independent IORegistry observation was
+`SleepDisabled = No` after the diagnostic work.
 
 LLDB reproduced the layout warning at `_NSDetectedLayoutRecursion` in the Debug
 bundle, with and without `--preview active`. Its stack passes through AppKit's
