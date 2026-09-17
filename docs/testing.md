@@ -468,6 +468,37 @@ no cap, no sessions and allowed/unowned state. The app quit normally and the off
 removal hook exited 0. Independent checks confirmed launchctl 113, all three root
 helper/state paths absent, and `IOPMrootDomain.SleepDisabled = No`.
 
+## Live manual sessions and Stop all
+
+Three further build 4 trials used the native menu-bar controls on battery, with
+floor 20%, both power sources allowed and no user duration cap. The custom duration
+picker was set to 90 seconds. The helper was enabled through the native setup
+button; CLI consent was granted only for the trials.
+
+| Case | Observed result |
+| --- | --- |
+| Manual session plus a real CLI `check` | One manual and one task session were observed active. At 11.96 s the CLI had exited 0 and only the original manual session remained, with the global hold still applied. Native `End my session` then restored inactive/allowed state with zero sessions. |
+| Native custom-duration expiry | The first authenticated sample showed 85.69 s remaining in the 90-second manual session. At 86.35 s from observer startup the session had expired and state was inactive/allowed/unowned. No session reappeared during five further seconds. |
+| Native `Stop all` with manual and CLI sessions | Two sessions were observed at 0.61 s; after the native button press, zero sessions and allowed/unowned state were observed at 1.88 s while the real validation still ran. Automation was revoked. The work exited 0 at about 16 s without reacquiring protection; a subsequent CLI request was rejected with status 69 before its command launched. |
+
+Both real `ProjectTool.swift check` workloads passed all 89 tests and the complete
+local check command. These are live session results, not new test counts or another
+sanitizer qualification. Status polling at about 0.5 s also triggers reconciliation;
+the timings do not establish a standalone watchdog bound.
+
+The temporary UI probe initially attempted a button after the popover was no longer
+exposed and refused the action. Presenting the popover and pressing its control in
+one process made the later trial succeed. A separate probe compile error was also
+fixed before its successful run. Neither failed preparation is counted as a passed
+trial or an application crash. The expiry observer itself issued only signed status
+requests. Manual process/date inputs, long runs, full keyboard/VoiceOver and physical
+lid/source transitions remain separate gates.
+
+Afterwards automation was off, floor 20% and the absent duration cap were unchanged,
+and no session remained. The app quit normally, the official removal hook exited 0,
+launchctl returned 113 and all three protected helper/state paths were absent.
+Independent IORegistry observation confirmed `SleepDisabled = No`.
+
 ## Homebrew cask validation
 
 Homebrew 7.0.2 was exercised on the same Mac on 2026-09-17. The authorized `style`
@@ -599,6 +630,13 @@ plus an AppKit `layoutSubtreeIfNeeded` re-entrant-layout warning during startup 
 an Apple Siri eligibility message. The layout warning is not resolved or attributed
 to a specific Limitless call site; it needs reproduction and diagnosis during native
 qualification. The inspected preview quit normally after the check.
+
+The signed build 4 manual-session run also emitted the same startup layout warning,
+Apple AppIntents 4097 and a BaseBoard message. Its targeted error/fault log contained
+Security runtime diagnostics warning against a main-thread method call and
+SMAppService status lookup error 22 around helper setup. The log does not identify
+the Security call site or quantify a UI stall; attribution and responsiveness
+investigation remain open despite successful session and removal operations.
 
 LLDB reproduced the layout warning at `_NSDetectedLayoutRecursion` in the Debug
 bundle, with and without `--preview active`. Its stack passes through AppKit's
