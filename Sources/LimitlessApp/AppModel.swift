@@ -292,8 +292,8 @@ import ServiceManagement
                     throw ServiceError.restorationRequired
                 }
             }
-            if helper.status != .notRegistered { try await helper.unregister() }
-            guard helper.status == .notRegistered else { throw ServiceError.unavailable }
+            if !helper.removalIsConfirmed { try await helper.unregister() }
+            guard helper.removalIsConfirmed else { throw ServiceError.unavailable }
             await client?.close()
             client = nil
             // A login item never registered with ServiceManagement reports notFound.
@@ -302,8 +302,7 @@ import ServiceManagement
                 try await SMAppService.mainApp.unregister()
             }
             guard absentLoginStates.contains(SMAppService.mainApp.status),
-                try SecureOwnershipJournal.isStateDirectoryAbsent(),
-                try InstalledHelperFiles.areAbsent()
+                helper.removalIsConfirmed
             else { throw ServiceError.restorationRequired }
             if erasePreferences {
                 preferences.removePersistentDomain(forName: LimitlessIdentity.application)

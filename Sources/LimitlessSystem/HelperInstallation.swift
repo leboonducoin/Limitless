@@ -34,6 +34,23 @@ public protocol HelperInstallation: Sendable {
     func unregister() async throws
 }
 
+extension HelperInstallation {
+    public var removalIsConfirmed: Bool {
+        guard
+            removalStatusesAreAbsent(
+                service: status, systemJob: HelperInstallationKind.blessed.service.status)
+        else { return false }
+        return (try? requireRemovedFiles()) != nil
+    }
+}
+
+// notFound alone is ambiguous; the fixed system job must independently be absent.
+func removalStatusesAreAbsent(
+    service: SMAppService.Status, systemJob: SMAppService.Status
+) -> Bool {
+    [.notRegistered, .notFound].contains(service) && systemJob == .notRegistered
+}
+
 private func requireRemovedFiles() throws {
     var backend = MacSleepBackend()
     guard try SecureOwnershipJournal.isStateDirectoryAbsent(),
@@ -65,15 +82,18 @@ private struct BundledHelperInstallation: HelperInstallation {
         }.value
     }
 
-    func unregister() async throws {
+    @concurrent func unregister() async throws {
         _ = try HelperInstallationKind.bundled.validateApplication()
         try requireRemovedFiles()
         let service = SMAppService.daemon(plistName: LimitlessIdentity.daemonPlist)
-        try await service.unregister()
-        guard service.status == .notRegistered else {
+        switch service.status {
+        case .enabled, .requiresApproval: try await service.unregister()
+        case .notRegistered, .notFound: break
+        @unknown default: throw HelperInstallationError.unconfirmedRemoval
+        }
+        guard removalIsConfirmed else {
             throw HelperInstallationError.unconfirmedRemoval
         }
-        try requireRemovedFiles()
     }
 }
 
@@ -143,6 +163,7 @@ private struct BlessedHelperInstallation: HelperInstallation {
         try await Task.detached {
             _ = try HelperInstallationKind.blessed.validateApplication()
             try requireRemovedFiles()
+            if removalIsConfirmed { return }
             try withAuthorization(right: kSMRightModifySystemDaemons) { authorization in
                 // Recheck after a possibly long native authorization dialogue.
                 try requireRemovedFiles()
@@ -153,11 +174,7 @@ private struct BlessedHelperInstallation: HelperInstallation {
                         authorization, true, &error)
                 else { throw error?.takeRetainedValue() ?? CocoaError(.executableLoad) as CFError }
             }
-            guard
-                SMJobCopyDictionary(kSMDomainSystemLaunchd, LimitlessIdentity.helper as CFString)?
-                    .takeRetainedValue() == nil
-            else { throw HelperInstallationError.unconfirmedRemoval }
-            try requireRemovedFiles()
+            guard removalIsConfirmed else { throw HelperInstallationError.unconfirmedRemoval }
         }.value
     }
 }
