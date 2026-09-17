@@ -72,9 +72,11 @@ Matching identities pass; mismatched certificate pins and identifiers are refuse
 in both directions. Three additional anonymous-listener cases count admission
 callbacks: one for a matching peer, zero for a wrong pin or identifier. These three
 cases run within one signed process, separately from the five cross-process cases.
-The probe does not instantiate `HelperRuntime`, install a daemon or
-exercise the privileged service lifecycle. Native registration and app/helper
-lifecycle tests remain open; see [test evidence](testing.md#signed-community-and-xpc-tests).
+The probe does not instantiate `HelperRuntime`, install a daemon or exercise the
+privileged service lifecycle. Separate authorized build 4 trials passed community
+registration, root app/CLI exchange and inactive/active removal; see
+[native evidence](testing.md#privileged-installation-trial). Restart, fault and
+full hardware qualification remain open.
 
 The signed bundle selects one of two native `HelperInstallation` adapters through
 `LimitlessHelperInstallation`: `bundled` uses `SMAppService`, and `blessed` uses
@@ -172,8 +174,9 @@ An exhausted cleanup keeps the ownership record and reports a blocked state.
 Only explicit cleanup retry can reset that budget. Fault recovery never grants
 activation permission. The persistent journal implementation and helper transport
 are separate from the controller; controller tests substitute both OS and disk.
-The concrete journal is tested with real temporary files; signed helper transport
-still requires its dedicated Mac integration gate.
+The concrete journal is tested with real temporary files. Signed helper transport
+and normal root-path cleanup also passed the separate native trials; privileged
+crash/journal recovery remains a Mac integration gate.
 
 `SecureOwnershipJournal` uses the fixed production directory
 `/Library/Application Support/Limitless`, owned by root with mode 0700. It opens

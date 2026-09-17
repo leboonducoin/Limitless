@@ -107,6 +107,10 @@ Never invent tool commands or force an installation rejected by security control
 - UI work requires native visual inspection, keyboard and accessibility checks and
   local runtime-log review. If the required app or tool is unavailable, report the
   gap. A screenshot or a simulated test does not prove lid-closed operation.
+- Scope native automation to the inspected Limitless process. Resolve character
+  keys from the active keyboard layout and numeric input from the current locale;
+  US keycodes and dot-decimal assumptions are not portable. Confirm applied limits
+  through authenticated helper status, not an edited field alone.
 - Read `docs/design.md` before UI changes. Use native materials, system typography,
   original assets, semantic colors, reduced-motion/transparency support, and subtle
   purposeful animation. No Unicode emoji as built-in controls or decorative icons.
