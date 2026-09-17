@@ -30,10 +30,16 @@
   matching CLI/bundle versions. No signed release or publication has been performed.
 - Reciprocal XPC requirements now pin the executable's actual leaf certificate and
   exact peer identifiers, permitting a stable self-signed identity without Apple
-  membership. Ad-hoc signatures remain rejected; no-account installation is pending.
+  membership. Ad-hoc signatures remain rejected; signed integration remains pending.
 - Guarded cleanup of SMJobBless-installed helper files after confirmed restoration,
   with certificate, path and filesystem checks, partial-failure retry and independent
-  app absence checks. The no-account installer and real signed lifecycle remain pending.
+  app absence checks. The real signed lifecycle remains pending.
+- Native SMAppService and SMJobBless adapters with pre-consent signature/metadata
+  validation, native administrator authorization and guarded service removal.
+- Community bundle/sign/verify/package commands with embedded helper plists,
+  exact certificate requirements, hardened runtime and actual archive digests.
+  Ad-hoc metadata and both release rejection paths pass locally and are included in CI;
+  a publisher-signed no-account artifact and native installation are still unqualified.
 
 ## Unreleased
 

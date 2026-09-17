@@ -18,8 +18,8 @@ sessions, native login support, a Swift CLI, an AI skill, and a narrowly scoped
 privileged helper. Distribution is planned through GitHub and Homebrew.
 No Node or Python runtime will be required to use it. A distribution usable without
 paid Apple Developer membership is required; notarization will be an optional later
-channel. Certificate-based helper authentication is implemented; the installation
-flow without membership still needs implementation and real-Mac qualification.
+channel. Certificate-based helper authentication, native installation adapters and
+community packaging are implemented; the signed flow still needs real-Mac qualification.
 See the [distribution decision](docs/distribution.md#distribution-without-apple-developer-membership).
 
 ## Development

@@ -7,11 +7,11 @@ SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
 
 The two libraries, app, helper and CLI executables pass strict swift-format and a Release
-build. There are 87 default Swift Testing tests (45 core, 36 system, 3 CLI, 3 app, including
+build. There are 88 default Swift Testing tests (45 core, 37 system, 3 CLI, 3 app, including
 parameterized boundary cases).
 One additional opt-in, read-only Mac integration test also passes on the inspected
-MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 88 tests
-with that opt-in enabled at the 2026-09-17 installed-file cleanup checkpoint.
+MacBook. Separate Address Sanitizer and Thread Sanitizer runs pass all 89 tests
+with that opt-in enabled at the 2026-09-17 native installation checkpoint.
 This covers policy, clock semantics, ownership, simultaneous demands, source
 suspension, battery cutoff, revocation and simulated restoration/recovery failures.
 System tests cover strict Boolean decoding, the real continuous clock and bounded
@@ -31,8 +31,13 @@ cleanup accepts only confirmed absent entries, while a dangling link remains an
 error; these interrupted-removal states are also tested on temporary files.
 Production uses Security's strict signature verification instead of the fixture verifier;
 positive signed deletion and ServiceManagement removal still require integration.
-The final Release development bundle also passed icon/plist/signature checks and
-the expected Developer ID rejection on 2026-09-17. Ponytail review removed an
+Both Release development layouts passed icon/plist/signature checks and expected
+Developer ID/community release rejection on 2026-09-17. Community checks inspect
+the actual embedded Mach-O plists and Security's signed Info.plist view. The modern
+bundle was built after the community bundle using the same scratch directory,
+checking that switching layouts does not retain stale helper metadata. Neither
+bundle installs a service or has a publisher certificate.
+Ponytail review removed an
 unused cleanup-status flag and reused the journal's filesystem checks; no new
 dependency or general-purpose filesystem abstraction was introduced.
 Core tests verify that removal revokes all work, survives console
@@ -45,6 +50,11 @@ Signature tests parse the exact certificate requirements with Security and set
 them on inactive Foundation XPC connections. They reject malformed/injected
 certificate fingerprints and identifiers, and confirm the ad-hoc test host cannot
 impersonate the production helper. This is not a successful cross-process exchange.
+Both native installation adapters also reject registration/removal from an ad-hoc
+test host before native consent or mutation. Tool self-checks reject malformed
+certificate selectors, versions, truncated Mach-O metadata, unsafe signing flags
+and entitlements; only the community channel accepts a missing secure timestamp.
+No native authorization dialogue, signed SMJobBless exchange or removal was tested.
 CLI tests cover conflicting modes/stop conditions, malformed options, unbounded
 representable durations, timezone-bearing dates and unchanged argument arrays.
 Real unprivileged process tests verify exit codes, termination, duplicate launch
@@ -110,14 +120,14 @@ dispatch. Security also runs weekly. Actions are pinned to verified full commit
 IDs; checkout credentials are not persisted. Jobs have individual minimum
 permissions and timeouts. No job installs the helper or changes power settings.
 
-| Check | Local evidence, 2026-09-16 | GitHub execution |
+| Check | Local evidence through 2026-09-17 | GitHub execution |
 | --- | --- | --- |
 | Release build, strict format, Swift tests | Passed | Configured; not run |
-| Development app bundle, icon export, plist and strict ad-hoc signature verification | Debug and Release passed | Release bundle configured; not run |
+| Development app bundle, icon export, plist and strict ad-hoc signature verification | Both Release layouts passed; modern Debug previously passed | Both Release layouts configured; not run |
 | Release input validation, Homebrew template syntax, ad-hoc release rejection | Passed | Included in check and bundle; not run |
 | Address / Thread Sanitizer, separate builds | Both passed; runtime libraries verified in binaries | Configured; not run |
-| actionlint 1.7.12 | Passed | Configured; not run |
-| zizmor 1.30.1, pedantic | Offline audit passed | Online audit configured; not run |
+| actionlint 1.7.12 | Passed again after community CI edit | Configured; not run |
+| zizmor 1.30.1, pedantic | Offline audit passed again after community CI edit | Online audit configured; not run |
 | Gitleaks 8.30.1 | Full local history and staged changes passed | Full fetched history configured; not run |
 | CodeQL Swift and GitHub Actions, extended security | Not available locally with this CLT toolchain | Configured; not run |
 | Dependency review and Dependabot | Configuration inspected | Requires GitHub execution/settings |
@@ -144,9 +154,10 @@ the Homebrew template with the system Ruby parser. Ruby is only a development
 DSL check/Homebrew dependency, not an application or CLI runtime. Each development
 bundle repeats the negative signature check after its ordinary signature passes.
 The builder also checks that the actual CLI version matches the bundle plist.
-The positive Developer ID/timestamp/entitlement, Apple submission, stapling,
+The positive publisher-certificate, Developer ID/timestamp, Apple submission, stapling,
 Gatekeeper and exported-release checks are implemented but not executed: this Mac
-still has zero valid signing identities and Command Line Tools, not full Xcode.
+has zero valid signing identities (rechecked 2026-09-17) and Command Line Tools,
+not full Xcode. Full Xcode is not required by the community signing command.
 No notarization upload, generated production cask or signed artifact is claimed.
 The separate `brew style --help` probe was unable to create Homebrew's cache in
 the restricted environment; it did not install a dependency. Full Homebrew

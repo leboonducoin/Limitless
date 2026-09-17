@@ -1,14 +1,19 @@
 import CryptoKit
 import Foundation
+import MachO
 import Security
 
 // Run from the repository root: swift Tools/ProjectTool.swift check
-func run(_ executable: String, _ arguments: [String], capture: Bool = false, saveOutput: URL? = nil)
+func run(
+    _ executable: String, _ arguments: [String], capture: Bool = false, saveOutput: URL? = nil,
+    environment: [String: String]? = nil
+)
     throws -> String
 {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: executable)
     process.arguments = arguments
+    process.environment = environment
     let pipe = capture ? Pipe() : nil
     if let pipe { process.standardOutput = pipe }
     if !capture { print("\(executable) \(arguments.joined(separator: " "))") }
@@ -64,6 +69,182 @@ struct BuildRecord: Codable, Equatable {
     let sourceClean: Bool
 }
 
+enum ReleaseIdentity {
+    case developerID(team: String)
+    case community(certificate: String)
+
+    var helperPath: String {
+        switch self {
+        case .developerID: "Library/HelperTools/LimitlessHelper"
+        case .community: "Library/LaunchServices/io.github.leboonducoin.Limitless.helper"
+        }
+    }
+
+    var installationKind: String {
+        switch self {
+        case .developerID: "bundled"
+        case .community: "blessed"
+        }
+    }
+
+    func requirement(identifier: String) throws -> SecRequirement {
+        switch self {
+        case .developerID(let team):
+            return try developerRequirement(identifier: identifier, team: team)
+        case .community(let certificate):
+            let value = try certificateRequirement(identifier: identifier, certificate: certificate)
+            var requirement: SecRequirement?
+            try require(
+                SecRequirementCreateWithString(value as CFString, [], &requirement)
+                    == errSecSuccess,
+                "Could not parse the certificate requirement.")
+            guard let requirement else { throw CocoaError(.coderValueNotFound) }
+            return requirement
+        }
+    }
+}
+
+func certificateRequirement(identifier: String, certificate: String) throws -> String {
+    try require(
+        [
+            "io.github.leboonducoin.Limitless", "io.github.leboonducoin.Limitless.cli",
+            "io.github.leboonducoin.Limitless.helper",
+        ].contains(identifier)
+            && matches(certificate, "[A-Fa-f0-9]{40}"), "Invalid certificate identity.")
+    return "identifier \"\(identifier)\" and certificate leaf = H\"\(certificate.lowercased())\""
+}
+
+func communityMetadata(info: [String: Any], certificate: String?) throws
+    -> (app: [String: Any], helper: [String: Any], daemon: [String: Any])
+{
+    let identifier = "io.github.leboonducoin.Limitless"
+    guard let version = info["CFBundleShortVersionString"] as? String,
+        let build = info["CFBundleVersion"] as? String
+    else { throw CocoaError(.coderValueNotFound) }
+    try require(
+        matches(version, "(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)")
+            && matches(build, "[1-9][0-9]*")
+            && info["CFBundleIdentifier"] as? String == identifier,
+        "Invalid helper metadata version or identity.")
+    // Ad-hoc inspection bundles explicitly authorize nobody; never use a dummy certificate pin.
+    let appRequirement =
+        try certificate.map { try certificateRequirement(identifier: identifier, certificate: $0) }
+        ?? "false"
+    let helperRequirement =
+        try certificate.map {
+            try certificateRequirement(identifier: identifier + ".helper", certificate: $0)
+        } ?? "false"
+    var app = info
+    app["LimitlessHelperInstallation"] = "blessed"
+    app["SMPrivilegedExecutables"] = [identifier + ".helper": helperRequirement]
+    let helper: [String: Any] = [
+        "CFBundleIdentifier": identifier + ".helper", "CFBundleName": "Limitless Helper",
+        "CFBundleVersion": build, "CFBundleShortVersionString": version,
+        "SMAuthorizedClients": [appRequirement],
+    ]
+    var daemon = try propertyList(URL(fileURLWithPath: "Packaging/" + identifier + ".helper.plist"))
+    daemon.removeValue(forKey: "BundleProgram")
+    daemon.removeValue(forKey: "ProgramArguments")
+    try require(
+        daemon["Program"] == nil && daemon["Label"] as? String == identifier + ".helper",
+        "SMJobBless must assign the installed program itself.")
+    return (app, helper, daemon)
+}
+
+/// Inspect the actual thin ARM64 executable without loading or executing its code.
+func embeddedPropertyList(_ data: Data, section name: String) throws -> [String: Any] {
+    func read<T>(_ offset: Int, as type: T.Type) throws -> T {
+        try require(
+            offset >= 0 && offset <= data.count && MemoryLayout<T>.size <= data.count - offset,
+            "Truncated Mach-O metadata.")
+        return data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: type) }
+    }
+    func field<T>(_ value: T) -> String {
+        withUnsafeBytes(of: value) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+    }
+    let header = try read(0, as: mach_header_64.self)
+    var offset = MemoryLayout<mach_header_64>.size
+    try require(
+        header.magic == MH_MAGIC_64 && header.cputype == CPU_TYPE_ARM64
+            && Int(header.sizeofcmds) <= data.count - offset
+            && header.ncmds <= header.sizeofcmds / UInt32(MemoryLayout<load_command>.size),
+        "Expected bounded load commands in an ARM64 Mach-O executable.")
+    let end = offset + Int(header.sizeofcmds)
+    for _ in 0..<header.ncmds {
+        let command = try read(offset, as: load_command.self)
+        try require(
+            command.cmdsize >= MemoryLayout<load_command>.size
+                && Int(command.cmdsize) <= end - offset, "Invalid Mach-O load command.")
+        if command.cmd == LC_SEGMENT_64 {
+            try require(
+                command.cmdsize >= MemoryLayout<segment_command_64>.size, "Truncated segment.")
+            let segment = try read(offset, as: segment_command_64.self)
+            try require(
+                Int(segment.nsects)
+                    <= (Int(command.cmdsize) - MemoryLayout<segment_command_64>.size)
+                        / MemoryLayout<section_64>.size,
+                "Truncated section table.")
+            for index in 0..<Int(segment.nsects) {
+                let section = try read(
+                    offset + MemoryLayout<segment_command_64>.size + index
+                        * MemoryLayout<section_64>.size, as: section_64.self)
+                if field(segment.segname) == "__TEXT" && field(section.segname) == "__TEXT"
+                    && field(section.sectname) == name
+                {
+                    let start = Int(section.offset)
+                    try require(
+                        start <= data.count && section.size <= UInt64(data.count - start)
+                            && section.size <= 65_536, "Invalid embedded plist extent.")
+                    let value = try PropertyListSerialization.propertyList(
+                        from: data.subdata(in: start..<(start + Int(section.size))), format: nil)
+                    guard let dictionary = value as? [String: Any] else {
+                        throw CocoaError(.propertyListReadCorrupt)
+                    }
+                    return dictionary
+                }
+            }
+        }
+        offset += Int(command.cmdsize)
+    }
+    throw NSError(
+        domain: "Limitless.ProjectTool", code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "Missing embedded \(name)."])
+}
+
+func verifyCommunityMetadata(_ app: URL, certificate: String?) throws {
+    let contents = app.appendingPathComponent("Contents")
+    let info = try propertyList(contents.appendingPathComponent("Info.plist"))
+    let expected = try communityMetadata(info: info, certificate: certificate)
+    let helper = contents.appendingPathComponent(
+        "Library/LaunchServices/io.github.leboonducoin.Limitless.helper")
+    let data = try Data(contentsOf: helper, options: .mappedIfSafe)
+    try require(
+        NSDictionary(dictionary: info).isEqual(to: expected.app)
+            && NSDictionary(dictionary: try embeddedPropertyList(data, section: "__info_plist"))
+                .isEqual(to: expected.helper)
+            && NSDictionary(dictionary: try embeddedPropertyList(data, section: "__launchd_plist"))
+                .isEqual(to: expected.daemon),
+        "App and embedded helper metadata disagree with the signing identity.")
+    // Exercise the same Security view that native installation validates before admin consent.
+    var code: SecStaticCode?
+    var information: CFDictionary?
+    try require(
+        SecStaticCodeCreateWithPath(helper as CFURL, [], &code) == errSecSuccess,
+        "Cannot inspect the embedded helper's signature.")
+    guard let code else { throw CocoaError(.coderValueNotFound) }
+    try require(
+        SecCodeCopySigningInformation(
+            code, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
+        "Cannot inspect the helper's signed metadata.")
+    let details = information as? [String: Any]
+    guard let securedInfo = details?[kSecCodeInfoPList as String] as? [String: Any] else {
+        throw CocoaError(.coderValueNotFound)
+    }
+    try require(
+        NSDictionary(dictionary: securedInfo).isEqual(to: expected.helper),
+        "Security's embedded Info.plist differs from the release metadata.")
+}
+
 func developerRequirement(identifier: String, team: String) throws -> SecRequirement {
     try require(matches(team, "[A-Z0-9]{10}"), "Expected a ten-character Apple Team ID.")
     let value =
@@ -79,8 +260,8 @@ func developerRequirement(identifier: String, team: String) throws -> SecRequire
     return requirement
 }
 
-func verifyCode(_ path: URL, identifier: String, team: String) throws -> Data {
-    let requirement = try developerRequirement(identifier: identifier, team: team)
+func verifyCode(_ path: URL, identifier: String, identity: ReleaseIdentity) throws -> Data {
+    let requirement = try identity.requirement(identifier: identifier)
     var code: SecStaticCode?
     try require(
         SecStaticCodeCreateWithPath(path as CFURL, [], &code) == errSecSuccess,
@@ -91,7 +272,7 @@ func verifyCode(_ path: URL, identifier: String, team: String) throws -> Data {
             code,
             SecCSFlags(rawValue: kSecCSStrictValidate | kSecCSCheckAllArchitectures),
             requirement) == errSecSuccess,
-        "Developer ID, Team ID or code integrity check failed: \(path.path)")
+        "Signing identity or code integrity check failed: \(path.path)")
     var information: CFDictionary?
     try require(
         SecCodeCopySigningInformation(
@@ -99,34 +280,38 @@ func verifyCode(_ path: URL, identifier: String, team: String) throws -> Data {
             &information) == errSecSuccess,
         "Cannot inspect signing information: \(path.path)")
     let details = information as? [String: Any] ?? [:]
-    try verifySigningInformation(details)
+    try verifySigningInformation(details, requiresTimestamp: identity.installationKind == "bundled")
     guard let certificates = details[kSecCodeInfoCertificates as String] as? [SecCertificate],
         let leaf = certificates.first
     else { throw CocoaError(.coderValueNotFound) }
     return SecCertificateCopyData(leaf) as Data
 }
 
-func verifySigningInformation(_ details: [String: Any]) throws {
+func verifySigningInformation(_ details: [String: Any], requiresTimestamp: Bool = true) throws {
     let flags = (details[kSecCodeInfoFlags as String] as? NSNumber)?.uint32Value ?? 0
     try require(
         SecCodeSignatureFlags(rawValue: flags).contains(.runtime)
-            && details[kSecCodeInfoTimestamp as String] is Date
+            && (details[kSecCodeInfoTimestamp as String] is Date
+                || (!requiresTimestamp && details[kSecCodeInfoTimestamp as String] == nil))
             && details[kSecCodeInfoEntitlements as String] == nil
             && details[kSecCodeInfoEntitlementsDict as String] == nil,
-        "Release code must have hardened runtime, a secure timestamp and no entitlements.")
+        "Release code needs hardened runtime and no entitlements; Developer ID also needs a secure timestamp."
+    )
 }
 
-func verifyRelease(_ app: URL, team: String, notarized: Bool) throws -> (String, BuildRecord) {
+func verifyRelease(_ app: URL, identity: ReleaseIdentity, notarized: Bool) throws -> (
+    String, BuildRecord
+) {
     try require(app.lastPathComponent == "Limitless.app", "Expected a Limitless.app bundle.")
     let identifier = "io.github.leboonducoin.Limitless"
-    let certificate = try verifyCode(app, identifier: identifier, team: team)
+    let certificate = try verifyCode(app, identifier: identifier, identity: identity)
     for (relative, suffix) in [
         ("MacOS/limitless", ".cli"),
-        ("Library/HelperTools/LimitlessHelper", ".helper"),
+        (identity.helperPath, ".helper"),
     ] {
         let peerCertificate = try verifyCode(
             app.appendingPathComponent("Contents/" + relative),
-            identifier: identifier + suffix, team: team)
+            identifier: identifier + suffix, identity: identity)
         try require(
             peerCertificate == certificate,
             "App, CLI and helper must use the same signing certificate.")
@@ -142,12 +327,19 @@ func verifyRelease(_ app: URL, team: String, notarized: Bool) throws -> (String,
             && info["LSMinimumSystemVersion"] as? String == "26.0",
         "Unexpected release bundle identity, version or macOS minimum.")
     for relative in [
-        "MacOS/LimitlessApp", "MacOS/limitless", "Library/HelperTools/LimitlessHelper",
+        "MacOS/LimitlessApp", "MacOS/limitless", identity.helperPath,
     ] {
         let architectures = try run(
             "/usr/bin/lipo", ["-archs", contents.appendingPathComponent(relative).path],
             capture: true)
         try require(architectures == "arm64", "This release recipe requires arm64-only binaries.")
+    }
+    try require(
+        info["LimitlessHelperInstallation"] as? String == identity.installationKind,
+        "Release channel and installation metadata disagree.")
+    if case .community(let certificate) = identity {
+        try require(!notarized, "Community artifacts do not claim notarization.")
+        try verifyCommunityMetadata(app, certificate: certificate)
     }
     let record = try JSONDecoder().decode(
         BuildRecord.self,
@@ -213,6 +405,54 @@ func selfTest(developmentApp: URL? = nil) throws {
         var unsafe = signingInformation
         unsafe[key as String] = value
         try rejects { try verifySigningInformation(unsafe) }
+        try rejects { try verifySigningInformation(unsafe, requiresTimestamp: false) }
+    }
+    var communitySigning = signingInformation
+    communitySigning.removeValue(forKey: kSecCodeInfoTimestamp as String)
+    try verifySigningInformation(communitySigning, requiresTimestamp: false)
+    let identifier = "io.github.leboonducoin.Limitless"
+    let certificate = String(repeating: "AB", count: 20)
+    _ = try ReleaseIdentity.community(certificate: certificate).requirement(identifier: identifier)
+    for invalid in ["", String(certificate.dropLast()), certificate + "\n", "\" or true"] {
+        try rejects { _ = try certificateRequirement(identifier: identifier, certificate: invalid) }
+    }
+    try rejects { _ = try certificateRequirement(identifier: "unknown", certificate: certificate) }
+    let info = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
+    for pin in [nil, certificate] {
+        let metadata = try communityMetadata(info: info, certificate: pin)
+        let helperRequirement =
+            try pin.map {
+                try certificateRequirement(identifier: identifier + ".helper", certificate: $0)
+            } ?? "false"
+        let appRequirement =
+            try pin.map { try certificateRequirement(identifier: identifier, certificate: $0) }
+            ?? "false"
+        try require(
+            metadata.app["SMPrivilegedExecutables"] as? [String: String] == [
+                identifier + ".helper": helperRequirement
+            ]
+                && metadata.helper["SMAuthorizedClients"] as? [String] == [appRequirement]
+                && metadata.helper["CFBundleVersion"] as? String == info["CFBundleVersion"]
+                    as? String
+                && metadata.daemon["Program"] == nil && metadata.daemon["ProgramArguments"] == nil
+                && metadata.daemon["BundleProgram"] == nil,
+            "Community metadata must bind both peers and leave the installed program to SMJobBless."
+        )
+    }
+    var invalidInfo = info
+    invalidInfo["CFBundleVersion"] = "../invalid"
+    try rejects { _ = try communityMetadata(info: invalidInfo, certificate: certificate) }
+    for malformed in [Data(), Data(repeating: 0, count: 256)] {
+        try rejects { _ = try embeddedPropertyList(malformed, section: "__info_plist") }
+    }
+    var malformedHeader = mach_header_64()
+    malformedHeader.magic = MH_MAGIC_64
+    malformedHeader.cputype = CPU_TYPE_ARM64
+    malformedHeader.ncmds = .max
+    malformedHeader.sizeofcmds = .max
+    try rejects {
+        _ = try embeddedPropertyList(
+            withUnsafeBytes(of: malformedHeader) { Data($0) }, section: "__info_plist")
     }
     for team in ["", "012345678", "01234567890", "012345678a", "0123456789\n", "\" or true"] {
         try rejects {
@@ -231,13 +471,28 @@ func selfTest(developmentApp: URL? = nil) throws {
         "Cask must preserve guarded removal and substitute both release values.")
     _ = try run("/usr/bin/ruby", ["-c", "Packaging/limitless.rb.in"])
     if let developmentApp {
-        try rejects { _ = try verifyRelease(developmentApp, team: "0123456789", notarized: false) }
+        let info = try propertyList(developmentApp.appendingPathComponent("Contents/Info.plist"))
+        if info["LimitlessHelperInstallation"] as? String == "blessed" {
+            try verifyCommunityMetadata(developmentApp, certificate: nil)
+        }
+        try rejects {
+            _ = try verifyRelease(
+                developmentApp, identity: .developerID(team: "0123456789"), notarized: false)
+        }
+        try rejects {
+            _ = try verifyRelease(
+                developmentApp,
+                identity: .community(certificate: String(repeating: "0", count: 40)),
+                notarized: false)
+        }
     }
     print("Release input, cask and optional development-signature rejection checks passed.")
 }
 
 func distributionCommand(_ arguments: [String]) throws -> Bool {
-    let command = arguments.first ?? ""
+    let requested = arguments.first ?? ""
+    let community = ["community-verify", "community-package"].contains(requested)
+    let command = community ? String(requested.dropFirst("community-".count)) : requested
     if command == "self-test", (1...2).contains(arguments.count) {
         try selfTest(
             developmentApp: arguments.count == 2 ? URL(fileURLWithPath: arguments[1]) : nil)
@@ -246,12 +501,15 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
     guard ["verify", "notarize", "package"].contains(command) else { return false }
     try require(
         arguments.count == (command == "verify" ? 3 : 4),
-        "Usage: verify APP TEAM | notarize APP TEAM KEYCHAIN_PROFILE | package APP TEAM NEW_OUTPUT_DIR"
+        "Usage: verify APP TEAM | notarize APP TEAM KEYCHAIN_PROFILE | package APP TEAM NEW_OUTPUT_DIR | community-verify APP CERT_SHA1 | community-package APP CERT_SHA1 NEW_OUTPUT_DIR"
     )
     try require(geteuid() != 0, "Distribution tools must run as a regular user.")
     let app = URL(fileURLWithPath: arguments[1])
-    let team = arguments[2]
-    let (version, record) = try verifyRelease(app, team: team, notarized: command != "notarize")
+    let identity: ReleaseIdentity =
+        community
+        ? .community(certificate: arguments[2]) : .developerID(team: arguments[2])
+    let notarized = !community && command != "notarize"
+    let (version, record) = try verifyRelease(app, identity: identity, notarized: notarized)
     if command == "notarize" {
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(
             "Limitless-notary-\(UUID().uuidString)")
@@ -271,7 +529,7 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
             result?["status"] as? String == "Accepted",
             "Apple did not accept this submission; inspect response.json and its submission ID.")
         _ = try run("/usr/bin/xcrun", ["stapler", "staple", app.path])
-        _ = try verifyRelease(app, team: team, notarized: true)
+        _ = try verifyRelease(app, identity: identity, notarized: true)
         print("Notarized and stapled. Nothing published; archive again with the package command.")
     } else if command == "package" {
         try require(
@@ -295,7 +553,8 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         defer { try? FileManager.default.removeItem(at: extracted) }
         _ = try run("/usr/bin/ditto", ["-x", "-k", zip.path, extracted.path])
         let (exportVersion, exportRecord) = try verifyRelease(
-            extracted.appendingPathComponent("Limitless.app"), team: team, notarized: true)
+            extracted.appendingPathComponent("Limitless.app"), identity: identity,
+            notarized: notarized)
         try require(
             exportVersion == version && exportRecord == record, "Exported archive metadata changed."
         )
@@ -306,10 +565,14 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
             to: output.appendingPathComponent("SHA256SUMS"), options: .withoutOverwriting)
         try Data(cask(version: version, digest: digest).utf8).write(
             to: output.appendingPathComponent("limitless.rb"), options: .withoutOverwriting)
-        let manifest = [
-            "version": version, "sourceRevision": record.sourceRevision, "teamID": team,
+        var manifest: [String: Any] = [
+            "version": version, "sourceRevision": record.sourceRevision,
             "archive": zip.lastPathComponent, "sha256": digest,
+            "channel": community ? "community" : "developer-id", "notarized": notarized,
         ]
+        manifest[community ? "certificateSHA1" : "teamID"] =
+            community
+            ? arguments[2].lowercased() : arguments[2]
         try JSONSerialization.data(
             withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys]
         )
@@ -319,7 +582,7 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         )
     } else {
         print(
-            "Verified notarized Limitless \(version), source \(record.sourceRevision), team \(team)."
+            "Verified Limitless \(version), source \(record.sourceRevision), channel \(community ? "community (not notarized)" : "Developer ID (notarized)")."
         )
     }
     return true
@@ -329,11 +592,12 @@ do {
     let arguments = Array(CommandLine.arguments.dropFirst())
     if try distributionCommand(arguments) { exit(0) }
     let sanitizer = ["asan": "address", "tsan": "thread"][arguments.first ?? ""]
-    let signing = arguments == ["sign"]
-    let bundle = arguments == ["bundle"] || signing
+    let community = ["community-bundle", "community-sign"].contains(arguments.first ?? "")
+    let signing = arguments == ["sign"] || arguments == ["community-sign"]
+    let bundle = arguments == ["bundle"] || arguments == ["community-bundle"] || signing
     try require(
         arguments.count == 1 && (arguments == ["check"] || sanitizer != nil || bundle),
-        "Usage: swift Tools/ProjectTool.swift check | asan | tsan | bundle | sign | self-test [APP] | verify APP TEAM | notarize APP TEAM KEYCHAIN_PROFILE | package APP TEAM NEW_OUTPUT_DIR"
+        "Usage: swift Tools/ProjectTool.swift check | asan | tsan | bundle | sign | community-bundle | community-sign | self-test [APP] | verify APP TEAM | notarize APP TEAM KEYCHAIN_PROFILE | package APP TEAM NEW_OUTPUT_DIR | community-verify APP CERT_SHA1 | community-package APP CERT_SHA1 NEW_OUTPUT_DIR"
     )
     _ = try run("/usr/bin/git", ["diff", "--check"])
     _ = try run(
@@ -347,12 +611,15 @@ do {
         ?? run("/usr/bin/xcode-select", ["-p"], capture: true)
     let team = ProcessInfo.processInfo.environment["LIMITLESS_TEAM_ID"] ?? ""
     let certificate = ProcessInfo.processInfo.environment["LIMITLESS_SIGNING_IDENTITY"] ?? ""
+    let identity: ReleaseIdentity =
+        community ? .community(certificate: certificate) : .developerID(team: team)
     let sourceRevision = signing ? try cleanRevision() : nil
     if signing {
         try require(
-            geteuid() != 0 && developer.hasSuffix(".app/Contents/Developer"),
-            "Release signing requires full Xcode and a regular user.")
-        _ = try developerRequirement(identifier: "io.github.leboonducoin.Limitless", team: team)
+            geteuid() != 0 && (community || developer.hasSuffix(".app/Contents/Developer")),
+            "Release signing requires a regular user; Developer ID signing also requires full Xcode."
+        )
+        _ = try identity.requirement(identifier: "io.github.leboonducoin.Limitless")
         try require(
             matches(certificate, "[0-9A-Fa-f]{40}"),
             "LIMITLESS_SIGNING_IDENTITY must be the certificate's SHA-1 fingerprint.")
@@ -369,6 +636,9 @@ do {
     {
         compilerFlags += ["-Xswiftc", "-load-plugin-library", "-Xswiftc", plugin]
     }
+    // Do not inherit a caller's stale helper metadata into checks or the other channel.
+    var buildEnvironment = ProcessInfo.processInfo.environment
+    buildEnvironment.removeValue(forKey: "LIMITLESS_HELPER_METADATA")
     if bundle {
         let configuration =
             signing
@@ -376,17 +646,6 @@ do {
         try require(
             ["debug", "release"].contains(configuration),
             "LIMITLESS_CONFIGURATION must be debug or release.")
-        _ = try run(
-            "/usr/bin/xcrun", ["swift", "build", "-c", configuration] + buildPath + compilerFlags)
-        let binaryPath = try run(
-            "/usr/bin/xcrun",
-            ["swift", "build", "-c", configuration, "--show-bin-path"] + buildPath, capture: true)
-        let info = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
-        let version = info["CFBundleShortVersionString"] as? String ?? ""
-        try require(
-            try run(binaryPath + "/limitless", ["--version"], capture: true)
-                == "Limitless \(version)",
-            "CLI and bundle versions disagree.")
         let manager = FileManager.default
         let output =
             ProcessInfo.processInfo.environment["LIMITLESS_OUTPUT_DIR"]
@@ -397,28 +656,62 @@ do {
         guard !manager.fileExists(atPath: output.path) else {
             throw CocoaError(.fileWriteFileExists)
         }
+        try manager.createDirectory(at: output, withIntermediateDirectories: false)
+        var info = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
+        if community {
+            let metadata = try communityMetadata(
+                info: info, certificate: signing ? certificate : nil)
+            info = metadata.app
+            let directory = output.appendingPathComponent("Metadata", isDirectory: true)
+            try manager.createDirectory(at: directory, withIntermediateDirectories: false)
+            for (name, value) in [
+                ("HelperInfo.plist", metadata.helper), ("HelperLaunchd.plist", metadata.daemon),
+            ] {
+                try PropertyListSerialization.data(
+                    fromPropertyList: value, format: .xml, options: 0
+                )
+                .write(to: directory.appendingPathComponent(name), options: .withoutOverwriting)
+            }
+            buildEnvironment["LIMITLESS_HELPER_METADATA"] = directory.path
+        }
+        _ = try run(
+            "/usr/bin/xcrun", ["swift", "build", "-c", configuration] + buildPath + compilerFlags,
+            environment: buildEnvironment)
+        let binaryPath = try run(
+            "/usr/bin/xcrun",
+            ["swift", "build", "-c", configuration, "--show-bin-path"] + buildPath + compilerFlags,
+            capture: true, environment: buildEnvironment)
+        let version = info["CFBundleShortVersionString"] as? String ?? ""
+        try require(
+            try run(binaryPath + "/limitless", ["--version"], capture: true)
+                == "Limitless \(version)",
+            "CLI and bundle versions disagree.")
         let contents = app.appendingPathComponent("Contents", isDirectory: true)
         for directory in [
-            "MacOS", "Resources/limitless-skill", "Library/LaunchDaemons", "Library/HelperTools",
-        ] {
+            "MacOS", "Resources/limitless-skill",
+        ]
+            + (community
+                ? ["Library/LaunchServices"] : ["Library/LaunchDaemons", "Library/HelperTools"])
+        {
             try manager.createDirectory(
                 at: contents.appendingPathComponent(directory), withIntermediateDirectories: true)
         }
         for (source, destination) in [
             ("LimitlessApp", "MacOS/LimitlessApp"), ("limitless", "MacOS/limitless"),
-            ("LimitlessHelper", "Library/HelperTools/LimitlessHelper"),
+            ("LimitlessHelper", identity.helperPath),
         ] {
             try manager.copyItem(
                 at: URL(fileURLWithPath: binaryPath).appendingPathComponent(source),
                 to: contents.appendingPathComponent(destination))
         }
-        try manager.copyItem(
-            at: URL(fileURLWithPath: "Packaging/Info.plist"),
-            to: contents.appendingPathComponent("Info.plist"))
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"), options: .withoutOverwriting)
         let daemon = "io.github.leboonducoin.Limitless.helper.plist"
-        try manager.copyItem(
-            at: URL(fileURLWithPath: "Packaging/" + daemon),
-            to: contents.appendingPathComponent("Library/LaunchDaemons/" + daemon))
+        if !community {
+            try manager.copyItem(
+                at: URL(fileURLWithPath: "Packaging/" + daemon),
+                to: contents.appendingPathComponent("Library/LaunchDaemons/" + daemon))
+        }
         try manager.copyItem(
             at: URL(fileURLWithPath: "LICENSE"),
             to: contents.appendingPathComponent("Resources/LICENSE"))
@@ -458,10 +751,12 @@ do {
         }
         // Sign nested executables explicitly before sealing the outer bundle.
         let signature = signing ? certificate : "-"
-        let signingOptions = signing ? ["--options", "runtime", "--timestamp"] : []
+        let signingOptions =
+            signing
+            ? ["--options", "runtime", community ? "--timestamp=none" : "--timestamp"] : []
         for (path, identifier) in [
             ("MacOS/limitless", "io.github.leboonducoin.Limitless.cli"),
-            ("Library/HelperTools/LimitlessHelper", "io.github.leboonducoin.Limitless.helper"),
+            (identity.helperPath, "io.github.leboonducoin.Limitless.helper"),
         ] {
             _ = try run(
                 "/usr/bin/codesign",
@@ -474,13 +769,15 @@ do {
         _ = try run("/usr/bin/codesign", ["--verify", "--strict", "--deep", app.path])
         _ = try run(
             "/usr/bin/plutil",
-            [
-                "-lint", contents.appendingPathComponent("Info.plist").path,
-                contents.appendingPathComponent("Library/LaunchDaemons/" + daemon).path,
-            ])
+            ["-lint", contents.appendingPathComponent("Info.plist").path]
+                + (community
+                    ? []
+                    : [contents.appendingPathComponent("Library/LaunchDaemons/" + daemon).path]))
         if signing {
-            _ = try verifyRelease(app, team: team, notarized: false)
-            print("Developer ID bundle: \(app.path)\nNot installed, not notarized, not published.")
+            _ = try verifyRelease(app, identity: identity, notarized: false)
+            print(
+                "\(community ? "Community" : "Developer ID") bundle: \(app.path)\nNot installed, not notarized, not published."
+            )
         } else {
             try selfTest(developmentApp: app)
             print(
@@ -490,14 +787,17 @@ do {
     } else if let sanitizer {
         _ = try run(
             "/usr/bin/xcrun",
-            ["swift", "test", "--sanitize", sanitizer] + buildPath + compilerFlags)
+            ["swift", "test", "--sanitize", sanitizer] + buildPath + compilerFlags,
+            environment: buildEnvironment)
     } else {
         try selfTest()
         _ = try run(
-            "/usr/bin/xcrun", ["swift", "build", "-c", "release"] + buildPath + compilerFlags)
+            "/usr/bin/xcrun", ["swift", "build", "-c", "release"] + buildPath + compilerFlags,
+            environment: buildEnvironment)
         _ = try run(
             "/usr/bin/xcrun",
-            ["swift", "test", "--enable-code-coverage"] + buildPath + compilerFlags)
+            ["swift", "test", "--enable-code-coverage"] + buildPath + compilerFlags,
+            environment: buildEnvironment)
     }
     if !bundle {
         print(

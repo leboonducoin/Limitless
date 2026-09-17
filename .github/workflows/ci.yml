@@ -39,3 +39,9 @@ jobs:
           LIMITLESS_CONFIGURATION: release
           LIMITLESS_OUTPUT_DIR: ${{ runner.temp }}/limitless-bundle
         run: swift Tools/ProjectTool.swift bundle
+      - name: Build and inspect the community helper metadata without installation
+        if: matrix.check == 'check'
+        env:
+          LIMITLESS_CONFIGURATION: release
+          LIMITLESS_OUTPUT_DIR: ${{ runner.temp }}/limitless-community-bundle
+        run: swift Tools/ProjectTool.swift community-bundle

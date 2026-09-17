@@ -86,7 +86,11 @@ Never invent tool commands or force an installation rejected by security control
   It refuses an existing output directory and never registers a helper or login item.
   See `docs/distribution.md`; a development bundle is not a releasable artifact.
 - `check` also validates release inputs and the Homebrew DSL. Each development
-  bundle must fail the Developer ID release check. `sign`, `notarize`, `verify`
+  bundle must fail Developer ID and community release checks. `community-bundle`
+  builds the ad-hoc SMJobBless layout and verifies embedded metadata without any
+  installation. `community-sign`, `community-verify` and `community-package` use
+  an actual certificate fingerprint without requiring an Apple Team ID; they do
+  not qualify Gatekeeper acceptance. `sign`, `notarize`, `verify`
   and `package` use the same Swift tool; see distribution docs before using them.
   Signature creation and Apple uploads need explicit authorization. Never invent
   a release digest, upload result, available download URL or successful CI run.

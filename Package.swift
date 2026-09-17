@@ -1,5 +1,20 @@
 // swift-tools-version: 6.2
+
+import Foundation
 import PackageDescription
+
+// Set only by the community bundle recipe; no privileged service is installed by a build.
+let helperLinkerSettings: [LinkerSetting] =
+    ProcessInfo.processInfo.environment["LIMITLESS_HELPER_METADATA"].map { directory in
+        [
+            .unsafeFlags([
+                "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist",
+                "-Xlinker", directory + "/HelperInfo.plist",
+                "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__launchd_plist",
+                "-Xlinker", directory + "/HelperLaunchd.plist",
+            ])
+        ]
+    } ?? []
 
 let package = Package(
     name: "Limitless",
@@ -15,7 +30,8 @@ let package = Package(
         .target(name: "LimitlessCore"),
         .target(name: "LimitlessSystem", dependencies: ["LimitlessCore"]),
         .executableTarget(
-            name: "LimitlessHelper", dependencies: ["LimitlessSystem", "LimitlessCore"]),
+            name: "LimitlessHelper", dependencies: ["LimitlessSystem", "LimitlessCore"],
+            linkerSettings: helperLinkerSettings),
         .testTarget(name: "LimitlessCoreTests", dependencies: ["LimitlessCore"]),
         .executableTarget(
             name: "LimitlessCLI", dependencies: ["LimitlessSystem", "LimitlessCore"]),
