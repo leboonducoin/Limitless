@@ -47,8 +47,10 @@ and never creates a demand. No active state or automation consent is restored fr
 preferences. Saved power/battery/duration preferences may be reapplied only through
 the user's explicit control action; a live helper policy takes precedence.
 
-Initial helper setup uses SMAppService and macOS's own approval interface. No
-password field. Register only in response to the setup button. Development builds
+Initial helper setup uses the bundle's native installation adapter: SMAppService
+for the notarized channel or SMJobBless with Authorization Services for the community
+channel. macOS owns the consent interface; there is no app password field.
+Register only in response to the setup button. Development builds
 without a trusted signing identity expose the UI but disable privileged actions.
 Debug previews are clearly labeled and cannot call the helper, register services,
 change login items or persist power policy.
