@@ -23,7 +23,7 @@ exists. No public release or push is authorized by this document.
 | R13 | All authored executable code Swift; no Node/Python product runtime | Source and packaged-artifact inventory | Source and local Debug/Release bundle inventoried; signed release audit open |
 | R14 | Public Apple APIs; isolate undocumented mechanism | Call-site audit, entitlement inspection and backend tests | Backend isolated; signed artifact audit open |
 | R15 | Frequent local commits, maintained AGENTS.md, RTK for terminal work | Git history and maintained contributor instructions | In progress |
-| R16 | Usable distribution without the maintainer or users holding a paid Apple Developer membership; Developer ID is optional later | No-account authentication/installation review, GitHub download and dedicated Homebrew tap tested on a clean Mac | Certificate pinning implemented and requirement setters tested; installer and signed exchange remain open |
+| R16 | Usable distribution without the maintainer or users holding a paid Apple Developer membership; Developer ID is optional later | No-account authentication/installation review, GitHub download and dedicated Homebrew tap tested on a clean Mac | Certificate pinning and guarded installed-file cleanup implemented; installer, packaging and signed exchange remain open |
 
 ## Delivery sequence
 

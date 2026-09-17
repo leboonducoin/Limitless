@@ -26,11 +26,15 @@ still need integration evidence. Apple's code-signing requirements support a
 self-signed certificate pin; that does not prove a complete installation flow.
 [Apple certificate requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
 
-The installation review must compare the current documented `SMAppService` contract
-with native alternatives, including the older public `SMJobBless` API, which is
-deprecated. No choice is considered qualified until signature exchange, approval,
-upgrade, restoration and full removal are exercised on a real Mac. Keep the shared
-session/controller/backend and all user limits; do not add a password field,
+The selected direction retains `SMAppService` for the notarized channel and adds
+the older public, deprecated `SMJobBless` API for the no-account channel. Its
+installer, embedded metadata and packaging are not implemented yet. The helper now
+has guarded cleanup for the two fixed files that SMJobBless installs, using the
+running executable's signed identity; temporary-file tests cover replacement,
+unsafe paths and interrupted removal. This does not qualify a real installation.
+Signature exchange, approval, upgrade, restoration and full removal still require
+real-Mac evidence. Keep the shared session/controller/backend and all user limits;
+do not add a password field,
 passwordless sudoers rule, unsigned-client acceptance or an arbitrary root executor.
 [Apple SMJobBless contract](https://developer.apple.com/documentation/servicemanagement/smjobbless(_:_:_:_:)).
 
@@ -61,7 +65,7 @@ rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build LIMITLESS_
 
 Use `LIMITLESS_CONFIGURATION=release` for an optimized bundle. Both configurations
 are signed ad hoc for local inspection. This signature does **not** satisfy the
-app/helper's required Apple signing identity. Power and login controls stay disabled.
+app/helper's required certificate identity. Power and login controls stay disabled.
 Nothing is copied to Applications, no service is registered and no login item is
 changed. The bundle includes:
 

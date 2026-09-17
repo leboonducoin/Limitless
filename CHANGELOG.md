@@ -31,6 +31,9 @@
 - Reciprocal XPC requirements now pin the executable's actual leaf certificate and
   exact peer identifiers, permitting a stable self-signed identity without Apple
   membership. Ad-hoc signatures remain rejected; no-account installation is pending.
+- Guarded cleanup of SMJobBless-installed helper files after confirmed restoration,
+  with certificate, path and filesystem checks, partial-failure retry and independent
+  app absence checks. The no-account installer and real signed lifecycle remain pending.
 
 ## Unreleased
 

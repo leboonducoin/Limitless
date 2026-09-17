@@ -9,9 +9,13 @@ final class HelperRuntime {
     var backend = MacSleepBackend()
     var powerReader = PowerSourceReader()
     var journal: SecureOwnershipJournal
+    private let identity: SignedIdentity
+    private var installedFiles: InstalledHelperFiles?
+    private var removalReady = false
     private(set) var expiredOwners: Set<UUID> = []
 
-    init() throws {
+    init(identity: SignedIdentity) throws {
+        self.identity = identity
         sessions = try ServiceSessions()
         journal = try SecureOwnershipJournal()
         controller = SleepController(restoringOwnedHold: try journal.loadOwned())
@@ -39,7 +43,7 @@ final class HelperRuntime {
             policy: sessions.registry.policy, power: power, sleep: report,
             sessions: sessions.summaries(for: owner, evaluation: evaluation, now: now),
             sampledAt: now.wall,
-            removal: sessions.isRemoving ? (journal.isRemoved ? .ready : .preparing) : .none)
+            removal: sessions.isRemoving ? (removalReady ? .ready : .preparing) : .none)
     }
 
     func takeExpiredOwners() -> Set<UUID> {
@@ -62,10 +66,16 @@ final class HelperRuntime {
             default: break
             }
             if request.operation == .prepareRemoval {
+                removalReady = false
                 let status = try reconcile(owner: owner)
                 guard status.canRemoveService, !backend.hasIdleAssertion
                 else { throw ServiceError.restorationRequired }
+                if installedFiles == nil {
+                    installedFiles = try InstalledHelperFiles(identity: identity)
+                }
                 try journal.removeUnownedDirectory()
+                try installedFiles?.remove()
+                removalReady = true
             }
             return ServiceReply(status: try reconcile(owner: owner), startedSession: started)
         } catch {
