@@ -5,6 +5,9 @@
 2026-09-16 environment inspection: macOS 26.6.2, Apple M1 Pro, CLT Swift 6.4,
 SDK 27.0. Full Xcode and a valid signing identity were not detected. No system
 power settings, login items or privileged services have been changed by this work.
+On 2026-09-17, the user authorized creation of a dedicated local test identity and
+signing of test bundles. Those checks are recorded separately below; no Apple
+membership, trust-store exception or privileged installation was used.
 
 The two libraries, app, helper and CLI executables pass strict swift-format and a Release
 build. There are 88 default Swift Testing tests (45 core, 37 system, 3 CLI, 3 app, including
@@ -64,9 +67,9 @@ command because the development signature does not satisfy the production identi
 The installed skill-creator validator accepted `skills/limitless/SKILL.md`.
 App tests reject misleading active/inactive presentation, invalid saved limits and
 preview attempts to control the helper, automation, login items or removal.
-Tests never call privileged power writes or create real sleep assertions. Live
-signed XPC, the complete CLI/service lifecycle, root-path journal integration and
-physical sleep remain untested. Native presentation inspection is recorded below;
+Tests never call privileged power writes or create real sleep assertions. The
+complete signed CLI/helper lifecycle, root-path journal integration and physical
+sleep remain untested. Non-root signed XPC evidence and native presentation inspection are recorded below;
 it does not qualify privileged controls or physical power behavior.
 
 Read-only inspection outside the tool sandbox found an absent `SleepDisabled`
@@ -85,7 +88,8 @@ rtk proxy swift Tools/ProjectTool.swift tsan
 ```
 
 `check` runs whitespace checks, strict formatting, release-tool input checks,
-Homebrew DSL syntax, Release compilation and tests with coverage enabled.
+Homebrew DSL syntax, typechecking of the opt-in signed XPC probe/runner, Release
+compilation and tests with coverage enabled. It never signs or executes that probe.
 `asan` and `tsan` run separate instrumented test builds.
 The tool loads Apple's existing Swift Testing macro explicitly when the selected
 Command Line Tools contain it in the nested `plugins/testing` directory. It does
@@ -154,17 +158,17 @@ the Homebrew template with the system Ruby parser. Ruby is only a development
 DSL check/Homebrew dependency, not an application or CLI runtime. Each development
 bundle repeats the negative signature check after its ordinary signature passes.
 The builder also checks that the actual CLI version matches the bundle plist.
-The positive publisher-certificate, Developer ID/timestamp, Apple submission, stapling,
-Gatekeeper and exported-release checks are implemented but not executed: this Mac
-has zero valid signing identities (rechecked 2026-09-17) and Command Line Tools,
-not full Xcode. Full Xcode is not required by the community signing command.
-No notarization upload, generated production cask or signed artifact is claimed.
+The community certificate and exported-archive checks have passed with a dedicated
+local test identity, as recorded below. Developer ID/timestamp, Apple submission,
+stapling, Gatekeeper and publisher release qualification remain unexecuted.
+This Mac has Command Line Tools, not full Xcode; full Xcode is not required by
+the community signing command. No notarization upload or published cask is claimed.
 The separate `brew style --help` probe was unable to create Homebrew's cache in
 the restricted environment; it did not install a dependency. Full Homebrew
 style/audit and install/upgrade/uninstall qualification are not claimed.
 
 No push has occurred, so no remote CI result is claimed. Native interaction tests,
-authenticated XPC, release-tool positive paths, independent provenance attestation
+privileged XPC, Developer ID release paths, independent provenance attestation
 and the signed Homebrew lifecycle remain separate release gates.
 
 On 2026-09-17, the expanded README and contribution guide were checked against the
@@ -175,6 +179,57 @@ Issue forms and their chooser were reviewed against GitHub's documented
 [form schema](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema)
 and [template configuration](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository).
 Their GitHub rendering has not been tested; no issue or pull request was submitted.
+
+## Signed community and XPC tests
+
+On 2026-09-17, the user authorized a local test certificate and test signatures.
+The dedicated key is RSA 3072, imported into the user's keychain with a codesign
+access list and configured as sensitive/non-extractable. Security attributes
+confirmed signing is allowed and extraction is disabled. The SHA-256-signed
+certificate has code-signing usage and a one-year lifetime. Private key bytes
+were passed in memory and pipes, never printed, written to the repository or saved
+as a key file. No global certificate trust was added. This is not a backed-up,
+qualified publisher identity.
+
+A clean detached checkout of `bad7a1aa94b67397d165f3d43626c6f6d42cdc5b`
+produced a community Release bundle. `community-sign`, `community-verify` and
+`community-package` completed successfully, including exact certificate equality
+on app/CLI/helper, strict integrity, embedded metadata, hardened runtime, no
+entitlements and re-verification after extracting the actual ZIP. The local
+manifest, checksum and draft cask exist; no download URL has been published.
+The signed CLI's `status` returned 69 (`unavailable`) with no crash while the
+privileged helper was absent. No application integration control was activated.
+
+The separate reproducible test uses the production `SignedConnection.swift`
+directly and a fixed-message, non-root XPC service embedded in a test bundle.
+It contains no power backend, helper runtime, service installer or login action.
+Run it only after explicit signing authorization with an existing test identity:
+
+```sh
+rtk proxy swift Tests/SignedXPC/Run.swift CERT_SHA1 /private/tmp/limitless-signed-xpc-new
+```
+
+Replace `CERT_SHA1` with the actual certificate fingerprint and choose a new output
+directory; existing output is refused. No key is generated by this command.
+The runner compiles the probe, signs each pair and verifies it before execution.
+Each XPC service exits within eight seconds. A timeout is a test failure.
+Ordinary `check` typechecks both Swift files without signing/execution; the CodeQL
+workflow compiles them for analysis without signing/execution (hosted run pending).
+
+| Case | Observed result |
+| --- | --- |
+| Both directions match | Reply from a different PID with the same non-root UID |
+| Server expects a different client certificate pin | No reply; connection interrupted, Cocoa error 4097 |
+| Client expects a different server certificate pin | No reply; code-signing requirement failure, Cocoa error 4102 |
+| Server expects a different client identifier | No reply; connection interrupted, Cocoa error 4097 |
+| Client expects a different server identifier | No reply; code-signing requirement failure, Cocoa error 4102 |
+
+All five cases passed on the inspected Mac. Mismatched pins deliberately change
+one hexadecimal digit of the expected fingerprint; no second signing key was
+created. Native XPC logs also recorded code-signing requirement refusals with
+Security status -67050. This proves these checks on the local non-root transport,
+not the production helper's privileged endpoint, console-user rules, administrator
+approval, installation/removal or closed-lid behavior.
 
 ## Native interface inspection
 

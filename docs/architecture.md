@@ -60,10 +60,12 @@ restoration attempts can delay a confirmed stop. SIGTERM/SIGINT revoke demands
 and attempt cleanup before exit; an unconfirmed stop retains the journal. A crash
 or SIGKILL relies on the subsequent helper start to restore the journaled hold.
 
-The Security requirement compiler and Foundation's XPC requirement setter accept
-the certificate constraints in local tests. The executable and client compile
-locally. Real same-signer/wrong-signer XPC exchange, native service
-registration and privileged lifecycle tests have not yet been performed.
+The opt-in signed probe compiles the production `SignedConnection.swift` directly
+and exchanges a fixed message with a separate non-root bundled XPC service.
+Matching identities pass; mismatched certificate pins and identifiers are refused
+in both directions. It does not instantiate `HelperRuntime`, install a daemon or
+exercise the privileged service lifecycle. Native registration and app/helper
+lifecycle tests remain open; see [test evidence](testing.md#signed-community-and-xpc-tests).
 
 The signed bundle selects one of two native `HelperInstallation` adapters through
 `LimitlessHelperInstallation`: `bundled` uses `SMAppService`, and `blessed` uses

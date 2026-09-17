@@ -96,11 +96,13 @@ jobs:
       - name: Build Swift with a CodeQL-supported compiler
         if: matrix.language == 'swift'
         run: swift build --build-tests
-      - name: Include Swift maintenance and artwork tools in analysis
+      - name: Include Swift tools and the opt-in XPC probe in analysis
         if: matrix.language == 'swift'
         run: |
           swiftc Tools/ProjectTool.swift -o "$RUNNER_TEMP/limitless-project-tool"
           swiftc Sources/LimitlessApp/BrandArt.swift Tools/ExportIcon.swift -o "$RUNNER_TEMP/limitless-export-icon"
+          swiftc -swift-version 6 -parse-as-library Sources/LimitlessSystem/SignedConnection.swift Tests/SignedXPC/Probe.swift -o "$RUNNER_TEMP/limitless-xpc-probe"
+          swiftc -swift-version 6 Tests/SignedXPC/Run.swift -o "$RUNNER_TEMP/limitless-xpc-test-runner"
       - uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           category: /language:${{ matrix.language }}

@@ -26,8 +26,10 @@ Ad-hoc builds fail closed. No test-only authentication bypass is shipped.
 The stable certificate pin replaces the earlier Apple-only Team ID boundary.
 Certificate selection uses the SHA-1 fingerprint mandated by Apple's requirement
 language, not an archive integrity digest. The release verifier also requires the
-same actual certificate bytes on all three executables. Real wrong-signer XPC
-tests and native installation without Apple membership still require qualification.
+same actual certificate bytes on all three executables. A local signed probe
+verifies cross-process authentication and rejects mismatched pins/identifiers in
+both directions. Native installation and the privileged lifecycle without Apple
+membership still require qualification.
 This identity does not establish Apple notarization. No identifier-only acceptance
 or automatic Gatekeeper exception is authorized by the no-account requirement.
 

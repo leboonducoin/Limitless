@@ -1,8 +1,8 @@
 # Build, installation and removal
 
-Limitless is not yet published or qualified for privileged installation. The
-commands below create development artifacts, not a production installer. Do not
-register a development helper or bypass Gatekeeper to make it run.
+Limitless is not yet published or qualified for privileged installation. Local
+ad-hoc builds and certificate-signed test artifacts exist; neither is a qualified
+production installer. Do not register an ad-hoc helper or bypass Gatekeeper.
 
 ## Distribution without Apple Developer membership
 
@@ -18,11 +18,12 @@ requires notarization for apps containing LaunchDaemons, so the community bundle
 uses a separate native installation adapter. Ad-hoc development bundles remain
 disabled; removing the Team ID requirement does not remove authentication.
 
-The certificate requirements compile and are accepted by Foundation's XPC setter
-in local tests; a bundle identifier or UID alone remains insufficient. Real
-same-certificate/wrong-certificate exchange and native administrator approval
-still need integration evidence. Apple's code-signing requirements support a
-self-signed certificate pin; that does not prove a complete installation flow.
+Certificate-signed, non-root XPC probes now verify a real cross-process reply and
+reject mismatched certificate pins and identifiers in both directions. A bundle
+identifier or UID alone remains insufficient. Native administrator approval and
+the privileged app/helper exchange still need integration evidence. Apple's
+code-signing requirements support a self-signed certificate pin; that does not
+prove a complete installation flow.
 [Apple certificate requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
 
 The implementation retains `SMAppService` for the notarized channel and uses
@@ -145,8 +146,18 @@ generating its SHA-256, manifest and draft cask. Its manifest records
 Developer ID commands below retain their separate timestamp/notarization gates.
 
 None of these commands creates a certificate, installs a helper, changes trust,
-publishes a download or bypasses Gatekeeper. A real certificate-signed community
-artifact and clean-Mac approval/Homebrew lifecycle remain untested.
+publishes a download or bypasses Gatekeeper. On 2026-09-17, explicit user consent
+authorized a dedicated local test identity and test signatures. The resulting
+community bundle and re-extracted ZIP passed the verifiers with no trust-store
+changes. This is a test certificate, not a qualified publisher identity or release.
+Clean-Mac approval and the Homebrew lifecycle remain untested. See
+[signed test evidence](testing.md#signed-community-and-xpc-tests).
+
+An untrusted self-signed identity may be absent from `security find-identity -v`
+while still supporting exact-certificate code-signing requirements. Do not add a
+trust exception just to change that listing. The observed test identity was marked
+`CSSMERR_TP_NOT_TRUSTED`; signing, strict verification and the XPC probe succeeded.
+[Apple's distinction between signature validity and subsystem trust](https://developer.apple.com/library/archive/technotes/tn2206/).
 
 ## Read-only UI inspection
 
