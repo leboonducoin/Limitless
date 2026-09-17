@@ -31,6 +31,14 @@ tests and native installation without Apple membership still require qualificati
 This identity does not establish Apple notarization. No identifier-only acceptance
 or automatic Gatekeeper exception is authorized by the no-account requirement.
 
+Community bundles use public deprecated SMJobBless/SMJobRemove with native
+Authorization Services. Both peers' exact certificate requirements and helper
+metadata are checked before consent. The authorization reference is destroyed
+after each operation; no password is read or stored. A loaded installation must
+be drained and removed through the matching app before an upgrade or channel
+change. The embedded development requirements authorize nobody. Native consent
+and a real certificate-signed lifecycle remain qualification gates.
+
 Removal is application-only and first revokes all demands. A protected ownership
 record is never deleted to bypass a failed restoration. Journal cleanup refuses
 unknown contents and replaced directories/locks, uses no recursive deletion, and
@@ -51,8 +59,10 @@ paths require a dedicated security review before release. See
 
 Use pinned tools/actions, minimal workflow permissions, no release secrets on PR
 jobs, and a protected publication environment. Secret detection, CodeQL, workflow
-analysis and dependency review are release gates. Verify signatures, notarization,
-checksums and source provenance separately. Never bypass a security control.
+analysis and dependency review are release gates. Verify signatures, checksums,
+source provenance and, for the Developer ID channel, notarization separately.
+The community channel must explicitly identify itself as not notarized.
+Never bypass a security control.
 
 Read-only GitHub inspection on 2026-09-16 confirmed a public repository with private
 vulnerability reporting, secret scanning, secret push protection and Dependabot

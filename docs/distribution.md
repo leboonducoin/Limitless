@@ -11,13 +11,12 @@ must also be usable through GitHub or a dedicated Homebrew tap before then. User
 must never need their own developer membership. The Developer ID commands below
 remain an optional future channel, not the only acceptable product distribution.
 
-The current code is not ready for this complete route. `SignedIdentity` now pins
+This route is implemented but not yet qualified for release. `SignedIdentity` pins
 the exact peer identifier and the executable's own signing certificate, including
-a self-signed certificate, but setup still uses `SMAppService.daemon`. The installed Apple
-SDK's public `SMAppService.h` explicitly requires notarization for apps containing
-LaunchDaemons. Simply removing the Team ID check would neither qualify installation
-nor preserve helper authentication. Ad-hoc development bundles remain disabled
-while that boundary is redesigned.
+a self-signed certificate. The installed Apple SDK's public `SMAppService.h`
+requires notarization for apps containing LaunchDaemons, so the community bundle
+uses a separate native installation adapter. Ad-hoc development bundles remain
+disabled; removing the Team ID requirement does not remove authentication.
 
 The certificate requirements compile and are accepted by Foundation's XPC setter
 in local tests; a bundle identifier or UID alone remains insufficient. Real
@@ -26,9 +25,10 @@ still need integration evidence. Apple's code-signing requirements support a
 self-signed certificate pin; that does not prove a complete installation flow.
 [Apple certificate requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
 
-The selected direction retains `SMAppService` for the notarized channel and adds
-the older public, deprecated `SMJobBless` API for the no-account channel. Its
-installer, embedded metadata and packaging are not implemented yet. The helper now
+The implementation retains `SMAppService` for the notarized channel and uses
+the older public, deprecated `SMJobBless` API for the no-account channel. The Swift
+installer validates both signatures and embedded reciprocal requirements before
+requesting administrator consent through Authorization Services. The helper
 has guarded cleanup for the two fixed files that SMJobBless installs, using the
 running executable's signed identity; temporary-file tests cover replacement,
 unsafe paths and interrupted removal. This does not qualify a real installation.
@@ -37,6 +37,20 @@ real-Mac evidence. Keep the shared session/controller/backend and all user limit
 do not add a password field,
 passwordless sudoers rule, unsigned-client acceptance or an arbitrary root executor.
 [Apple SMJobBless contract](https://developer.apple.com/documentation/servicemanagement/smjobbless(_:_:_:_:)).
+
+The native adapter rejects replacement of a loaded job. To upgrade or change
+certificate/channel, first use the old matching app's guarded removal, then enable
+the new installation. An interrupted, unloaded installation can be repaired only
+when any remaining executable satisfies the same certificate requirement. macOS
+still decides whether registration succeeds. No channel migration is automatic.
+
+A stable publisher signing certificate/private key is still required, but it need
+not be issued by Apple. Certificate creation, keychain changes and trust changes
+are separate authorized maintainer actions; this repository performs none of them.
+Users receive the already signed app and never need a signing key. Losing or
+rotating the publisher key requires the old matching app to remove its helper.
+The community channel does not use Apple's secure timestamp service and makes no
+notarization claim; certificate validity and expiry need release qualification.
 
 For downloaded non-notarized apps, macOS may require a user decision in Privacy &
 Security; managed systems may disallow it. That choice must remain with the user.
@@ -85,6 +99,54 @@ runtime, downloaded image, Node or Python is packaged. The bundle command runs
 strict Swift formatting/build checks, `iconutil`, `plutil -lint` and recursive strict
 signature verification. CI builds a Release bundle; CodeQL includes both Swift
 maintenance tools. This is structural validation, not notarization or installation.
+
+## Community bundle and release commands
+
+Build an ad-hoc community inspection bundle without installing anything:
+
+```sh
+rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-community-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-community-preview swift Tools/ProjectTool.swift community-bundle
+```
+
+This variant puts the helper at
+`Contents/Library/LaunchServices/io.github.leboonducoin.Limitless.helper`.
+Its `__TEXT,__info_plist` and `__TEXT,__launchd_plist` sections contain the helper's
+identity/version, authorized clients and launchd declaration. `SMJobBless` supplies
+the installed `ProgramArguments`; the embedded plist deliberately has no program
+path or arguments. The app's `SMPrivilegedExecutables` must agree with the helper.
+Ad-hoc bundles use the requirement `false` for both peers, authorizing nobody.
+
+The builder passes generated metadata to the helper linker only, verifies the
+actual Mach-O sections and Security's signed Info.plist view, and resets the
+metadata environment for ordinary builds/checks. No root tool runs. Both bundle
+variants must fail the actual-certificate release verifier. CI includes both
+development layouts; this does not qualify native installation.
+
+After explicit signing authorization, use a clean committed checkout and an
+existing stable code-signing identity in the maintainer's keychain. Set
+`LIMITLESS_SIGNING_IDENTITY` to its actual 40-character SHA-1 fingerprint; no
+`LIMITLESS_TEAM_ID` or paid membership is required. The placeholder `CERT_SHA1`
+below must be replaced with that fingerprint, never a sample value:
+
+```sh
+rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-community-release-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-community-signed swift Tools/ProjectTool.swift community-sign
+rtk proxy swift Tools/ProjectTool.swift community-verify /private/tmp/limitless-community-signed/Limitless.app CERT_SHA1
+rtk proxy swift Tools/ProjectTool.swift community-package /private/tmp/limitless-community-signed/Limitless.app CERT_SHA1 /private/tmp/limitless-community-release
+```
+
+`community-sign` forces Release, records the clean source commit, embeds exact
+certificate requirements and signs all three executables with hardened runtime,
+no entitlements and no timestamp service. It has no ad-hoc fallback. The verifier
+requires the same actual certificate and exact identifiers throughout the app,
+the community layout, matching embedded metadata, ARM64 and clean source metadata.
+`community-package` extracts and verifies the actual exported archive again before
+generating its SHA-256, manifest and draft cask. Its manifest records
+`channel: community`, `notarized: false` and the certificate fingerprint. The
+Developer ID commands below retain their separate timestamp/notarization gates.
+
+None of these commands creates a certificate, installs a helper, changes trust,
+publishes a download or bypasses Gatekeeper. A real certificate-signed community
+artifact and clean-Mac approval/Homebrew lifecycle remain untested.
 
 ## Read-only UI inspection
 
@@ -203,7 +265,8 @@ itself as an installable cask, substitute a dummy digest, or use `--no-quarantin
 The source record is covered by the app signature; the digest binds the archive.
 Neither proves an independently reproducible build or a GitHub artifact
 attestation. Before publication, record the exact successful CI/security runs,
-hardware acceptance, clean-Mac Gatekeeper result, signature team, tag/commit,
+hardware acceptance, clean-Mac Gatekeeper result, certificate/channel (and team
+for Developer ID), tag/commit,
 manifest and release artifacts together. Protected release approvals and any
 hosted provenance attestation require repository/signing configuration; this
 repository currently performs no automatic credential import, upload or release.
@@ -228,9 +291,12 @@ files, a still-owned/corrupt journal, changed permissions or replaced links bloc
 cleanup. There is no recursive root deletion. The retired journal cannot accept
 new writes. A partial failure can be retried without recreating a demand.
 
-The app then uses asynchronous `SMAppService.unregister()` for the helper and
-login item, checks their registration states and verifies that the fixed state
-directory is absent. Only then can it report preparation complete. A failed or
+The helper also removes its two fixed installed files in the community channel,
+with certificate and filesystem checks described in [architecture](architecture.md#removal).
+The app then uses native `SMJobRemove` with administrator consent for that job, or
+asynchronous `SMAppService.unregister()` for the bundled helper. Login removal
+always uses `SMAppService`. The app checks registration states and absence of the
+fixed journal and installed files before reporting completion. A failed or
 unreadable check leaves an error. Finder cannot be prevented from deleting a file;
 keep the app installed until preparation succeeds. [Apple unregister API](https://developer.apple.com/documentation/servicemanagement/smappservice/unregister(completionhandler:)).
 
