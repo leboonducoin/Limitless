@@ -81,5 +81,33 @@ security updates enabled. Source and workflow definitions are now published on
 [Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml)
 run on every push to that branch. The exact observed outcomes belong in
 [testing evidence](docs/testing.md), separately from manual hardware acceptance.
-Required checks and protected release controls must be configured before binary
-publication. A source push is not approval to create a release or publish a cask.
+Binary publication requires successful checks and protected release controls.
+A source push is not approval to create a release or publish a cask.
+
+On 2026-09-18, `main` protection was enabled with all seven build/sanitizer/security
+job checks pinned to the GitHub Actions app, an up-to-date base requirement and
+resolved review conversations. Force pushes and deletion are disabled by the rule.
+Administrator enforcement remains off to preserve the maintainer's explicitly
+requested direct-push workflow: administrators can bypass these branch rules.
+This is not a release approval gate; protected binary publication remains separate.
+The additional `CodeQL alert review on main` ruleset requires CodeQL results and
+blocks all security-alert severities plus error/warning findings for ordinary
+contributions. The repository owner retains an explicit, audited bypass for direct
+pushes. Both settings were read back through GitHub's API; no rejection trial or
+dummy vulnerability was introduced into `main`.
+
+## Reviewed compatibility exception
+
+[CodeQL alert 1](https://github.com/leboonducoin/Limitless/security/code-scanning/1)
+(`swift/weak-sensitive-data-hashing`) was reviewed on 2026-09-18 and dismissed as
+**won't fix**, with the reason retained in GitHub. `SignedIdentity` computes SHA-1
+only over the public leaf certificate for Apple's `certificate leaf = H"…"`
+selector. This is a legacy platform constraint documented in Apple's
+[requirement language](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html),
+not a claim that SHA-1 is suitable for new cryptographic designs.
+
+Native code-signature validity and exact peer identifiers remain mandatory;
+passwords and private keys are never hashed by this path. Release archive integrity
+uses SHA-256. The CodeQL query remains enabled, with no repository-wide suppression.
+Reassess this exception if Apple supports a stronger certificate selector or if the
+data flow changes. This reviewed alert is distinct from an analysis with no findings.

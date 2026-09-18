@@ -13,6 +13,9 @@ published; [testing evidence](docs/testing.md) and the
 - Preserved automatic XPC invalidation through a synchronous connection owner,
   avoiding a Swift 6.2 Release compiler cycle with isolated actor destruction;
   added a regression test for dropping an owner without explicit close.
+- Qualified hosted builds, tests, ASan/TSan and security analysis; documented the
+  Apple certificate-selector exception and enabled branch/check/alert protections
+  with the maintainer's direct-push exception recorded in the security policy.
 
 - Established Limitless's MIT attribution, contributor instructions, architecture,
   complete acceptance contract, and explicit validation/security boundaries.
