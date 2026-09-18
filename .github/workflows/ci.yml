@@ -33,6 +33,12 @@ jobs:
         env:
           CHECK: ${{ matrix.check }}
         run: swift Tools/ProjectTool.swift "$CHECK"
+      - name: Diagnose sanitizer startup failures
+        if: failure() && matrix.check != 'check'
+        run: >-
+          xcrun lldb --batch -o run -o 'thread backtrace all' --
+          .build/debug/LimitlessPackageTests.xctest/Contents/MacOS/LimitlessPackageTests
+          --testing-library swift-testing
       - name: Build and inspect the development app bundle
         if: matrix.check == 'check'
         env:
