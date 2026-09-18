@@ -16,6 +16,9 @@ published; [testing evidence](docs/testing.md) and the
 - Qualified hosted builds, tests, ASan/TSan and security analysis; documented the
   Apple certificate-selector exception and enabled branch/check/alert protections
   with the maintainer's direct-push exception recorded in the security policy.
+- Explicitly released the journal lock before closing its descriptor, so a
+  temporary duplicate cannot keep a retired owner locked; added a deterministic
+  regression for this failure observed under hosted TSan.
 
 - Established Limitless's MIT attribution, contributor instructions, architecture,
   complete acceptance contract, and explicit validation/security boundaries.
