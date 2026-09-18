@@ -22,9 +22,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [check, asan, tsan]
+        include:
+          - check: check
+            xcode: '26.2'
+          - check: asan
+            xcode: '26.6'
+          - check: tsan
+            xcode: '26.6'
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -36,7 +42,8 @@ jobs:
       - name: Diagnose sanitizer startup failures
         if: failure() && matrix.check != 'check'
         run: >-
-          xcrun lldb --batch -o run -o 'thread backtrace all' --
+          xcrun lldb --batch -o 'settings set target.process.stop-on-exec false'
+          -o run -o 'thread backtrace all' --
           .build/debug/LimitlessPackageTests.xctest/Contents/MacOS/LimitlessPackageTests
           --testing-library swift-testing
       - name: Build and inspect the development app bundle

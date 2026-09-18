@@ -2,9 +2,17 @@
 
 ## Unreleased
 
-Implemented work and local validation are recorded below. No release has been
+Implemented work and validation are recorded below. No binary release has been
 published; [testing evidence](docs/testing.md) and the
 [acceptance matrix](docs/requirements.md) distinguish verified paths from open gates.
+
+- Published the source and CI workflows on `main`, with a documented native preview,
+  live workflow badges, architecture overview and contribution guides.
+- Made the native installation error paths compile on the Xcode 26.2 CI baseline,
+  preserving the system error and fallback without a `CocoaError` bridge cast.
+- Preserved automatic XPC invalidation through a synchronous connection owner,
+  avoiding a Swift 6.2 Release compiler cycle with isolated actor destruction;
+  added a regression test for dropping an owner without explicit close.
 
 - Established Limitless's MIT attribution, contributor instructions, architecture,
   complete acceptance contract, and explicit validation/security boundaries.

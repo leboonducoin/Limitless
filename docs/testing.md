@@ -146,12 +146,10 @@ The checked-in workflows run on pull requests, pushes to `main`, and manual
 dispatch. Security also runs weekly. Actions are pinned to verified full commit
 IDs; checkout credentials are not persisted. Jobs have individual minimum
 permissions and timeouts. No job installs the helper or changes power settings.
-Read-only GitHub inspection on 2026-09-17 returned zero registered workflows,
-workflow runs and releases for `leboonducoin/Limitless`. In the table, "configured"
-means committed locally, not uploaded or executed on GitHub. Private vulnerability
-reporting, secret scanning, push protection and Dependabot security updates were
-enabled; `main` had no classic protection or applicable branch rules. No remote
-setting was changed. See [SECURITY.md](../SECURITY.md) for publication prerequisites.
+Private vulnerability reporting, secret scanning, push protection and Dependabot
+security updates were verified enabled on 2026-09-18. Source publication and
+successful CI do not qualify hardware compatibility or authorize a binary release.
+See [SECURITY.md](../SECURITY.md) for publication prerequisites.
 
 | Check | Local evidence through 2026-09-17 | GitHub execution |
 | --- | --- | --- |
@@ -166,7 +164,14 @@ setting was changed. See [SECURITY.md](../SECURITY.md) for publication prerequis
 | Dependency review and Dependabot | Configuration inspected | Requires GitHub execution/settings |
 
 Primary CI uses Xcode 26.2 on `macos-26`, within CodeQL's documented Swift
-compiler support. Go is a development-only runner dependency for pinned
+compiler support. Sanitizers use Xcode 26.6, the stable default in the
+[verified runner image](https://github.com/actions/runner-images/blob/macos-26-arm64/20260907.0351/images/macos/macos-26-arm64-Readme.md).
+On that macOS 26.6.2 image, Xcode 26.2 TSan terminated before tests with signal 11
+and ASan did not reach test discovery before the superseding run was cancelled.
+These runs are failures/unqualified, not sanitizer passes. The baseline compiler
+check remains separate, and sanitizer failures remain blocking. A conditional
+LLDB step records startup backtraces without changing the failed job's outcome.
+Go is a development-only runner dependency for pinned
 actionlint and the MIT Gitleaks scanner, not a Limitless product dependency.
 The separately licensed Gitleaks GitHub Action is not used. zizmor's action and
 scanner version are pinned. Security-tool versions embedded in `run` commands
@@ -197,9 +202,10 @@ An initial `brew style --help` probe could not create Homebrew's cache in the
 restricted environment. The later authorized run passed style and strict audit
 in a temporary tap; installation, the initial block and completed removal are below.
 
-At the 2026-09-17 snapshot above, no push had occurred. The complete physical and
-accessibility matrix, Developer ID release paths, independent provenance attestation
-and the signed Homebrew lifecycle remain separate release gates.
+The complete physical and accessibility matrix, clean-Mac download and Homebrew
+upgrade qualification, independent provenance attestation and optional Developer ID
+release paths remain separate gates. The maintainer owns manual hardware and UI
+acceptance following the 2026-09-18 handoff; these trials are not automated by CI.
 
 On 2026-09-17, the expanded README and contribution guide were checked against the
 actual CLI help, native control labels, core defaults and distribution commands.

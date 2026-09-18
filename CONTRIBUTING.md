@@ -4,6 +4,7 @@ Read [AGENTS.md](AGENTS.md), [the requirements](docs/requirements.md), and the
 canonical document for the area you change. Limitless is entirely Swift and targets
 native macOS. Keep changes focused, dependencies justified, and security boundaries
 explicit. All contributions are made under the [MIT license](LICENSE).
+Please follow the [code of conduct](CODE_OF_CONDUCT.md) in project discussions.
 
 The current minimum is macOS 26 on Apple Silicon with Swift 6 language mode.
 There are no Swift package dependencies. A paid Apple Developer account is not

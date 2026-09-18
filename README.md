@@ -140,7 +140,8 @@ and automation again. No session is restored automatically. See the complete
 
 ## Development
 
-Use the Apple Swift toolchain on macOS. CI is configured for Xcode 26.2; local
+Use the Apple Swift toolchain on macOS. CI checks Xcode 26.2 compatibility and runs
+sanitizers with Xcode 26.6; local
 checks also pass with Command Line Tools Swift 6.4. Commands below use the project's
 RTK development wrapper, which is not part of the delivered application.
 
@@ -178,6 +179,7 @@ acceptance gates. A green workflow does not certify physical Mac compatibility.
 - [Security policy](SECURITY.md)
 - [Testing and evidence](docs/testing.md)
 - [Contributing](CONTRIBUTING.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
 - [Agent instructions](AGENTS.md)
 
 ## Safety boundary
