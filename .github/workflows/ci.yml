@@ -33,9 +33,6 @@ jobs:
         env:
           CHECK: ${{ matrix.check }}
         run: swift Tools/ProjectTool.swift "$CHECK"
-      - name: Diagnose compiler request cycles after a failed Release build
-        if: failure() && matrix.check == 'check'
-        run: swift build -c release -Xswiftc -Xfrontend -Xswiftc -debug-cycles
       - name: Build and inspect the development app bundle
         if: matrix.check == 'check'
         env:

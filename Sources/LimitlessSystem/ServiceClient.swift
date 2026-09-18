@@ -4,7 +4,8 @@ import os
 
 /// One authenticated connection per owner. An interruption is terminal; no automatic reacquisition.
 public actor ServiceClient {
-    private let connection: NSXPCConnection
+    private let lifetime: ConnectionLifetime
+    private var connection: NSXPCConnection { lifetime.connection }
     private var closed = false
 
     public init(role: ClientRole) async throws {
@@ -21,11 +22,9 @@ public actor ServiceClient {
         connection.remoteObjectInterface = NSXPCInterface(with: LimitlessXPC.self)
         // Do not let Foundation silently reconnect a lost owner and renew old work.
         connection.interruptionHandler = { [weak connection] in connection?.invalidate() }
-        self.connection = connection
+        lifetime = ConnectionLifetime(connection)
         connection.activate()
     }
-
-    isolated deinit { connection.invalidate() }
 
     public func close() {
         closed = true
@@ -74,4 +73,14 @@ public actor ServiceClient {
             throw error
         }
     }
+}
+
+// Keep cleanup synchronous without exporting an isolated actor deinit, which
+// triggers a cross-module Release compiler cycle in Swift 6.2.
+final class ConnectionLifetime {
+    let connection: NSXPCConnection
+
+    init(_ connection: NSXPCConnection) { self.connection = connection }
+
+    deinit { connection.invalidate() }
 }
