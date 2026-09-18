@@ -141,8 +141,8 @@ and automation again. No session is restored automatically. See the complete
 ## Development
 
 Use the Apple Swift toolchain on macOS. CI checks Xcode 26.2 compatibility and runs
-sanitizers with Xcode 26.6; local
-checks also pass with Command Line Tools Swift 6.4. Commands below use the project's
+sanitizers with Xcode 26.6; local checks also pass with Command Line Tools Swift 6.4.
+Commands below use the project's
 RTK development wrapper, which is not part of the delivered application.
 
 ```sh

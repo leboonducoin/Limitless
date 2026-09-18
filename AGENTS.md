@@ -79,6 +79,9 @@ Never invent tool commands or force an installation rejected by security control
 - Run the repository's complete local check command, when available, after a
   substantive change. Also run checks specific to a changed security/build boundary.
   Do not claim a workflow passed unless its actual execution was observed.
+- GitHub Actions runs on every push to `main` and on pull requests. The baseline
+  build and CodeQL use Xcode 26.2; ASan/TSan use Xcode 26.6 on `macos-26`.
+  Keep sanitizer failures blocking and verify the actual final commit's CI results.
 - Current Swift checks: `rtk proxy swift Tools/ProjectTool.swift check`, plus
   `asan` and `tsan` for instrumented runs. See `docs/testing.md` for a separate
   scratch path on a synced Desktop and the local security-tool evidence.
