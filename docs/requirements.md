@@ -2,7 +2,10 @@
 
 This document preserves the complete product contract. A passing unit test proves
 only its covered behavior. Items remain open until the evidence described below
-exists. No public release or push is authorized by this document.
+exists. On 2026-09-18 the maintainer authorized pushing the source to `main` and
+running GitHub Actions. Hardware trials and interface acceptance are now owned by
+the maintainer and remain unverified until results are recorded. Source publication
+does not certify a binary release; no public binary release is authorized here.
 
 ## Required product
 
