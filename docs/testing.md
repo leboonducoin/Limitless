@@ -140,6 +140,19 @@ remained after review. PR-only dependency review passed on Dependabot PR 3 in
 [its Security run](https://github.com/leboonducoin/Limitless/actions/runs/35332149448);
 that observation does not approve or merge the dependency update.
 
+A subsequent documentation-only run on `c686e85` exposed an intermittent journal
+reopening failure under TSan (`alreadyLocked`), while the baseline and ASan passed.
+A deterministic local regression retained a duplicated lock descriptor and failed
+with the same error before the fix: closing only the owner's descriptor does not
+release a `flock` still referenced by that copy. The destructor now explicitly
+unlocks before closing; `O_CLOEXEC` remains set. This covers the brief inherited
+descriptor lifetime possible during concurrent process launch without adding
+retries or serializing the test suite. The regression uses only a private temporary
+directory and `dup`, with no helper, fork or power setting change.
+The full local check with read-only observation passed after the fix (94 tests),
+including the same regression that failed before the explicit unlock. A separate
+local TSan build also passed; its hardware observation remained disabled.
+
 The first authorized push to `main` on 2026-09-18 triggered the
 [CI run](https://github.com/leboonducoin/Limitless/actions/runs/35329710628) and
 [Security run](https://github.com/leboonducoin/Limitless/actions/runs/35329710625).
@@ -185,8 +198,8 @@ compiler support. Sanitizers use Xcode 26.6, the stable default in the
 On that macOS 26.6.2 image, Xcode 26.2 TSan terminated before tests with signal 11
 and ASan did not reach test discovery before the superseding run was cancelled.
 These runs are failures/unqualified, not sanitizer passes. The baseline compiler
-check remains separate, and sanitizer failures remain blocking. A conditional
-LLDB step records startup backtraces without changing the failed job's outcome.
+check remains separate, and sanitizer failures remain blocking. A temporary
+LLDB diagnostic was removed after investigation; it never changed a failed job's outcome.
 Go is a development-only runner dependency for pinned
 actionlint and the MIT Gitleaks scanner, not a Limitless product dependency.
 The separately licensed Gitleaks GitHub Action is not used. zizmor's action and

@@ -42,6 +42,18 @@ private func withJournalDirectory(_ body: (URL) throws -> Void) throws {
     }
 }
 
+@Test func journalReleasesItsLockEvenWhileADuplicatedDescriptorLives() throws {
+    try withJournalDirectory { directory in
+        var journal: SecureOwnershipJournal? = try SecureOwnershipJournal(testDirectory: directory)
+        let duplicate = dup(try #require(journal?.lockFD))
+        #expect(duplicate >= 0)
+        defer { close(duplicate) }
+        journal = nil
+        let reopened = try SecureOwnershipJournal(testDirectory: directory)
+        #expect(try !reopened.loadOwned())
+    }
+}
+
 @Test(arguments: [
     "", "{}", "{\"version\":2,\"owned\":true}", "{\"version\":1,\"owned\":false}",
     String(repeating: "x", count: 1025),

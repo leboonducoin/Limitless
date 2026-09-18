@@ -15,7 +15,8 @@ public final class SecureOwnershipJournal: OwnershipJournal {
     private let directoryFD: Int32
     private let parentFD: Int32
     private let directoryName: String
-    private let lockFD: Int32
+    // Internal for tests that retain a descriptor as a concurrent spawn can.
+    let lockFD: Int32
     private let owner: uid_t
     private static let filename = "ownership.json"
     private enum Retirement { case active, sealed, unlinked, removed }
@@ -103,6 +104,9 @@ public final class SecureOwnershipJournal: OwnershipJournal {
     }
 
     deinit {
+        // A concurrent spawn can briefly retain the open file description before exec.
+        // Release our ownership explicitly instead of waiting for every copy to close.
+        flock(lockFD, LOCK_UN)
         close(lockFD)
         close(directoryFD)
         close(parentFD)
