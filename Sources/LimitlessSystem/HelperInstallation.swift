@@ -152,7 +152,10 @@ private struct BlessedHelperInstallation: HelperInstallation {
                     SMJobBless(
                         kSMDomainSystemLaunchd, LimitlessIdentity.helper as CFString,
                         authorization, &error)
-                else { throw error?.takeRetainedValue() ?? CocoaError(.executableLoad) as CFError }
+                else {
+                    if let error { throw error.takeRetainedValue() }
+                    throw CocoaError(.executableLoad)
+                }
             }
             guard self.status == .enabled else { throw HelperInstallationError.invalidBundle }
         }.value
@@ -172,7 +175,10 @@ private struct BlessedHelperInstallation: HelperInstallation {
                     SMJobRemove(
                         kSMDomainSystemLaunchd, LimitlessIdentity.helper as CFString,
                         authorization, true, &error)
-                else { throw error?.takeRetainedValue() ?? CocoaError(.executableLoad) as CFError }
+                else {
+                    if let error { throw error.takeRetainedValue() }
+                    throw CocoaError(.executableLoad)
+                }
             }
             guard removalIsConfirmed else { throw HelperInstallationError.unconfirmedRemoval }
         }.value

@@ -124,6 +124,16 @@ does not qualify closed-lid operation, transitions, helper approval or restorati
 
 ## CI and security
 
+The first authorized push to `main` on 2026-09-18 triggered the
+[CI run](https://github.com/leboonducoin/Limitless/actions/runs/35329710628) and
+[Security run](https://github.com/leboonducoin/Limitless/actions/runs/35329710625).
+Xcode 26.2 rejected two direct `CocoaError`-to-`CFError` casts accepted by local
+Swift 6.4. Both community installation failure paths now throw the retained system
+error when present, otherwise the original Cocoa fallback, without a bridge cast.
+Compilation on the CI baseline is the regression check; the existing ad-hoc-host
+tests still reject installation/removal before native authorization. No privileged
+integration test is needed for this source compatibility correction.
+
 The checked-in workflows run on pull requests, pushes to `main`, and manual
 dispatch. Security also runs weekly. Actions are pinned to verified full commit
 IDs; checkout credentials are not persisted. Jobs have individual minimum
@@ -179,7 +189,7 @@ An initial `brew style --help` probe could not create Homebrew's cache in the
 restricted environment. The later authorized run passed style and strict audit
 in a temporary tap; installation, the initial block and completed removal are below.
 
-No push has occurred, so no remote CI result is claimed. The complete physical and
+At the 2026-09-17 snapshot above, no push had occurred. The complete physical and
 accessibility matrix, Developer ID release paths, independent provenance attestation
 and the signed Homebrew lifecycle remain separate release gates.
 
