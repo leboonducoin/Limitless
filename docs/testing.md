@@ -134,6 +134,14 @@ Compilation on the CI baseline is the regression check; the existing ad-hoc-host
 tests still reject installation/removal before native authorization. No privileged
 integration test is needed for this source compatibility correction.
 
+The next Release build exposed a Swift 6.2 cross-module compiler cycle resolving
+`ServiceClient`'s isolated destructor. A temporary `-debug-cycles` run identified
+that exact request. The actor now owns a small, non-Sendable connection lifetime
+object with synchronous invalidation on destruction; explicit close and reciprocal
+signature requirements are unchanged. A regression test verifies invalidation when
+the owner is dropped without explicit close. It never activates the connection or
+contacts a helper. The compiler diagnostic step was removed after diagnosis.
+
 The checked-in workflows run on pull requests, pushes to `main`, and manual
 dispatch. Security also runs weekly. Actions are pinned to verified full commit
 IDs; checkout credentials are not persisted. Jobs have individual minimum
