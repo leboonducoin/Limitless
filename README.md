@@ -1,6 +1,14 @@
 # Limitless
 
-A native macOS menu-bar app that keeps your Mac awake for the time or work you choose.
+**A little more time.** A native macOS menu-bar app that keeps your Mac awake for
+the time or work you choose.
+
+[![CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml)
+[![Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![macOS 26+](https://img.shields.io/badge/macOS-26%2B-111111.svg)](docs/requirements.md)
+
+[Preview](#preview) · [Features](#what-limitless-does) · [Installation](#installation-and-signing) · [CLI & AI](#cli-and-ai-tasks) · [Development](#development) · [Documentation](#project-documentation)
 
 By **Arthur Barreau**. [MIT](LICENSE), copyright © 2026 Arthur Barreau.
 
@@ -19,6 +27,17 @@ native authorization and process tracking. The undocumented global
 `pmset disablesleep` mechanism is isolated in one backend for lid-closed operation
 where the hardware and macOS permit it, without requiring an external display.
 
+## Preview
+
+<p align="center">
+  <img src="docs/images/menu-preview.png" width="400" alt="Limitless native menu panel in dark mode, showing a preview session, battery reserve and tracked tasks">
+</p>
+
+Native macOS capture from the read-only development preview. The displayed
+battery and session values are sample data; controls are disabled. This shows the
+interface, not proof of closed-lid operation. Manual hardware testing and interface
+refinements are being handled by the maintainer before a public binary release.
+
 ## What Limitless does
 
 | Control | Behavior |
@@ -34,6 +53,20 @@ where the hardware and macOS permit it, without requiring an external display.
 The SwiftUI/AppKit interface uses native materials, system typography and original
 icon artwork. The application, CLI, helper and maintenance tools are Swift, with
 no third-party Swift package dependency and **no Node or Python product runtime**.
+
+## How it works
+
+```mermaid
+flowchart LR
+    App[Menu-bar app] -->|Authenticated control XPC| Helper[Privileged helper]
+    CLI[Swift CLI and AI tasks] -->|Authenticated task XPC| Helper
+    Helper --> Core[Shared policy and session core]
+    Helper --> System[Apple power APIs and isolated lid backend]
+```
+
+The helper enforces user limits on every request. Your commands run in the
+unprivileged CLI; the helper accepts no arbitrary command or filesystem path.
+See the [architecture](docs/architecture.md) and [security policy](SECURITY.md).
 
 ## Installation and signing
 
@@ -127,8 +160,13 @@ rtk proxy /private/tmp/limitless-preview/Limitless.app/Contents/MacOS/LimitlessA
 
 Use `community-bundle` to inspect the alternative helper layout. Signed release
 commands are documented separately and require an actual signing identity.
-See [testing and observed results](docs/testing.md) for ASan/TSan, read-only Mac
-checks and the unperformed integration gates. No GitHub CI result is claimed yet.
+Every push to `main` runs GitHub Actions: Release builds and tests, separate
+Address/Thread Sanitizer runs, both development bundle layouts, workflow linting,
+secret scanning and CodeQL for Swift and Actions. Pull requests also run dependency
+review; security checks run weekly. The badges above link to the actual results.
+CI never installs a privileged helper or changes the runner's power settings.
+See [testing and observed results](docs/testing.md) for the exact checks and manual
+acceptance gates. A green workflow does not certify physical Mac compatibility.
 
 ## Project documentation
 
