@@ -22,9 +22,15 @@ import ServiceManagement
     var customDuration: Double = 90
     var durationUnit: DurationUnit = .minutes
     var stopDate = Date().addingTimeInterval(3_600)
-    var processID = ""
-    var confirmingRemoval = false
-    var erasePreferencesOnRemoval = false
+    var processID = "" {
+        didSet {
+            if selectedProcess.map({ String($0.pid) }) != processID { selectedProcess = nil }
+        }
+    }
+    private(set) var processes: [RunningProcess] = []
+    var processSearch = ""
+    private(set) var processListError: String?
+    private var selectedProcess: ProcessIdentity?
     private let preferences: UserDefaults
     private let helper: (any HelperInstallation)? =
         (Bundle.main.object(forInfoDictionaryKey: "LimitlessHelperInstallation") as? String)
@@ -68,10 +74,26 @@ import ServiceManagement
         status?.sessions.first(where: { $0.belongsToClient && $0.kind == .manual })
     }
     var taskCount: Int { status?.sessions.filter { $0.kind == .task }.count ?? 0 }
+    var showsTaskCount: Bool { taskCount > 0 || stopChoice == .process }
     var presentation: PowerPresentation? {
         connectionError == nil ? status.map(PowerPresentation.init) : nil
     }
     var draftChanged: Bool { draft != baseline }
+
+    func refreshProcesses() {
+        do {
+            processes = try RunningProcess.snapshot()
+            processListError = nil
+        } catch {
+            processes = []
+            processListError = "Processes unavailable. Enter a PID or refresh."
+        }
+    }
+
+    func selectProcess(_ process: RunningProcess) {
+        processID = String(process.id)
+        selectedProcess = process.identity
+    }
 
     func beginMonitoring() {
         guard monitoring == nil, !isPreview, !quitting else { return }
@@ -176,7 +198,8 @@ import ServiceManagement
             case .date: end = .at(stopDate)
             case .process:
                 guard let pid = Int32(processID) else { throw WorkError.invalidProcess }
-                process = try ProcessIdentity(pid: pid)
+                process = try selectedProcess ?? ProcessIdentity(pid: pid)
+                guard process?.isAlive == true else { throw WorkError.processUnavailable }
                 end = .unlimited
             }
             try end.validate(at: SystemClock.now())
@@ -207,8 +230,7 @@ import ServiceManagement
                 // Persist limits only, never automation authorization or an active demand.
                 let saved = try draft.policy(allowsAutomation: false)
                 preferences.set(try JSONEncoder().encode(saved), forKey: "userPolicy")
-                message =
-                    "Limits applied. Existing sessions remain bounded by their original deadlines."
+                message = nil
             }
         } catch { message = "Use a battery floor from 0 to 50% and a positive, finite duration." }
     }
@@ -256,9 +278,9 @@ import ServiceManagement
         SMAppService.openSystemSettingsLoginItems()
     }
 
-    /// Shared by the native settings action and the signed app's Homebrew removal hook.
+    /// Shared by the context-menu action and the signed app's maintenance entry point.
     /// No app files, external CLI links or user-created skill copies are deleted here.
-    func removeIntegration(erasePreferences: Bool = false) async -> Bool {
+    func removeIntegration() async -> Bool {
         guard trustedBuild, !isPreview, !busy, let helper else {
             message = "Removal requires a correctly signed Limitless installation."
             return false
@@ -304,9 +326,11 @@ import ServiceManagement
             guard absentLoginStates.contains(SMAppService.mainApp.status),
                 helper.removalIsConfirmed
             else { throw ServiceError.restorationRequired }
-            if erasePreferences {
-                preferences.removePersistentDomain(forName: LimitlessIdentity.application)
-            }
+            try Self.erasePreferences(
+                preferences, domain: LimitlessIdentity.application,
+                library: FileManager.default.url(
+                    for: .libraryDirectory, in: .userDomainMask,
+                    appropriateFor: nil, create: false))
             helperStatus = helper.status
             loginStatus = SMAppService.mainApp.status
             status = nil
@@ -315,7 +339,7 @@ import ServiceManagement
             removalComplete = true
             monitoring?.cancel()
             message =
-                "The power helper and login item are removed. Quit Limitless, then use Homebrew or move the app to the Trash."
+                "Helper, login item and preferences removed."
             return true
         } catch {
             quitting = false
@@ -328,6 +352,20 @@ import ServiceManagement
             message =
                 "Removal is incomplete. Keep the app installed and retry. If the helper is unavailable while its state directory remains, restore the signed installation and enable the helper before retrying."
             return false
+        }
+    }
+
+    /// Only the current user's Limitless domain and documented cache/window-state entries.
+    /// Called after native cleanup, so an error never causes an unsafe helper removal.
+    static func erasePreferences(_ defaults: UserDefaults, domain: String, library: URL) throws {
+        defaults.removePersistentDomain(forName: domain)
+        guard defaults.synchronize() else { throw ServiceError.unavailable }
+        for relative in ["Caches/\(domain)", "Saved Application State/\(domain).savedState"] {
+            do {
+                try FileManager.default.removeItem(at: library.appendingPathComponent(relative))
+            } catch let error as CocoaError where error.code == .fileNoSuchFile {
+                // Already absent is the expected result on installations without cached state.
+            }
         }
     }
 

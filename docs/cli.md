@@ -6,7 +6,10 @@ installation and app-authorized automation are prerequisites for real keep-awake
 sessions; the community channel does not require paid Apple Developer membership.
 The local signed test build has passed native task/limit trials, as recorded in
 [testing evidence](testing.md#live-task-limits-and-idle-observation). Downloaded
-GitHub/Homebrew distribution remains unqualified.
+GitHub distribution remains unqualified. The CLI is included inside the graphical
+app at `/Applications/Limitless.app/Contents/MacOS/limitless`; it is not a separate
+installation. The examples below assume you have made that executable available
+as `limitless` in your shell.
 
 ```sh
 limitless status

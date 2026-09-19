@@ -2,6 +2,47 @@
 
 ## Current evidence
 
+### 2026-09-19 menu and caffeinate refinement
+
+The maintainer reported all of their manual tests working on the preceding build.
+This revision adds a supervised caffeinate child and moves settings into the main
+popover. `ProjectTool.swift check` passed the Release build, formatting, release
+input checks, probe typechecks and 100 reported Swift tests (46 core, 44 system,
+3 CLI, 7 app); the opt-in hardware observation was skipped. New coverage checks
+assertion decoding, child termination with harmless `/bin/sleep`, assertion-loss
+recovery limits, process-list identity, exact presets, empty-count visibility and
+complete scoped preference cleanup. Ordinary tests never launch caffeinate.
+
+Separate Debug ad-hoc bundles passed icon/plist/signature checks. Native read-only
+previews were inspected in dark and light appearances: all settings and footer are
+present, the exact timing menu is correct, process search/selection updates the PID,
+the process list scrolls, Tab moves focus, native Quit works, and Uninstall's native
+confirmation cannot execute in preview mode. The AppKit Edit menu preserves standard
+text-editing shortcuts. No helper, login item or power state was changed. The literal
+secondary-click gesture on the status icon and full VoiceOver remain manual checks;
+the native action menu and confirmation were inspected through the application menu.
+Preview runtime logs contained no reported error/fault/crash matches.
+
+Before the decision to use GitHub only, Homebrew style (one file, zero offenses) and strict audit passed in a temporary local
+tap using an explicitly non-release fixture digest. No package was installed. The
+first fixture write failed because `tap-new` does not create `Casks`; after creating
+that directory both checks ran successfully. No release checksum or URL was invented.
+
+The GitHub-only decision removes the cask template, generation and Ruby validation.
+The release-input self-check now explicitly verifies that the bundle opens the
+graphical menu-bar executable. Earlier Homebrew sections below are historical,
+not current installation instructions or release requirements.
+
+Security's trusted-identity listing was empty, but the full identity listing still
+contains the previously authorized local test certificate with `CSSMERR_TP_NOT_TRUSTED`.
+An empty trusted listing alone does not prove it cannot sign; no trust-store change
+is needed to test an exact certificate requirement. The current installed app and
+power settings have not been changed. Signed packaging and manual caffeinate/cleanup
+trials are separate from the automatic results above. Hosted checks will run on the
+pushed revision; earlier green runs do not qualify this revision.
+
+### Earlier evidence
+
 2026-09-16 environment inspection: macOS 26.6.2, Apple M1 Pro, CLT Swift 6.4,
 SDK 27.0. Full Xcode and a valid signing identity were not detected initially.
 On 2026-09-17, the user authorized a dedicated local test identity, test signatures
@@ -93,7 +134,7 @@ rtk proxy swift Tools/ProjectTool.swift tsan
 ```
 
 `check` runs whitespace checks, strict formatting, release-tool input checks,
-Homebrew DSL syntax, typechecking of the opt-in signed XPC probe/runner, Release
+graphical bundle metadata checks, typechecking of the opt-in signed XPC probe/runner, Release
 compilation and tests with coverage enabled. It never signs or executes that probe.
 `asan` and `tsan` run separate instrumented test builds.
 The tool loads Apple's existing Swift Testing macro explicitly when the selected
@@ -215,23 +256,24 @@ The app's `--prepare-uninstall` hook also returned 1 with the expected signed-bu
 requirement before any removal action. Signed service unregistration is covered
 separately in the native lifecycle results below.
 
-Release-tool self-checks reject malformed/injected Team IDs, nonnumeric versions,
-invalid digests and ad-hoc artifacts. Synthetic signing-information checks reject
-missing/invalid runtime flags or timestamps and any entitlement data. They parse the Developer ID requirement and
-the Homebrew template with the system Ruby parser. Ruby is only a development
-DSL check/Homebrew dependency, not an application or CLI runtime. Each development
+Release-tool self-checks reject malformed/injected Team IDs, invalid community
+certificate selectors and ad-hoc artifacts. Synthetic signing-information checks
+reject missing/invalid runtime flags or timestamps and any entitlement data. They
+parse the Developer ID requirement and verify the graphical bundle entry point.
+Release verification rejects nonnumeric versions; the exported archive's digest
+is calculated from its actual contents. Each development
 bundle repeats the negative signature check after its ordinary signature passes.
 The builder also checks that the actual CLI version matches the bundle plist.
 The community certificate and exported-archive checks have passed with a dedicated
 local test identity, as recorded below. Developer ID/timestamp, Apple submission,
 stapling, Gatekeeper and publisher release qualification remain unexecuted.
 This Mac has Command Line Tools, not full Xcode; full Xcode is not required by
-the community signing command. No notarization upload or published cask is claimed.
+the community signing command. No notarization upload or public release is claimed.
 An initial `brew style --help` probe could not create Homebrew's cache in the
 restricted environment. The later authorized run passed style and strict audit
 in a temporary tap; installation, the initial block and completed removal are below.
 
-The complete physical and accessibility matrix, clean-Mac download and Homebrew
+The complete physical and accessibility matrix, clean-Mac download and
 upgrade qualification, independent provenance attestation and optional Developer ID
 release paths remain separate gates. The maintainer owns manual hardware and UI
 acceptance following the 2026-09-18 handoff; these trials are not automated by CI.

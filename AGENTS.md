@@ -8,8 +8,10 @@ and the hardware permit it. Read `docs/requirements.md` and the relevant canonic
 document before changing behavior. Preserve the full requested scope and distinguish
 implemented, automatically tested, physically verified, and publication-ready work.
 
-The user requires a working GitHub/Homebrew distribution without paid Apple
+The user requires a working GitHub Releases distribution without paid Apple
 Developer membership. Developer ID/notarization is an optional later channel.
+The 2026-09-19 decision removes Homebrew: distribute one graphical app archive
+with its companion CLI. Do not reintroduce a separate installation method.
 Read the no-account decision in `docs/distribution.md` before changing trust or
 installation. Preserve native admin consent and reciprocal XPC authentication;
 never replace certificate validation with a bundle ID/UID-only check.
@@ -27,7 +29,7 @@ never replace certificate validation with a bundle ID/UID-only check.
 ## Architecture and security boundaries
 
 - All authored executable code is Swift: app, CLI, helper, adapters, build and
-  maintenance tools. Markdown, assets, plist/JSON/YAML and Homebrew DSL are allowed.
+  maintenance tools. Markdown, assets and plist/JSON/YAML are allowed.
 - No Node/Python runtime in the delivered product. Prefer Apple frameworks and the
   standard library. Add dependencies only for a demonstrated need.
 - Keep policy and session decisions in the common core; do not duplicate them in UI
@@ -92,7 +94,7 @@ Never invent tool commands or force an installation rejected by security control
 - Build a local ad-hoc app with `rtk proxy swift Tools/ProjectTool.swift bundle`.
   It refuses an existing output directory and never registers a helper or login item.
   See `docs/distribution.md`; a development bundle is not a releasable artifact.
-- `check` also validates release inputs and the Homebrew DSL. Each development
+- `check` also validates release inputs and the graphical app entry point. Each development
   bundle must fail Developer ID and community release checks. `community-bundle`
   builds the ad-hoc SMJobBless layout and verifies embedded metadata without any
   installation. `community-sign`, `community-verify` and `community-package` use
@@ -109,12 +111,9 @@ Never invent tool commands or force an installation rejected by security control
   installation, power changes or Gatekeeper acceptance. See `docs/testing.md`.
 - Validate workflow edits with actionlint and zizmor; scan staged changes and Git
   history with Gitleaks. Never silently skip an unavailable security gate.
-- Validate generated Homebrew casks in a tap's `Casks` directory with `brew style
-  --cask OWNER/TAP/limitless` and `brew audit --cask --strict OWNER/TAP/limitless`.
-  Loose-file style uses the wrong context; audit rejects paths. Keep test taps local,
-  preserve quarantine, and set `HOMEBREW_NO_AUTOREMOVE=1` and
-  `HOMEBREW_NO_INSTALL_CLEANUP=1` for teardown. A blocked cleanup hook must not be
-  forced; record pending app/receipt paths and the manual macOS decision required.
+- Validate the actual exported GitHub archive, its SHA-256 and source manifest.
+  Preserve quarantine and record clean-Mac first-opening and removal results.
+  A blocked native cleanup must never be forced.
 - Keep `docs/testing.md` accurate about executable commands, results, unavailable
   tools, and separate Mac-only/manual gates. No invented coverage percentages.
 - UI work requires native visual inspection, keyboard and accessibility checks and

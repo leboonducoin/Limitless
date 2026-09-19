@@ -114,7 +114,8 @@ code. See [CLI and AI integration](cli.md) for the tracking boundary and signals
 
 ## Power management
 
-Public IOKit assertions cover idle sleep prevention. Public IOPowerSources APIs
+Apple's `/usr/bin/caffeinate -i -w <helper PID>` covers idle sleep prevention alongside
+the global hold. Public IOPowerSources APIs
 provide power information. ServiceManagement handles helper registration and login.
 The undocumented global `pmset disablesleep` mechanism is confined to one backend;
 its reads, writes and compatibility interpretation must not leak into UI code.
@@ -130,6 +131,18 @@ has a two-second execution timeout; termination gets up to another half second.
 An unfinished child remains tracked, blocking another write. A successful command
 gets up to one second for powerd propagation, then requires a matching observation.
 These synchronous operations run only on the helper's serial worker.
+
+The same worker checks both mechanisms every two seconds (250 ms timer leeway),
+and on power notifications/requests. The caffeinate child uses a fixed executable,
+fixed `-i` flag and the helper's own PID, with a clean environment. It never receives
+user command arguments. Public `IOPMCopyAssertionsByProcess` must confirm an active
+idle-system assertion belonging to that child; a running process alone is not proof.
+Startup waits at most one second for confirmation. Loss uses the controller's shared
+three-repair budget. Stop/suspension/expiry terminates the child and confirms its exit
+before releasing ownership; a failed stop retains the child and journal for retry.
+`-w` also ends caffeinate when the helper exits. No display assertion or synthetic
+user activity is introduced. These observations still do not prove lid compatibility.
+See [Apple's caffeinate implementation](https://github.com/apple-oss-distributions/PowerManagement/blob/main/caffeinate/caffeinate.c).
 
 `PowerSourceReader` uses only public IOPowerSources calls and keys. A failed list
 or description read is unavailable; a successful empty list on AC identifies a
@@ -152,7 +165,7 @@ Each client demand has an independent identity, owner, policy and stop condition
 Relative durations use continuous monotonic time (including system sleep); absolute
 dates use wall time and are re-evaluated after clock/wake notifications. Durations
 have no arbitrary product maximum; invalid, nonfinite and unrepresentable values
-are rejected. Presets are 5/10/15/30/45 minutes and 1/2/3/4/6/8/12/24 hours.
+are rejected. Presets are 15/30/45 minutes and 1/2/4/8/12/24 hours, plus unlimited.
 
 A user ceiling is enforced separately from client requests. CLI/AI cannot disable
 battery protection, extend the ceiling, or re-enable stopped work by renewing a
@@ -213,8 +226,9 @@ version supported by CodeQL for primary CI, with newer toolchains as compatibili
 checks. App state belongs on MainActor; blocking subprocess work does not.
 No persistent database, telemetry SDK, network service, web UI or custom UI framework.
 
-The SwiftUI `MenuBarExtra` uses an observable MainActor model and separate native
-settings. Read-only status requests renew the app's lease every five seconds even
+An AppKit `NSStatusItem` opens a native `NSPopover` hosting SwiftUI and an observable
+MainActor model. All settings are in this panel; secondary-click opens the native
+Quit/Uninstall menu. Read-only status requests renew the app's lease every five seconds even
 when the panel is closed. A process-bound manual session checks the same PID/UID/
 start-time adapter as the CLI every second. Losing a connection clears that watcher
 and never recreates a manual demand. A stale reading is visibly unavailable;

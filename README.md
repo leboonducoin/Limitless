@@ -15,7 +15,7 @@ By **Arthur Barreau**. [MIT](LICENSE), copyright © 2026 Arthur Barreau.
 **In development — not yet a published or hardware-qualified application.**
 The first release targets **macOS 26 or later on Apple Silicon**. The app, CLI,
 helper and distribution tooling are implemented, but there is no qualified public
-download or Homebrew tap yet. Local signed trials verified native installation,
+download yet. Local signed trials verified native installation,
 live battery keep-awake, concurrent tasks and restoration/removal. Physical
 closed-lid operation, clean-Mac distribution and the remaining security scenarios
 are still release gates. See the [acceptance matrix](docs/requirements.md).
@@ -33,10 +33,10 @@ where the hardware and macOS permit it, without requiring an external display.
   <img src="docs/images/menu-preview.png" width="400" alt="Limitless native menu panel in dark mode, showing a preview session, battery reserve and tracked tasks">
 </p>
 
-Native macOS capture from the read-only development preview. The displayed
-battery and session values are sample data; controls are disabled. This shows the
-interface, not proof of closed-lid operation. Manual hardware testing and interface
-refinements are being handled by the maintainer before a public binary release.
+Native macOS capture from an earlier read-only development preview. The current
+interface brings settings into this panel; this image has not yet been refreshed.
+The displayed battery and session values are sample data, not evidence of
+closed-lid operation.
 
 ## What Limitless does
 
@@ -44,7 +44,7 @@ refinements are being handled by the maintainer before a public binary release.
 | --- | --- |
 | Power source | Battery only (`-b`), power adapter only (`-c`), or both (`-a`); exactly one mode at a time |
 | Battery protection | Every integer from 0–50%; default 20%. A value of 0 disables custom protection and shows a warning |
-| Automatic stop | 13 presets from five minutes to 24 hours, custom duration, date/time, process completion, or no time limit |
+| Automatic stop | 15/30/45 minutes, 1/2/4/8/12/24 hours, custom duration, date/time, process completion, or no limit |
 | Tracked commands | The Swift CLI holds a session while its foreground command exists and releases it on completion |
 | Concurrent work | Each task owns its session; the last eligible task releases the automatic hold |
 | Observed state | Displays confirmed, suspended, restoring and unavailable states; recovery has a bounded retry budget |
@@ -70,8 +70,14 @@ See the [architecture](docs/architecture.md) and [security policy](SECURITY.md).
 
 ## Installation and signing
 
-Distribution is planned through GitHub releases and a dedicated Homebrew tap.
-There is no valid `brew install` command or release download to advertise yet.
+**GitHub Releases is the only planned installation route.** No public binary has
+been published yet. Each release will contain **Limitless.app**, including its
+menu-bar interface and companion CLI.
+
+Extract the release archive, move Limitless.app into Applications and open it.
+The menu-bar icon appears on first launch, before helper approval. Launch at login
+remains an independent choice in the panel. No Terminal command is needed to use
+the graphical app.
 
 The community channel uses a stable publisher certificate and native macOS
 administrator consent without requiring paid Apple Developer membership from
@@ -79,10 +85,10 @@ the maintainer or users. Users will receive the already signed app; they will no
 need to build it or create a certificate. Developer ID and notarization are an
 optional later channel. The community installer and packaging are implemented;
 the local signed installation/active-removal cycle passed without paid membership
-or added certificate trust. Clean-Mac download/Homebrew qualification is pending.
+or added certificate trust. Clean-Mac download qualification is pending.
 
 A downloaded non-notarized app may require an explicit decision in macOS Privacy
-& Security, and managed Macs may prevent opening it. Limitless and its cask do not
+& Security, and managed Macs may prevent opening it. Limitless does not
 remove quarantine or change Gatekeeper. Ad-hoc development builds cannot enable
 the helper or change power settings. See [distribution and trust](docs/distribution.md).
 
@@ -93,7 +99,7 @@ current development bundle is ready for privileged use.
 
 1. Open Limitless and choose **Enable Limitless**. macOS handles helper approval;
    the app never asks for or stores your administrator password itself.
-2. In Settings, choose power sources and battery/duration limits, then **Apply limits**.
+2. In the menu panel, choose power sources and battery/duration limits, then **Apply**.
    Enabling **Launch at login** does not start a session.
 3. Choose the menu panel's stop condition and start a session. A mismatched power
    source suspends it; returning to an allowed source can resume it before its deadline.
@@ -106,7 +112,7 @@ its status guidance instead of assuming that quitting or rebooting fixed the fla
 
 ### CLI and AI tasks
 
-After installing the signed helper and explicitly allowing tracked tasks in Settings:
+After installing the signed helper and enabling **Allow CLI & AI tasks** in the panel:
 
 ```sh
 limitless status --json
@@ -127,14 +133,15 @@ See [CLI syntax, signals and tracking limits](docs/cli.md).
 
 ## Removal and upgrades
 
-Use **Settings → Prepare for removal…** before deleting a working installation.
+Right-click the menu-bar icon and choose **Uninstall Limitless…**.
 This ends sessions, confirms restoration of owned state, removes the helper and
 login registration, and checks the result. Commands themselves keep running.
-Optional preference removal is separate. If cleanup fails, keep the matching app
+All saved preferences, cache and window state are erased, then the app moves to Trash.
+If cleanup fails, keep the matching app
 and retry; do not delete the protected journal manually.
 
-The Homebrew recipe uses this guarded removal hook and stops if it fails. Upgrades
-also remove the old integrations: reopen the new app to enable the helper, login
+The app's maintenance entry point uses the same guarded cleanup. Upgrades
+also remove the old integrations and preferences: reopen the new app to enable the helper, login
 and automation again. No session is restored automatically. See the complete
 [removal and recovery procedure](docs/distribution.md#prepare-for-removal).
 

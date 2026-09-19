@@ -19,6 +19,9 @@ import Testing
     defer { command.interrupt(terminate: true) }
     let identity = try ProcessIdentity(pid: command.processIdentifier)
     #expect(identity.isAlive)
+    let listed = try #require(RunningProcess.snapshot().first { $0.id == identity.pid })
+    #expect(listed.identity == identity && !listed.name.isEmpty)
+    #expect(try RunningProcess.snapshot().allSatisfy { $0.id != getpid() && $0.id > 1 })
     var info = try #require(ProcessIdentity.read(identity.pid))
     info.pbi_start_tvusec &+= 1
     #expect(!identity.matches(info))

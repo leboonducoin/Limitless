@@ -355,15 +355,6 @@ func verifyRelease(_ app: URL, identity: ReleaseIdentity, notarized: Bool) throw
     return (version, record)
 }
 
-func cask(version: String, digest: String) throws -> String {
-    try require(
-        matches(version, "(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)")
-            && matches(digest, "[0-9a-f]{64}"), "Invalid cask version or SHA-256.")
-    return try String(contentsOfFile: "Packaging/limitless.rb.in", encoding: .utf8)
-        .replacingOccurrences(of: "@VERSION@", with: version)
-        .replacingOccurrences(of: "@SHA256@", with: digest)
-}
-
 func archive(_ app: URL, to destination: URL) throws {
     try require(
         !FileManager.default.fileExists(atPath: destination.path), "Archive already exists.")
@@ -418,6 +409,10 @@ func selfTest(developmentApp: URL? = nil) throws {
     }
     try rejects { _ = try certificateRequirement(identifier: "unknown", certificate: certificate) }
     let info = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
+    try require(
+        info["CFBundleExecutable"] as? String == "LimitlessApp"
+            && info["LSUIElement"] as? Bool == true,
+        "The installed app must launch the menu-bar interface, not the companion CLI.")
     for pin in [nil, certificate] {
         let metadata = try communityMetadata(info: info, certificate: pin)
         let helperRequirement =
@@ -459,17 +454,6 @@ func selfTest(developmentApp: URL? = nil) throws {
             _ = try developerRequirement(identifier: "io.github.leboonducoin.Limitless", team: team)
         }
     }
-    for version in ["", "1.0", "01.0.0", "1.0.0-dev", "1.0.0\n", "#{system('false')}"] {
-        try rejects { _ = try cask(version: version, digest: digest) }
-    }
-    try rejects { _ = try cask(version: "0.1.0", digest: digest + "\n") }
-    let recipe = try cask(version: "0.1.0", digest: digest)
-    try require(
-        !recipe.contains("@VERSION@") && !recipe.contains("@SHA256@")
-            && recipe.contains("--prepare-uninstall") && recipe.contains("must_succeed: true")
-            && !recipe.contains("/Library/Application Support/Limitless"),
-        "Cask must preserve guarded removal and substitute both release values.")
-    _ = try run("/usr/bin/ruby", ["-c", "Packaging/limitless.rb.in"])
     if let developmentApp {
         let info = try propertyList(developmentApp.appendingPathComponent("Contents/Info.plist"))
         if info["LimitlessHelperInstallation"] as? String == "blessed" {
@@ -486,7 +470,7 @@ func selfTest(developmentApp: URL? = nil) throws {
                 notarized: false)
         }
     }
-    print("Release input, cask and optional development-signature rejection checks passed.")
+    print("Release input and optional development-signature rejection checks passed.")
 }
 
 func distributionCommand(_ arguments: [String]) throws -> Bool {
@@ -534,7 +518,7 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
     } else if command == "package" {
         try require(
             try cleanRevision() == record.sourceRevision,
-            "Generate release metadata and cask from the same clean source revision as the app.")
+            "Generate release metadata from the same clean source revision as the app.")
         let output = URL(fileURLWithPath: arguments[3], isDirectory: true)
         try require(
             !output.resolvingSymlinksInPath().path.hasPrefix(
@@ -563,8 +547,6 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         }.joined()
         try Data("\(digest)  \(zip.lastPathComponent)\n".utf8).write(
             to: output.appendingPathComponent("SHA256SUMS"), options: .withoutOverwriting)
-        try Data(cask(version: version, digest: digest).utf8).write(
-            to: output.appendingPathComponent("limitless.rb"), options: .withoutOverwriting)
         var manifest: [String: Any] = [
             "version": version, "sourceRevision": record.sourceRevision,
             "archive": zip.lastPathComponent, "sha256": digest,
@@ -578,7 +560,7 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         )
         .write(to: output.appendingPathComponent("release.json"), options: .withoutOverwriting)
         print(
-            "Verified archive, digest, manifest and draft cask: \(output.path)\nNothing published. The cask URL becomes usable only after an authorized release."
+            "Verified archive, digest and manifest: \(output.path)\nNothing published."
         )
     } else {
         print(

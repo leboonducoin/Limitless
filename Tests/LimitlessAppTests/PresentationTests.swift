@@ -4,6 +4,41 @@ import Testing
 
 @testable import LimitlessApp
 
+@Test func durationPresetsMatchTheCompactMenu() {
+    #expect(SessionEnd.presetMinutes == [15, 30, 45, 60, 120, 240, 480, 720, 1440])
+}
+
+@Test @MainActor func uninstallErasesAllPreferencesAndOnlyItsOwnCacheAndWindowState() throws {
+    let domain = "Limitless.test.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: domain))
+    let library = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer {
+        defaults.removePersistentDomain(forName: domain)
+        try? FileManager.default.removeItem(at: library)
+    }
+    defaults.set("saved", forKey: "userPolicy")
+    defaults.set(true, forKey: "anotherPreference")
+    for path in [
+        "Caches/\(domain)", "Saved Application State/\(domain).savedState", "Caches/other-app",
+    ] {
+        try FileManager.default.createDirectory(
+            at: library.appendingPathComponent(path), withIntermediateDirectories: true)
+    }
+    try AppModel.erasePreferences(defaults, domain: domain, library: library)
+    #expect(defaults.persistentDomain(forName: domain)?.isEmpty != false)
+    #expect(
+        !FileManager.default.fileExists(
+            atPath: library.appendingPathComponent("Caches/\(domain)").path))
+    #expect(
+        !FileManager.default.fileExists(
+            atPath: library.appendingPathComponent("Saved Application State/\(domain).savedState")
+                .path))
+    #expect(
+        FileManager.default.fileExists(
+            atPath: library.appendingPathComponent("Caches/other-app").path))
+    try AppModel.erasePreferences(defaults, domain: domain, library: library)
+}
+
 private func status(
     _ phase: SleepPhase, observed: SleepObservation, owned: Bool,
     fault: SleepFault? = nil
@@ -42,6 +77,15 @@ private func status(
 }
 
 #if DEBUG
+    @Test @MainActor func emptyTaskCountOnlyAppearsForProcessCompletion() {
+        let model = AppModel.preview("inactive")
+        #expect(model.taskCount == 0 && !model.showsTaskCount)
+        model.stopChoice = .process
+        #expect(model.showsTaskCount)
+        model.stopChoice = .unlimited
+        #expect(!model.showsTaskCount)
+    }
+
     @Test @MainActor func startupNeverGrantsControlBeforeBuildVerification() async {
         let model = AppModel()
         #expect(model.buildTrust == .checking)
@@ -62,7 +106,7 @@ private func status(
         await model.setAutomation(false)
         await model.registerHelper()
         await model.setLaunchAtLogin(true)
-        #expect(await model.removeIntegration(erasePreferences: true) == false)
+        #expect(await model.removeIntegration() == false)
         #expect(!model.removalComplete)
         #expect(model.status == before)
         #expect(model.loginStatus == .notRegistered)
