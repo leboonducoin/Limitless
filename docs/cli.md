@@ -78,6 +78,7 @@ session remains independent. Global stop and policy/recovery controls are app-on
 | [Claude Code](https://code.claude.com/docs/en/skills) | `~/.claude/skills/limitless/SKILL.md` | `.claude/skills/limitless/SKILL.md` |
 | [Cursor](https://cursor.com/help/customization/skills) | `~/.cursor/skills/limitless/SKILL.md` | `.cursor/skills/limitless/SKILL.md` |
 | [Gemini CLI](https://geminicli.com/docs/cli/skills/) | `~/.gemini/skills/limitless/SKILL.md` | `.gemini/skills/limitless/SKILL.md` |
+| [Other](#other-ai-tools-manual-installation) | See manual setup below | Depends on the tool |
 
 Choose one location for each agent; avoid duplicate copies. Codex also supports
 explicit invocation with `$limitless`; Claude Code uses `/limitless`. In Gemini CLI,
@@ -100,7 +101,7 @@ Skill installation is deliberate: Limitless does not modify agent directories.
 To remove a copied skill later, delete only its `limitless` folder in the location
 you chose. Uninstalling the app removes its bundled original.
 
-### Other AI tools — manual installation
+### Other AI tools (manual installation)
 
 For another **local** agent with skill support, copy the same `limitless/SKILL.md`
 into its documented personal or project skill folder. Keep the YAML header and
