@@ -151,6 +151,27 @@ func unownedStateCannotBeAdoptedOrOverwritten(_ observation: SleepObservation) t
     #expect(backend.writes == [true, false])
 }
 
+@Test func lostCaffeinateAssertionIsRepairedWithinTheExistingBudgetAndStopWins() throws {
+    var controller = SleepController(restoringOwnedHold: false)
+    var backend = TestBackend()
+    var journal = TestJournal()
+    _ = controller.reconcile(
+        wantsAwake: true, now: try instant(), backend: &backend, journal: &journal)
+    for attempt in 1...SleepController.retryLimit {
+        backend.hasIdleAssertion = false
+        let repaired = controller.reconcile(
+            wantsAwake: true, now: try instant(Double(attempt * 10 + 10)),
+            backend: &backend, journal: &journal)
+        #expect(repaired.phase == .active && backend.hasIdleAssertion)
+        #expect(controller.recoveryAttempts == attempt)
+    }
+    backend.hasIdleAssertion = false
+    let exhausted = controller.reconcile(
+        wantsAwake: true, now: try instant(100), backend: &backend, journal: &journal)
+    #expect(exhausted.fault == .recoveryExhausted && !exhausted.ownsGlobalHold)
+    #expect(!backend.hasIdleAssertion && backend.observation == .allowed)
+}
+
 @Test func unknownOwnedStateTriggersCleanupInsteadOfEnablingAgain() throws {
     var controller = SleepController(restoringOwnedHold: false)
     var backend = TestBackend()
