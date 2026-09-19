@@ -1,9 +1,39 @@
 import CoreFoundation
 import Foundation
+import IOKit.pwr_mgt
 import LimitlessCore
 import Testing
 
 @testable import LimitlessSystem
+
+@Test func caffeinateRequiresAnActiveIdleAssertionNotJustAProcessOrOtherAssertion() {
+    let active: [String: Any] = [
+        kIOPMAssertionTypeKey: kIOPMAssertionTypePreventUserIdleSystemSleep,
+        kIOPMAssertionLevelKey: NSNumber(value: kIOPMAssertionLevelOn),
+    ]
+    #expect(CaffeinateAssertion.containsIdleAssertion([active]))
+    #expect(!CaffeinateAssertion.containsIdleAssertion(nil))
+    #expect(!CaffeinateAssertion.containsIdleAssertion([]))
+    var inactive = active
+    inactive[kIOPMAssertionLevelKey] = NSNumber(value: kIOPMAssertionLevelOff)
+    #expect(!CaffeinateAssertion.containsIdleAssertion([inactive]))
+    var displayOnly = active
+    displayOnly[kIOPMAssertionTypeKey] = kIOPMAssertionTypePreventUserIdleDisplaySleep
+    #expect(!CaffeinateAssertion.containsIdleAssertion([displayOnly]))
+}
+
+@Test func assertionChildCleanupConfirmsExitWithoutChangingPowerSettings() throws {
+    let child = Process()
+    child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+    child.arguments = ["30"]
+    try child.run()
+    defer { if child.isRunning { child.terminate() } }
+    var assertion = CaffeinateAssertion(process: child)
+    #expect(!assertion.isEffective)
+    try assertion.stop()
+    #expect(!child.isRunning && assertion.process == nil)
+    try assertion.stop()
+}
 
 @Test func onlyRealBooleanSleepPropertiesAreTrusted() {
     #expect(MacSleepBackend.decodeSleepProperty(kCFBooleanTrue) == .disabled)
