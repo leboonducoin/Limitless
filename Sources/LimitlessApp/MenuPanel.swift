@@ -6,7 +6,7 @@ struct MenuPanel: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
-    private var contentHeight = SwiftUI.State<CGFloat>(wrappedValue: 1)
+    private var contentHeight = SwiftUI.State<CGFloat>(wrappedValue: 320)
 
     init(model: AppModel) {
         self.model = model
@@ -15,44 +15,15 @@ struct MenuPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 10) {
-                        Image(nsImage: BrandArt.appIcon(size: 64)).resizable()
-                            .frame(width: 32, height: 32).accessibilityHidden(true)
-                        Text("Limitless").font(.headline)
-                        Spacer()
-                        if model.isPreview {
-                            Text("PREVIEW").font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
-                    statusOverview
-                    if model.removalInProgress {
-                        Text("Uninstall pending. Right-click the icon to retry.").font(.callout)
-                    }
-                    Divider()
-                    if model.isPreview || model.helperStatus == .enabled {
-                        sessionControls
-                    } else {
-                        setupControls
-                    }
-                    Divider()
-                    SettingsView(model: model)
-                    if let message = model.message {
-                        Text(message).font(.callout).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }.padding(20)
-                    .fixedSize(horizontal: false, vertical: true)
+                panelContent.fixedSize(horizontal: false, vertical: true)
                     .onGeometryChange(for: CGFloat.self) {
-                        $0.size.height
+                        ceil($0.size.height)
                     } action: {
-                        contentHeight.wrappedValue = $0
+                        if contentHeight.wrappedValue != $0 { contentHeight.wrappedValue = $0 }
                     }
             }
             .scrollBounceBehavior(.basedOnSize)
-            .frame(
-                height: min(
-                    contentHeight.wrappedValue, (NSScreen.main?.visibleFrame.height ?? 740) - 100))
+            .frame(height: min(contentHeight.wrappedValue, maximumBodyHeight))
             Divider()
             HStack(spacing: 8) {
                 HStack(spacing: 0) {
@@ -63,6 +34,7 @@ struct MenuPanel: View {
                         "Arthur Barreau",
                         destination: URL(string: "https://www.linkedin.com/in/arthurbarreau/")!
                     )
+                    .foregroundStyle(Color(nsColor: .linkColor))
                     .accessibilityLabel("Arthur Barreau on LinkedIn").help(
                         "Arthur Barreau on LinkedIn")
                     Text(" · MIT")
@@ -81,6 +53,40 @@ struct MenuPanel: View {
             }
         }
         .transaction { $0.animation = nil }
+    }
+
+    private var maximumBodyHeight: CGFloat {
+        max(200, (NSScreen.main?.visibleFrame.height ?? 740) - 100)
+    }
+
+    private var panelContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                Image(nsImage: BrandArt.appIcon(size: 64)).resizable()
+                    .frame(width: 32, height: 32).accessibilityHidden(true)
+                Text("Limitless").font(.headline)
+                Spacer()
+                if model.isPreview {
+                    Text("PREVIEW").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            statusOverview
+            if model.removalInProgress {
+                Text("Uninstall pending. Right-click the icon to retry.").font(.callout)
+            }
+            Divider()
+            if model.showsPowerControls {
+                sessionControls
+            } else {
+                setupControls
+            }
+            Divider()
+            SettingsView(model: model)
+            if let message = model.message {
+                Text(message).font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }.padding(20)
     }
 
     private var statusOverview: some View {
@@ -158,6 +164,18 @@ struct MenuPanel: View {
                     systemImage: "terminal"
                 ).font(.caption)
             }
+            if let processes = model.watchedProcesses, !processes.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(processes, id: \.pid) { process in
+                            Text("Waiting for PID \(String(process.pid))")
+                                .font(.caption).monospacedDigit()
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: CGFloat(min(processes.count, 4)) * 18)
+                .scrollBounceBehavior(.basedOnSize)
+            }
         }
     }
 
@@ -185,9 +203,14 @@ struct MenuPanel: View {
                 Text("Development build — power controls unavailable.").font(.callout)
             } else if model.helperStatus == .requiresApproval {
                 Button("Approve in System Settings") { model.openLoginSettings() }
+                    .disabled(model.isPreview)
+            } else if model.helperStatus == .enabled {
+                if model.connectionError == nil && !model.removalInProgress {
+                    ProgressView("Connecting…").controlSize(.small)
+                }
             } else {
                 Button("Enable Limitless") { Task { await model.registerHelper() } }
-                    .buttonStyle(.borderedProminent).disabled(model.busy)
+                    .buttonStyle(.borderedProminent).disabled(model.busy || model.isPreview)
                 Text("Requires macOS administrator approval.").font(.caption).foregroundStyle(
                     .secondary)
             }

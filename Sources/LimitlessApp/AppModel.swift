@@ -53,11 +53,12 @@ import ServiceManagement
         .flatMap(HelperInstallationKind.init(rawValue:))?.service
     private var client: ServiceClient?
     private var monitoring: Task<Void, Never>?
-    private var watchedProcesses: [ProcessIdentity]?
+    private(set) var watchedProcesses: [ProcessIdentity]?
     private var policyApplication: Task<Void, Never>?
     private var updateMonitoring: Task<Void, Never>?
     private var updateInstallation: Task<Void, Never>?
     private var automaticAttempt: String?
+    private var updateCheckDelay: TimeInterval = 21_600
     private var statusReceivedAt = ContinuousClock.now
     private var refreshing = false
     private var revision = 0
@@ -91,11 +92,17 @@ import ServiceManagement
         trustedBuild && !isPreview && helperStatus == .enabled && client != nil
             && connectionError == nil && !removalInProgress && !removalComplete
     }
+    var showsPowerControls: Bool {
+        canControl || (isPreview && helperStatus == .enabled && !removalComplete)
+    }
     var removalInProgress: Bool { status.map { $0.removal != .none } ?? false }
     var ownSession: SessionSummary? {
         status?.sessions.first(where: { $0.belongsToClient && $0.kind == .manual })
     }
-    var taskCount: Int { status?.sessions.filter { $0.kind == .task }.count ?? 0 }
+    var taskCount: Int {
+        (status?.sessions.filter { $0.kind == .task }.count ?? 0)
+            + (watchedProcesses?.count ?? 0)
+    }
     var showsTaskCount: Bool { taskCount > 0 || stopChoice == .process }
     var presentation: PowerPresentation? {
         connectionError == nil ? status.map(PowerPresentation.init) : nil
@@ -141,13 +148,22 @@ import ServiceManagement
         ((try? ProcessSelection.parse(processID)) ?? []).contains(process.id)
     }
 
+    /// Remove ended identities once; a reused PID must never rejoin the session.
+    func pollWatchedProcesses() -> Bool {
+        guard var followed = watchedProcesses else { return false }
+        let completed = ProcessSelection.allFinished(&followed)
+        if followed != watchedProcesses { watchedProcesses = followed }
+        return completed
+    }
+
     func beginMonitoring() {
         guard monitoring == nil, !isPreview, !quitting else { return }
         if trustedBuild {
             updateMonitoring = Task { [weak self] in
                 while !Task.isCancelled {
                     await self?.checkForUpdates()
-                    do { try await Task.sleep(for: .seconds(21_600)) } catch { return }
+                    let delay = self?.updateCheckDelay ?? 21_600
+                    do { try await Task.sleep(for: .seconds(delay)) } catch { return }
                 }
             }
         }
@@ -156,12 +172,8 @@ import ServiceManagement
             while !Task.isCancelled {
                 guard let self else { return }
                 if !quitting {
-                    if var followed = watchedProcesses {
-                        let completed = ProcessSelection.allFinished(&followed)
-                        watchedProcesses = followed
-                        if completed, ownSession != nil, !busy {
-                            await stopManual()
-                        }
+                    if pollWatchedProcesses(), ownSession != nil, !busy {
+                        await stopManual()
                     }
                     if tick % 5 == 0 { await refresh() }
                     if automaticUpdates, let update = availableUpdate,
@@ -183,8 +195,14 @@ import ServiceManagement
             availableUpdate = try await GitHubUpdate.latest(
                 currentVersion: LimitlessIdentity.version)
             updateMessage = nil
+            updateCheckDelay = 21_600
+        } catch UpdateError.rateLimited(let until) {
+            updateCheckDelay = max(60, until.timeIntervalSinceNow)
+            updateMessage =
+                "GitHub's update limit was reached. Retrying at \(until.formatted(date: .omitted, time: .shortened))."
         } catch {
-            updateMessage = "Update check unavailable."
+            updateCheckDelay = 900
+            updateMessage = "Update check: \(error.localizedDescription) Retrying in 15 min."
         }
     }
 
@@ -562,12 +580,13 @@ import ServiceManagement
 #if DEBUG
     extension AppModel {
         /// Read-only presentation fixtures. Every mutation path still rejects isPreview.
-        static func preview(_ state: String) -> AppModel {
+        static func preview(_ state: String, watchedProcesses: [ProcessIdentity]? = nil) -> AppModel
+        {
             let model = AppModel()
             model.isPreview = true
             model.buildTrust = .untrusted
             model.helperStatus = .enabled
-            let active = state == "active"
+            let active = state == "active" || state == "process"
             let waiting = state == "suspended"
             let failed = state == "restoration"
             let unknown = state == "unknown"
@@ -587,6 +606,19 @@ import ServiceManagement
                 sessions: active || waiting ? [session] : [], sampledAt: Date())
             model.draft = PolicyDraft(policy)
             model.baseline = model.draft
+            model.watchedProcesses = watchedProcesses
+            if state == "process" {
+                model.stopChoice = .process
+                model.watchedProcesses =
+                    watchedProcesses
+                    ?? (try? RunningProcess.snapshot())?.prefix(3).map(\.identity) ?? []
+            }
+            if state == "setup" || state == "removed" {
+                model.buildTrust = .trusted
+                model.helperStatus = .notRegistered
+                model.status = nil
+                model.removalComplete = state == "removed"
+            }
             return model
         }
     }

@@ -331,7 +331,11 @@ repository currently performs no automatic credential import, upload or release.
 
 The menu checks the fixed repository's latest stable GitHub Release at launch and
 every six hours. No release (HTTP 404), equal/older versions, drafts and prereleases
-produce no Update button. Release tags and the bundle must use matching `major.minor.patch`
+produce no Update button. GitHub rate limits (403 with rate-limit headers, or 429)
+show the retry time and defer the next check until that time (at least one minute).
+Other failures show the actual error and retry after fifteen minutes. Checks are
+unauthenticated; they need neither helper permission nor an Apple account. The
+settings are hidden until app setup is complete. Release tags and the bundle must use matching `major.minor.patch`
 versions and the `Limitless-VERSION-arm64.zip` asset. The GitHub asset's SHA-256 digest
 is mandatory. Bump the marketing version for every public update; build numbers alone
 do not trigger an update.
@@ -358,8 +362,9 @@ the GUI exits, rechecks signatures and helper absence, retains a backup, and ask
 NSWorkspace to launch the replacement. Quarantine is applied, never removed.
 A macOS launch refusal restores the old app; native Gatekeeper and administrator
 approval still apply, including with a free/self-signed distribution. This is not
-a promise of unattended Gatekeeper acceptance. No public binary exists yet, so the
-current repository returns no available update.
+a promise of unattended Gatekeeper acceptance. No public binary exists yet; a
+successful check therefore offers no update. A GitHub rate limit is a separate
+temporary failure, not evidence that a release exists.
 
 Primary references: [GitHub Releases API](https://docs.github.com/en/rest/releases/releases),
 [Finder-style recycling](https://developer.apple.com/documentation/appkit/nsworkspace/recycle(_:completionhandler:)).
@@ -370,7 +375,8 @@ Right-click the menu-bar icon and choose **Uninstall Limitless…** to end all s
 and disable automation. The native confirmation also covers preference erasure and
 moving the app to Trash after successful cleanup.
 The app shows cleanup progress and foreground errors, uses macOS's Finder-style
-recycling operation, and confirms success before exiting.
+recycling operation, and exits immediately after successful cleanup and recycling.
+There is no final Done dialog. A failed cleanup keeps the app open with the error.
 The helper blocks new activation, policy changes and rearming for the rest of its
 process lifetime, including across reconnects and console-user changes. Running
 commands/processes are never terminated by this operation.

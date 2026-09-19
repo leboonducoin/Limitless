@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — build 8 refinements
+
+- Keep setup focused on administrator approval and independent launch at login.
+- Count watched processes as tasks and retain their remaining PIDs during sessions.
+- Restore the orange active dot to the right, make the author link blue and avoid
+  redundant status-icon redraws and fractional panel resizing.
+- Explain GitHub rate limits and defer retries; retain concrete network errors.
+- Link CLI & AI help directly to agent skill installation instructions.
+- Exit immediately after successful uninstall without a final confirmation dialog.
+
 ## Unreleased
 
 Implemented work and validation are recorded below. No binary release has been

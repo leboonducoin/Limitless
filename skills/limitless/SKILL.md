@@ -5,11 +5,14 @@ description: Keep an authorized macOS task awake with Limitless while its real c
 
 # Limitless
 
-Use the installed, signed Swift `limitless` CLI. The native app must already have
+Use the installed, signed Swift CLI at
+`/Applications/Limitless.app/Contents/MacOS/limitless`. If the user installed the app
+elsewhere, use the executable inside that app's `Contents/MacOS` directory; do not
+create a PATH shim or install another copy. The native app must already have
 approved its helper and enabled automation. This skill does not authorize changing
 those settings, installing software, or weakening the user's limits.
 
-Read `limitless --help` and `limitless status --json` before the first tracked task
+Read the CLI's `--help` and `status --json` before the first tracked task
 in a session. Follow any terminal-wrapper convention required by the workspace.
 If the CLI is unavailable, incompatible, blocked, or automation is disabled,
 explain the missing prerequisite. Continue independently useful work within the
@@ -19,8 +22,8 @@ user's instructions; never substitute `sudo`, `pmset`, `caffeinate`, a dummy
 Wrap the actual foreground command:
 
 ```sh
-limitless run -- swift test
-limitless run -c --for 2h -- xcodebuild -scheme MyApp build
+/Applications/Limitless.app/Contents/MacOS/limitless run -- swift test
+/Applications/Limitless.app/Contents/MacOS/limitless run -c --for 2h -- xcodebuild -scheme MyApp build
 ```
 
 Omit options to inherit the app's limits. `-b`, `-c`, `-a` are mutually exclusive;
@@ -29,7 +32,7 @@ at least the app's floor. Never select 0%, extend an authorized duration, change
 the system clock, rearm a stopped session, or reconnect to evade a cutoff.
 
 For an already running, specifically identified user task, use
-`limitless watch --pid PID`. Confirm that the PID belongs to the requested work.
+the same CLI with `watch --pid PID`. Confirm that the PID belongs to the requested work.
 Limitless binds it to its start time and ends protection if it exits, changes
 identity or becomes unreadable. Do not watch Codex, a terminal, an editor, a
 browser, a shell waiting for input, or an agent host as a proxy for actual work.

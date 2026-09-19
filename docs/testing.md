@@ -2,6 +2,57 @@
 
 ## Current evidence
 
+### 2026-09-19 setup, process tracking and integration help (build 8)
+
+The full `ProjectTool.swift check` passed formatting, Release compilation, release
+input checks, maintenance-probe typechecks and 108 reported tests (47 core, 48
+system, 3 CLI, 10 app); one opt-in hardware observation was skipped. The process
+regression now exercises the app's actual count and remaining identities as two
+unprivileged child processes exit, including the all-finished boundary. Additional
+coverage checks setup visibility and HTTP 404 versus 403/429 rate limits, reset
+times, malformed retry headers, server failures and oversized responses.
+
+A live unauthenticated GitHub check returned HTTP 403 with a zero remaining quota.
+The old updater collapsed this into “Update check unavailable.” The app now shows
+GitHub's retry time and waits; other failures retain their reason and retry after
+15 minutes. Tests use synthetic responses and make no network requests. Release
+trust, archive verification and replacement paths are unchanged from build 7.
+
+Native read-only previews confirmed the compact setup-only panel, independent
+login row, blue author credit, three visible remaining PIDs, matching task count,
+one-second countdown and accessible help link to the exact AI setup section. Tab
+reached the new help link. A post-removal fixture quit immediately through the
+native menu; process inspection confirmed every preview had exited. This tests
+the exit branch, not a privileged uninstall. The user retains real uninstall,
+administrator consent, outside-click behavior, status-dot placement, VoiceOver
+and physical power qualification.
+
+The preview remained visibly stable during inspection. Redundant status-image
+assignment is removed, activation precedes popover opening and measured height
+updates only for changed whole-point values, starting from a nonzero layout.
+App Intents/BaseBoard warnings and AppKit negative-geometry diagnostics still
+occurred during native accessibility inspection. These logs do not prove the
+reported intermittent flicker is resolved; it needs the maintainer's live-app
+reproduction. No new animation, framework or runtime dependency was introduced.
+
+Ponytail review: lean native changes, no replacement updater or custom layout engine.
+Motion/accessibility review:
+
+| Before | After | Why |
+| --- | --- | --- |
+| Static menu image assigned on every status sample | Assigned once; dot/label change with state | Avoid redundant native redraw |
+| One-point initial panel and fractional measurements | Sensible initial size and changed whole-point heights | Reduce layout churn |
+| Process watches omitted from task count | Actual remaining identities drive count and PID list | Observable progress |
+| Extra modal after successful uninstall | Immediate native termination after verified cleanup | Avoid an app waiting for Done |
+
+The bundled skill passes its installed validator. Agent installation paths for
+Codex, Claude Code, Cursor and Gemini CLI were checked against their linked
+official documentation; the Other section describes manual file-based use without
+inventing a universal skill path. No agent configuration was installed or changed.
+Local Markdown paths and Git history secret scanning passed. Final hosted
+CI/security results must be checked on the pushed commit; local success alone
+does not qualify publication or physical operation.
+
 ### 2026-09-19 compact controls, multiple PIDs and GitHub updates (build 7)
 
 `ProjectTool.swift check` passed formatting, Release compilation, release-input

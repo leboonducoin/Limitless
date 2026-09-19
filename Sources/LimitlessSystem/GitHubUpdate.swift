@@ -3,8 +3,10 @@ import Darwin
 import Foundation
 import Security
 
-public enum UpdateError: Error, LocalizedError, Sendable {
+public enum UpdateError: Error, LocalizedError, Equatable, Sendable {
     case invalidRelease, invalidArchive, untrustedBuild, unsafeLocation, busy, failed
+    case rateLimited(until: Date)
+    case httpStatus(Int)
 
     public var errorDescription: String? {
         switch self {
@@ -14,6 +16,9 @@ public enum UpdateError: Error, LocalizedError, Sendable {
         case .unsafeLocation: "Move Limitless to a writable Applications folder before updating."
         case .busy: "Close the running Limitless app before replacing it."
         case .failed: "The update could not be completed. Reopen Limitless or retry."
+        case .rateLimited(let until):
+            "GitHub's request limit was reached. Try again after \(until.formatted(date: .omitted, time: .shortened))."
+        case .httpStatus(let status): "GitHub returned HTTP \(status)."
         }
     }
 }
@@ -108,12 +113,9 @@ public enum GitHubUpdate {
         var request = URLRequest(url: url)
         request.setValue("Limitless", forHTTPHeaderField: "User-Agent")
         let (bytes, response) = try await session.bytes(for: request)
-        guard let response = response as? HTTPURLResponse,
-            let finalURL = response.url, GitHubRedirects.allows(finalURL)
-        else { throw UpdateError.invalidRelease }
-        if allowsMissing, response.statusCode == 404 { return nil }
-        guard response.statusCode == 200, response.expectedContentLength <= limit else {
-            throw UpdateError.invalidRelease
+        guard let response = response as? HTTPURLResponse else { throw UpdateError.invalidRelease }
+        guard try validateResponse(response, limit: limit, allowsMissing: allowsMissing) else {
+            return nil
         }
         var data = Data()
         for try await byte in bytes {
@@ -121,6 +123,32 @@ public enum GitHubUpdate {
             data.append(byte)
         }
         return data
+    }
+
+    /// False means there is no published release, not that checking failed.
+    static func validateResponse(
+        _ response: HTTPURLResponse, limit: Int, allowsMissing: Bool = false, now: Date = Date()
+    ) throws -> Bool {
+        guard let url = response.url, GitHubRedirects.allows(url) else {
+            throw UpdateError.invalidRelease
+        }
+        if allowsMissing, response.statusCode == 404 { return false }
+        if response.statusCode == 429
+            || (response.statusCode == 403
+                && (response.value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0"
+                    || response.value(forHTTPHeaderField: "Retry-After") != nil))
+        {
+            let reset = response.value(forHTTPHeaderField: "X-RateLimit-Reset")
+                .flatMap(TimeInterval.init).map { $0 - now.timeIntervalSince1970 }
+            let retry = response.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            let delay =
+                [reset, retry].compactMap { $0 }.filter { $0.isFinite && $0 > 0 && $0 <= 86_400 }
+                .max() ?? 900
+            throw UpdateError.rateLimited(until: now.addingTimeInterval(max(60, delay)))
+        }
+        guard response.statusCode == 200 else { throw UpdateError.httpStatus(response.statusCode) }
+        guard response.expectedContentLength <= limit else { throw UpdateError.invalidRelease }
+        return true
     }
 
     @concurrent public static func stage(

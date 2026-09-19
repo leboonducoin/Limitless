@@ -14,13 +14,14 @@ session; independently authorized CLI tasks can continue.
 - One native material surface. Liquid Glass is reserved for native controls;
   do not stack translucent cards or blur readable content.
 - An original drawn loop mark, with an indigo app-icon field and a monochrome
-  template menu-bar version. A dark-orange bottom-left dot marks observed active
+  template menu-bar version. A dark-orange bottom-right dot marks observed active
   protection; the accessible status label supplies the same information in words.
   Use SF Symbols for standard actions and power status.
 - A 360-point panel with grouped controls, short labels and enough height for
   wrapped error text. The body scrolls within the available screen height. Author,
   version and MIT information remain in a small footer, with a GitHub link at the
-  right; Arthur Barreau's credit links to his LinkedIn profile. There is no About button.
+  right; Arthur Barreau's credit is a semantic blue link to his LinkedIn profile.
+  There is no About button.
   Measure content height rather than reserving
   empty space. Clicking another app or outside the popover closes it.
 - Native control feedback and popover motion. No decorative loops, countdown
@@ -45,6 +46,9 @@ custom duration, date/time, process completion and unlimited time. CLI commands
 provide command completion. A searchable scrolling list shows readable processes
 owned by the current user; manual semicolon-separated PID entry remains available.
 Multiple selection waits for all selected processes to end or become unreadable.
+The live task count includes remaining selected processes and CLI task sessions.
+While running, a compact scrolling list retains the PIDs still awaited; ended
+identities disappear on the next one-second observation.
 Selection captures
 the start timestamp and is revalidated at Start, preventing PID reuse. Names remain
 in memory and command arguments are never read. Tracking uses the same unprivileged
@@ -60,7 +64,8 @@ authorization; watched-process completion releases only the app's own demand.
 Countdown text refreshes each second from the last helper sample and a monotonic clock.
 
 Automation authorization is an independent control, not a consequence of opening
-the app or starting a manual session. Launch at login uses SMAppService.mainApp
+the app or starting a manual session. Its adjacent help link opens the exact
+[AI setup section](cli.md#ai-agent-setup). Launch at login uses SMAppService.mainApp
 and never creates a demand. No active state or automation consent is restored from
 preferences. Saved power/battery/duration preferences may be reapplied only through
 the user's explicit control action; a live helper policy takes precedence.
@@ -68,8 +73,11 @@ the user's explicit control action; a live helper policy takes precedence.
 Initial helper setup uses the bundle's native installation adapter: SMAppService
 for the notarized channel or SMJobBless with Authorization Services for the community
 channel. macOS owns the consent interface; there is no app password field.
-Register only in response to the setup button. Development builds
-without a trusted signing identity expose the UI but disable privileged actions.
+Register only in response to the setup button. Until an authenticated helper is
+available, show setup/status, Launch at login and the footer; hide session, power,
+automation and update controls. Launch at login does not need the helper or admin
+approval, but still requires a trusted installed app. Untrusted development builds
+show setup guidance; explicit Debug previews expose inert presentation fixtures.
 While the initial identity check is pending, show native preparation feedback and
 keep integration controls disabled; do not label that pending state as an untrusted
 development build. Signature validation must not block the interface thread.
@@ -85,13 +93,21 @@ Successful cleanup always erases preferences and documented cache/window state,
 then moves the app to Trash. A failed stage retains clear retry guidance. The preview
 can open the confirmation but cannot execute its destructive action.
 Cleanup shows progress. App recycling uses NSWorkspace's Finder-style operation;
-errors are brought to the foreground, and success is confirmed before quitting.
+errors are brought to the foreground. After verified cleanup and recycling, quit
+immediately without another confirmation dialog or a second asynchronous stop.
 
 Automatic updates are off by default. Stable GitHub releases are checked at launch
-and every six hours. With automatic updates off, show Update only for a newer release;
+and every six hours after successful checks. Rate limits show GitHub's retry time;
+other failures show their actual reason and retry after fifteen minutes.
+With automatic updates off, show Update only for a newer release;
 with them on, wait for all sessions to end. Download/installation errors are visible.
 Preferences and login registration survive updates; automation and power sessions
 never resume themselves. macOS owns any new launch/helper approval.
+
+Keep the template status image stable across status polling; update the dot and
+accessible label only when the observed presentation changes. Activate before
+opening the popover and round measured content height to whole points to avoid
+fractional layout churn. Countdown updates have no implicit animation.
 
 ## Design references and validation
 

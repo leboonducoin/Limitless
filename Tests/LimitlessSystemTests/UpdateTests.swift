@@ -3,6 +3,47 @@ import Testing
 
 @testable import LimitlessSystem
 
+@Test func updateResponsesDistinguishMissingReleasesRateLimitsAndServerFailures() throws {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    func response(_ status: Int, headers: [String: String] = [:]) throws -> HTTPURLResponse {
+        try #require(
+            HTTPURLResponse(
+                url: URL(
+                    string: "https://api.github.com/repos/leboonducoin/Limitless/releases/latest")!,
+                statusCode: status, httpVersion: "HTTP/2", headerFields: headers))
+    }
+    #expect(try GitHubUpdate.validateResponse(response(200), limit: 100))
+    #expect(try !GitHubUpdate.validateResponse(response(404), limit: 100, allowsMissing: true))
+    #expect(throws: UpdateError.httpStatus(404)) {
+        try GitHubUpdate.validateResponse(response(404), limit: 100)
+    }
+    for status in [403, 500, 503] {
+        #expect(throws: UpdateError.httpStatus(status)) {
+            try GitHubUpdate.validateResponse(response(status), limit: 100)
+        }
+    }
+    #expect(throws: UpdateError.rateLimited(until: now.addingTimeInterval(600))) {
+        try GitHubUpdate.validateResponse(
+            response(
+                403, headers: ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1700000600"]),
+            limit: 100, now: now)
+    }
+    #expect(throws: UpdateError.rateLimited(until: now.addingTimeInterval(120))) {
+        try GitHubUpdate.validateResponse(
+            response(429, headers: ["Retry-After": "120"]), limit: 100, now: now)
+    }
+    for invalid in ["NaN", "1e300", "-60", "unreadable"] {
+        #expect(throws: UpdateError.rateLimited(until: now.addingTimeInterval(900))) {
+            try GitHubUpdate.validateResponse(
+                response(429, headers: ["Retry-After": invalid]), limit: 100, now: now)
+        }
+    }
+    #expect(throws: UpdateError.invalidRelease) {
+        try GitHubUpdate.validateResponse(
+            response(200, headers: ["Content-Length": "101"]), limit: 100)
+    }
+}
+
 private func releaseData(
     tag: String = "v0.2.0", digest: String? = "sha256:" + String(repeating: "a", count: 64),
     url: String? = nil, size: Int = 100, prerelease: Bool = false

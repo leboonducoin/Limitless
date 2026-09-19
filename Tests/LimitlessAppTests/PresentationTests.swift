@@ -20,7 +20,7 @@ import Testing
     }
 }
 
-@Test func processMonitoringWaitsUntilEverySelectedProcessHasEnded() throws {
+@Test @MainActor func processMonitoringWaitsUntilEverySelectedProcessHasEnded() throws {
     let first = Process()
     let second = Process()
     defer {
@@ -35,13 +35,28 @@ import Testing
         try child.run()
     }
     var followed = try [first, second].map { try ProcessIdentity(pid: $0.processIdentifier) }
+    #if DEBUG
+        let model = AppModel.preview("active", watchedProcesses: followed)
+        #expect(model.taskCount == 2 && model.showsTaskCount)
+        #expect(!model.pollWatchedProcesses())
+        #expect(model.watchedProcesses?.map(\.pid) == followed.map(\.pid))
+    #endif
     #expect(!ProcessSelection.allFinished(&followed))
     first.terminate()
     first.waitUntilExit()
     #expect(!ProcessSelection.allFinished(&followed) && followed.count == 1)
+    #if DEBUG
+        #expect(!model.pollWatchedProcesses())
+        #expect(model.taskCount == 1)
+        #expect(model.watchedProcesses?.map(\.pid) == [second.processIdentifier])
+    #endif
     second.terminate()
     second.waitUntilExit()
     #expect(ProcessSelection.allFinished(&followed))
+    #if DEBUG
+        #expect(model.pollWatchedProcesses())
+        #expect(model.taskCount == 0 && model.watchedProcesses?.isEmpty == true)
+    #endif
 }
 
 @Test @MainActor func uninstallErasesAllPreferencesAndOnlyItsOwnCacheAndWindowState() throws {
@@ -113,6 +128,16 @@ private func status(
 }
 
 #if DEBUG
+    @Test @MainActor func setupHidesPowerControlsUntilTheHelperIsAvailable() {
+        #expect(!AppModel().showsPowerControls)
+        for state in ["setup", "removed"] {
+            let model = AppModel.preview(state)
+            #expect(!model.showsPowerControls && !model.canControl)
+            #expect(model.trustedBuild)
+        }
+        #expect(AppModel.preview("inactive").showsPowerControls)
+    }
+
     @Test @MainActor func emptyTaskCountOnlyAppearsForProcessCompletion() {
         let model = AppModel.preview("inactive")
         #expect(model.taskCount == 0 && !model.showsTaskCount)

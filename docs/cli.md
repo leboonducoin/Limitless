@@ -8,16 +8,15 @@ The local signed test build has passed native task/limit trials, as recorded in
 [testing evidence](testing.md#live-task-limits-and-idle-observation). Downloaded
 GitHub distribution remains unqualified. The CLI is included inside the graphical
 app at `/Applications/Limitless.app/Contents/MacOS/limitless`; it is not a separate
-installation. The examples below assume you have made that executable available
-as `limitless` in your shell.
+installation. The examples below use its full path, with no shell setup required.
 
 ```sh
-limitless status
-limitless status --json
-limitless run -- swift test
-limitless run -c --for 90m -- xcodebuild -scheme MyApp build
-limitless watch -b --battery-floor 30 --pid 12345
-limitless run --until 2026-10-01T18:00:00+02:00 -- my-command
+/Applications/Limitless.app/Contents/MacOS/limitless status
+/Applications/Limitless.app/Contents/MacOS/limitless status --json
+/Applications/Limitless.app/Contents/MacOS/limitless run -- swift test
+/Applications/Limitless.app/Contents/MacOS/limitless run -c --for 90m -- xcodebuild -scheme MyApp build
+/Applications/Limitless.app/Contents/MacOS/limitless watch -b --battery-floor 30 --pid 12345
+/Applications/Limitless.app/Contents/MacOS/limitless run --until 2026-10-01T18:00:00+02:00 -- my-command
 ```
 
 `-b`, `-c`, and `-a` select battery, AC, or both. Supplying more than one is an
@@ -62,8 +61,58 @@ Concurrent wrappers own separate sessions. Completing one cannot stop another.
 The last eligible task releases the automatic hold, while a user-created manual
 session remains independent. Global stop and policy/recovery controls are app-only.
 
-The distributable [AI skill](../skills/limitless/SKILL.md) uses these exact commands.
-It adds no runtime or adapter script. Copy its `limitless` folder into the agent's
-skill directory only when installation is requested; repository development does
-not modify the user's installed skills. Its operational rules prohibit dummy work,
-watching the agent host, detached wrappers and attempts to evade user cutoffs.
+## AI agent setup
+
+1. Open Limitless, complete **Enable Limitless** through macOS, then turn on
+   **Allow CLI & AI tasks**. The adjacent question-mark button opens this guide.
+2. In Finder, right-click `Limitless.app`, choose **Show Package Contents**, then
+   open `Contents/Resources`. Copy the **limitless-skill** folder to one of the
+   locations below and rename the copied folder **limitless**. Create the parent
+   folders if needed; Finder's **Go → Go to Folder…** accepts `~` paths.
+3. Start a new local agent session and ask: “Use the Limitless skill while running
+   this build.” The skill must appear in the agent's available skills first.
+
+| Agent | Personal installation (all local projects) | Project-only alternative |
+| --- | --- | --- |
+| [Codex](https://developers.openai.com/codex/skills) | `~/.agents/skills/limitless/SKILL.md` | `.agents/skills/limitless/SKILL.md` |
+| [Claude Code](https://code.claude.com/docs/en/skills) | `~/.claude/skills/limitless/SKILL.md` | `.claude/skills/limitless/SKILL.md` |
+| [Cursor](https://cursor.com/help/customization/skills) | `~/.cursor/skills/limitless/SKILL.md` | `.cursor/skills/limitless/SKILL.md` |
+| [Gemini CLI](https://geminicli.com/docs/cli/skills/) | `~/.gemini/skills/limitless/SKILL.md` | `.gemini/skills/limitless/SKILL.md` |
+
+Choose one location for each agent; avoid duplicate copies. Codex also supports
+explicit invocation with `$limitless`; Claude Code uses `/limitless`. In Gemini CLI,
+run `/skills reload`, check `/skills list`, then ask it to use Limitless and review
+its normal skill-activation consent. This applies to Gemini CLI running on your Mac,
+not the Gemini website.
+The source copy is [here](../skills/limitless/SKILL.md). No extra runtime, adapter,
+administrator permission or paid developer account is needed to copy the skill.
+
+The agent runs the CLI on **this Mac**, around real commands such as builds, tests
+or exports. Each completed command releases its own session; the last tracked task
+ends protection unless a separate manual session remains. User power, battery and
+duration limits always apply. Chat/model thinking and remote/cloud jobs without a
+local process are not tracked; keeping an idle agent host open is not a task.
+
+If setup fails, check the full-path `status --json` command above, helper approval
+and **Allow CLI & AI tasks**. A blocked or ad-hoc build must not bypass macOS security.
+The skill forbids dummy work, detached wrappers and attempts to evade user cutoffs.
+Skill installation is deliberate: Limitless does not modify agent directories.
+To remove a copied skill later, delete only its `limitless` folder in the location
+you chose. Uninstalling the app removes its bundled original.
+
+### Other AI tools — manual installation
+
+For another **local** agent with skill support, copy the same `limitless/SKILL.md`
+into its documented personal or project skill folder. Keep the YAML header and
+instructions intact, reload its skills, and confirm Limitless appears before asking
+it to use the skill. There is no universal installation path or slash command.
+
+If the tool has no skill loader but can read files and run local commands, keep the
+file in a folder you choose and explicitly ask: “Read this Limitless SKILL.md and
+follow it for this task.” Attach or reference that exact file using the tool's
+normal context mechanism. This is manual use; Limitless does not claim automatic
+discovery or ongoing monitoring between requests.
+
+If the tool cannot execute commands on this Mac, run the CLI around the real command
+yourself using the examples above, or select its actual local process in Limitless.
+A browser-only AI cannot install this integration or keep your Mac awake remotely.
