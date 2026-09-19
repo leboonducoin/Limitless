@@ -99,16 +99,26 @@ current development bundle is ready for privileged use.
 
 1. Open Limitless and choose **Enable Limitless**. macOS handles helper approval;
    the app never asks for or stores your administrator password itself.
-2. In the menu panel, choose power sources and battery/duration limits, then **Apply**.
+2. In the menu panel, choose the power source and **Battery reserved limit**; changes apply immediately.
    Enabling **Launch at login** does not start a session.
 3. Choose the menu panel's stop condition and start a session. A mismatched power
    source suspends it; returning to an allowed source can resume it before its deadline.
-4. Use **Stop all** to revoke all current demands. Expiry, battery cutoff and
+4. Use **Stop** to revoke all current demands. Expiry, battery cutoff and
    explicit stop end affected sessions; recovery cannot revive them.
 
 Stopping protection permits ordinary sleep. It does not force sleep or terminate
 your command. If restoration is unconfirmed, keep the app installed and follow
 its status guidance instead of assuming that quitting or rebooting fixed the flag.
+
+**No limit** is in the Stop menu. **When a process ends…** accepts several selections
+or PIDs separated by semicolons; the session ends when all of them finish. Its optional
+**Session time limit** still acts as the user's maximum across sessions.
+
+Enable **Automatic updates** to install newer stable GitHub releases when idle.
+Otherwise an **Update** button appears only when one is available. Updates preserve
+preferences and login behavior, verify the same signing certificate, and use macOS's
+normal launch checks. Helper approval may be needed again. No public binary release
+exists yet, so there is currently no update to download.
 
 ### CLI and AI tasks
 

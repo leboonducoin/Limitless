@@ -1,11 +1,47 @@
 import Foundation
 import LimitlessCore
+import LimitlessSystem
 import Testing
 
 @testable import LimitlessApp
 
 @Test func durationPresetsMatchTheCompactMenu() {
     #expect(SessionEnd.presetMinutes == [15, 30, 45, 60, 120, 240, 480, 720, 1440])
+}
+
+@Test func multipleProcessIDsAreValidatedAndDeduplicated() throws {
+    #expect(try ProcessSelection.parse("697;660;9931") == [697, 660, 9931])
+    #expect(try ProcessSelection.parse(" 697 ; 660 ;697 ") == [697, 660])
+    for invalid in ["", "0", "-2", "+12", "12;", ";12", "12;;34", "1,2", "12;word", "2147483648"] {
+        #expect(throws: WorkError.invalidProcess) { try ProcessSelection.parse(invalid) }
+    }
+    #expect(throws: WorkError.invalidProcess) {
+        try ProcessSelection.parse(Array(repeating: "12", count: 129).joined(separator: ";"))
+    }
+}
+
+@Test func processMonitoringWaitsUntilEverySelectedProcessHasEnded() throws {
+    let first = Process()
+    let second = Process()
+    defer {
+        for child in [first, second] where child.isRunning {
+            child.terminate()
+            child.waitUntilExit()
+        }
+    }
+    for child in [first, second] {
+        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        child.arguments = ["60"]
+        try child.run()
+    }
+    var followed = try [first, second].map { try ProcessIdentity(pid: $0.processIdentifier) }
+    #expect(!ProcessSelection.allFinished(&followed))
+    first.terminate()
+    first.waitUntilExit()
+    #expect(!ProcessSelection.allFinished(&followed) && followed.count == 1)
+    second.terminate()
+    second.waitUntilExit()
+    #expect(ProcessSelection.allFinished(&followed))
 }
 
 @Test @MainActor func uninstallErasesAllPreferencesAndOnlyItsOwnCacheAndWindowState() throws {
@@ -106,6 +142,11 @@ private func status(
         await model.setAutomation(false)
         await model.registerHelper()
         await model.setLaunchAtLogin(true)
+        model.draft.batteryFloor = 42
+        model.policyEdited()
+        await model.checkForUpdates()
+        await model.installUpdate()
+        #expect(model.availableUpdate == nil && !model.updating)
         #expect(await model.removeIntegration() == false)
         #expect(!model.removalComplete)
         #expect(model.status == before)

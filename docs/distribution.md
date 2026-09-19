@@ -327,16 +327,50 @@ manifest and release artifacts together. Protected release approvals and any
 hosted provenance attestation require repository/signing configuration; this
 repository currently performs no automatic credential import, upload or release.
 
-For this initial release, use the old app's guarded Uninstall before replacing it.
-This revokes sessions, removes native registrations and erases preferences. Open
-the new app and enable helper approval, login and automation as desired. No session
-resumes automatically. An in-place updater is not implemented.
+## Updates
+
+The menu checks the fixed repository's latest stable GitHub Release at launch and
+every six hours. No release (HTTP 404), equal/older versions, drafts and prereleases
+produce no Update button. Release tags and the bundle must use matching `major.minor.patch`
+versions and the `Limitless-VERSION-arm64.zip` asset. The GitHub asset's SHA-256 digest
+is mandatory. Bump the marketing version for every public update; build numbers alone
+do not trigger an update.
+
+Automatic installation is opt-in and waits until every session ends. Manual Update
+requires idle sessions too. The helper atomically refuses update preparation when
+any demand remains, closes new admission, proves restoration and removes itself
+through the existing native-consent path. User preferences and login registration
+survive; automation authorization and awake sessions do not. Re-enable the helper
+through macOS after opening the new version. Older builds without the updater still
+use guarded Uninstall before manual replacement, which erases preferences.
+
+Downloads use an ephemeral, credential-free HTTPS session restricted to GitHub and
+its release-asset hosts. Archive size is capped at 64 MiB; extraction allows at most
+512 plain entries and 256 MiB in a private same-volume staging directory. Absolute
+paths, traversal, symbolic/hard links, special files, duplicate names and privileged
+mode bits are refused. Apple's bsdtar retains its path/symlink protections. The app,
+CLI and helper must have the installed app's exact signing certificate, correct
+identifiers, hardened runtime, no entitlements and clean Release provenance.
+Channel changes and signing-certificate rotation require an explicit manual install.
+
+The already installed executable performs the final unprivileged replacement after
+the GUI exits, rechecks signatures and helper absence, retains a backup, and asks
+NSWorkspace to launch the replacement. Quarantine is applied, never removed.
+A macOS launch refusal restores the old app; native Gatekeeper and administrator
+approval still apply, including with a free/self-signed distribution. This is not
+a promise of unattended Gatekeeper acceptance. No public binary exists yet, so the
+current repository returns no available update.
+
+Primary references: [GitHub Releases API](https://docs.github.com/en/rest/releases/releases),
+[Finder-style recycling](https://developer.apple.com/documentation/appkit/nsworkspace/recycle(_:completionhandler:)).
 
 ## Prepare for removal
 
 Right-click the menu-bar icon and choose **Uninstall Limitless…** to end all sessions
 and disable automation. The native confirmation also covers preference erasure and
 moving the app to Trash after successful cleanup.
+The app shows cleanup progress and foreground errors, uses macOS's Finder-style
+recycling operation, and confirms success before exiting.
 The helper blocks new activation, policy changes and rearming for the rest of its
 process lifetime, including across reconnects and console-user changes. Running
 commands/processes are never terminated by this operation.

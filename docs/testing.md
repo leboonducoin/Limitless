@@ -2,6 +2,76 @@
 
 ## Current evidence
 
+### 2026-09-19 compact controls, multiple PIDs and GitHub updates (build 7)
+
+`ProjectTool.swift check` passed formatting, Release compilation, release-input
+checks, maintenance-probe typechecks and 106 reported tests (47 core, 47 system,
+3 CLI, 9 app); one opt-in hardware observation was skipped. New regressions cover
+semicolon parsing/deduplication, waiting for both real unprivileged child processes,
+idle-only update admission, stable-version/digest/repository validation and native
+archive extraction with hostile path/link/size rejection.
+
+The explicitly authorized local certificate signed **temporary fixtures only** for
+`Tests/SignedUpdate/Run.swift`. Matching release acceptance, altered-resource
+rejection, ad-hoc rejection, downgrade rejection, atomic bundle replacement and
+backup restoration passed. The first fixture exposed Foundation's `/private/tmp`
+URL alias normalization; production now uses `realpath` and separately rejects
+staging symlinks. This test does not download or launch the new app, change an
+installed app, register services, or exercise Gatekeeper. Synthetic fixture source
+metadata is never release evidence. Reproduce after a Debug `check` build:
+
+```sh
+rtk proxy swift Tests/SignedUpdate/Run.swift CERT_SHA1 DEBUG_PRODUCTS_DIR BUNDLED_DEBUG_APP NEW_OUTPUT_DIRECTORY
+```
+
+The runner currently links the local CLT/Xcode build's static libraries; supply the
+actual directory containing `libLimitlessSystem.a`, `libLimitlessCore.a` and their
+modules. The coverage-runtime flag matches libraries produced by `check`. Ordinary
+CI only typechecks these files; CodeQL compiles them without signing or executing.
+
+A read-only native Debug preview confirmed the content-sized panel, compact footer
+and GitHub link, exact timing list with only one No limit choice, conditional process
+deadline controls, multi-selection and exact `697;660;9931` field input. Tab moved
+focus; the native uninstall confirmation opened and was cancelled (its destructive
+button is disabled in previews). Create a preview that opens through native app tools:
+
+```sh
+rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview-new LIMITLESS_PREVIEW_STATE=inactive swift Tools/ProjectTool.swift bundle
+```
+
+The active read-only preview also showed its countdown advancing without helper
+polling and only one Stop control. Both previews quit through the native menu.
+Runtime logs included Apple's App Intents connection warnings and an AppKit layout
+re-entrancy warning during menu/window interaction (also present in the build 6
+log). No app-specific crash or visible layout failure was observed; these logs do
+not support a claim of warning-free native execution.
+
+The uninstall report was investigated read-only: the system log recorded a
+`NSCocoaErrorDomain` 513 / POSIX 1 app-trash error. Cleanup now uses Finder-style
+`NSWorkspace.recycle`, visible progress, foreground errors and success feedback.
+At inspection, `/Applications/Limitless.app`, both installed helper files and the
+protected state directory were absent. The new privileged uninstall cycle remains
+for the maintainer to test manually.
+
+GitHub's latest-release endpoint returned HTTP 404; no public update exists. The
+real download/install/relaunch lifecycle, community Gatekeeper prompts, helper
+re-approval, orange status-icon dot, outside-click closure, live one-second timer,
+and full VoiceOver remain manual acceptance checks. No power/login/helper setting
+was changed during this work. Local tests and temporary signed replacement do not
+claim those physical results.
+
+Ponytail review retained native layout, timers, archive tooling and recycling; no
+new runtime dependency or downloaded installer is used. Native review:
+
+| Before | After | Why |
+| --- | --- | --- |
+| Fixed panel height and blank footer gap | Measured content with a screen-height cap | Compact idle view, scroll when needed |
+| Apply and duplicate stop/no-limit controls | Serialized immediate edits and one Stop | Direct manipulation without duplicate actions |
+| Silent-looking uninstall after confirmation | Progress, foreground errors and Finder-style recycling | Native permissions and visible outcome |
+
+Hosted CI/security results must be checked on the pushed commit; earlier green
+runs do not qualify this revision.
+
 ### 2026-09-19 menu and caffeinate refinement
 
 The maintainer reported all of their manual tests working on the preceding build.

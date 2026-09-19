@@ -8,39 +8,36 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("Power source", selection: $model.draft.mode) {
-                ForEach(PowerMode.allCases, id: \.self) { mode in Text(mode.label).tag(mode) }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityLabel("Power source")
-            Stepper(value: $model.draft.batteryFloor, in: 0...50, step: 1) {
-                LabeledContent("Battery reserve", value: "\(model.draft.batteryFloor)%")
-                    .monospacedDigit()
-            }
-            .accessibilityLabel("Battery reserve")
-            .accessibilityValue("\(model.draft.batteryFloor)%")
-            if model.draft.batteryFloor == 0 {
-                Label("Battery protection is off", systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-            }
-            Toggle("Session time limit", isOn: $model.draft.limitsDuration)
-            if model.draft.limitsDuration {
-                HStack {
-                    Text("Maximum minutes")
-                    TextField("Minutes", value: $model.draft.maximumMinutes, format: .number)
-                        .textFieldStyle(.roundedBorder).accessibilityLabel("Maximum minutes")
-                        .frame(width: 90)
+            Group {
+                Picker("Power source", selection: $model.draft.mode) {
+                    ForEach(PowerMode.allCases, id: \.self) { mode in Text(mode.label).tag(mode) }
                 }
-            }
-            if model.draftChanged {
-                HStack {
-                    Text("Unapplied changes").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Apply") { Task { await model.applyPolicy() } }
-                        .disabled(!model.canControl || model.busy).accessibilityLabel(
-                            "Apply limits")
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Power source")
+                Stepper(value: $model.draft.batteryFloor, in: 0...50, step: 1) {
+                    LabeledContent("Battery reserved limit", value: "\(model.draft.batteryFloor)%")
+                        .monospacedDigit()
                 }
-            }
+                .accessibilityLabel("Battery reserved limit")
+                .accessibilityValue("\(model.draft.batteryFloor)%")
+                if model.draft.batteryFloor == 0 {
+                    Label("Battery protection is off", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                }
+                if model.stopChoice == .process {
+                    Toggle("Session time limit", isOn: $model.draft.limitsDuration)
+                    if model.draft.limitsDuration {
+                        HStack {
+                            Text("Maximum minutes")
+                            TextField(
+                                "Minutes", value: $model.draft.maximumMinutes, format: .number
+                            )
+                            .textFieldStyle(.roundedBorder).accessibilityLabel("Maximum minutes")
+                            .frame(width: 90)
+                        }
+                    }
+                }
+            }.disabled(!model.canControl && !model.isPreview)
             Divider()
             Toggle(
                 "Allow CLI & AI tasks",
@@ -60,7 +57,20 @@ struct SettingsView: View {
                 Button("Approve in System Settings") { model.openLoginSettings() }.disabled(
                     model.isPreview)
             }
+            HStack {
+                Toggle("Automatic updates", isOn: $model.automaticUpdates)
+                    .disabled(!model.trustedBuild || model.isPreview || model.updating)
+                if let update = model.availableUpdate, !model.automaticUpdates {
+                    Button("Update") { model.requestUpdate() }
+                        .help("Install Limitless \(update.version)")
+                        .disabled(model.updating || model.busy)
+                }
+            }
+            if let message = model.updateMessage {
+                Text(message).font(.caption).foregroundStyle(.secondary)
+            }
         }
         .font(.callout).toggleStyle(.switch).controlSize(.small)
+        .onChange(of: model.draft) { model.policyEdited() }
     }
 }

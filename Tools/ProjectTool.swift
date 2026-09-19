@@ -640,6 +640,12 @@ do {
         }
         try manager.createDirectory(at: output, withIntermediateDirectories: false)
         var info = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
+        if let preview = ProcessInfo.processInfo.environment["LIMITLESS_PREVIEW_STATE"] {
+            try require(
+                !signing && configuration == "debug",
+                "Preview fixtures require an unsigned Debug bundle.")
+            info["LimitlessPreviewState"] = preview
+        }
         if community {
             let metadata = try communityMetadata(
                 info: info, certificate: signing ? certificate : nil)
@@ -697,6 +703,9 @@ do {
         try manager.copyItem(
             at: URL(fileURLWithPath: "LICENSE"),
             to: contents.appendingPathComponent("Resources/LICENSE"))
+        try manager.copyItem(
+            at: URL(fileURLWithPath: "THIRD_PARTY_NOTICES.md"),
+            to: contents.appendingPathComponent("Resources/THIRD_PARTY_NOTICES.md"))
         try manager.copyItem(
             at: URL(fileURLWithPath: "skills/limitless/SKILL.md"),
             to: contents.appendingPathComponent("Resources/limitless-skill/SKILL.md"))
@@ -780,6 +789,7 @@ do {
                 "Tests/SignedXPC/Probe.swift",
             ],
             ["Tests/SignedXPC/Run.swift"],
+            ["Tests/SignedUpdate/Run.swift"],
             ["Tests/NativeMac/ObserveHelperRestart.swift"],
         ] {
             _ = try run(
@@ -789,6 +799,18 @@ do {
         _ = try run(
             "/usr/bin/xcrun", ["swift", "build", "-c", "release"] + buildPath + compilerFlags,
             environment: buildEnvironment)
+        let products = try run(
+            "/usr/bin/xcrun", ["swift", "build", "-c", "release", "--show-bin-path"] + buildPath,
+            capture: true, environment: buildEnvironment)
+        let modules =
+            FileManager.default.fileExists(atPath: products + "/Modules")
+            ? products + "/Modules" : products
+        _ = try run(
+            "/usr/bin/xcrun",
+            [
+                "swiftc", "-typecheck", "-parse-as-library", "-swift-version", "6",
+                "-warnings-as-errors", "-I", modules, "Tests/SignedUpdate/Probe.swift",
+            ])
         _ = try run(
             "/usr/bin/xcrun",
             ["swift", "test", "--enable-code-coverage"] + buildPath + compilerFlags,

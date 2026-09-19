@@ -68,7 +68,7 @@ public struct ServiceSessions: Sendable {
             switch operation {
             case .configure, .start, .rearm: throw ServiceError.removalInProgress
             case .status, .stop, .stopAll, .heartbeat, .retryRestoration, .prepareRemoval,
-                .finishRemoval:
+                .prepareUpdate, .finishRemoval:
                 break
             }
         }
@@ -92,7 +92,12 @@ public struct ServiceSessions: Sendable {
         case .stop(let id):
             guard registry.stop(id, owner: owner) else { throw ServiceError.unauthorized }
         case .stopAll: try registry.stopAll()
-        case .prepareRemoval:
+        case .prepareRemoval, .prepareUpdate:
+            // The check and admission closure share the helper's serial worker.
+            // Automatic updates cannot interrupt work that started during a download.
+            if operation == .prepareUpdate, !registry.sessions.isEmpty {
+                throw ServiceError.sessionRejected
+            }
             try registry.stopAll()
             isRemoving = true
         case .finishRemoval:

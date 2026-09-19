@@ -23,7 +23,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     let now = try serviceClock(0)
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
-        .stopAll, .rearm, .retryRestoration, .prepareRemoval, .finishRemoval,
+        .stopAll, .rearm, .retryRestoration, .prepareRemoval, .prepareUpdate, .finishRemoval,
     ] {
         #expect(throws: ServiceError.unauthorized) {
             try value.apply(operation, owner: task, now: now)
@@ -127,7 +127,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     }
     for operation in [
         ServiceOperation.status, .heartbeat, .stop(UUID()), .rearm, .retryRestoration,
-        .stopAll, .prepareRemoval, .finishRemoval, .configure(try UserPolicy()),
+        .stopAll, .prepareRemoval, .prepareUpdate, .finishRemoval, .configure(try UserPolicy()),
         .start(SessionRequest(end: .after(seconds: 60))),
     ] {
         #expect(
@@ -167,6 +167,24 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     }
     _ = try value.apply(.retryRestoration, owner: next, now: serviceClock(1))
     #expect(value.registry.sessions.isEmpty)
+}
+
+@Test func updateWaitsForAllSessionsAndAtomicallyClosesNewAdmission() throws {
+    var (value, app, task) = try service()
+    let now = try serviceClock(0)
+    _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
+    _ = try value.apply(.start(SessionRequest()), owner: task, now: now)
+    _ = try value.apply(.start(SessionRequest()), owner: app, now: now)
+    #expect(throws: ServiceError.sessionRejected) {
+        try value.apply(.prepareUpdate, owner: app, now: now)
+    }
+    #expect(value.registry.sessions.count == 2 && !value.isRemoving)
+    _ = try value.apply(.stopAll, owner: app, now: now)
+    _ = try value.apply(.prepareUpdate, owner: app, now: now)
+    #expect(value.isRemoving && !value.registry.policy.allowsAutomation)
+    #expect(throws: ServiceError.removalInProgress) {
+        try value.apply(.start(SessionRequest()), owner: app, now: now)
+    }
 }
 
 @Test func removalNeedsAnExplicitDrainAndConfirmedRestoration() throws {

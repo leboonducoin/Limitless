@@ -6,6 +6,14 @@ Implemented work and validation are recorded below. No binary release has been
 published; [testing evidence](docs/testing.md) and the
 [acceptance matrix](docs/requirements.md) distinguish verified paths from open gates.
 
+- Apply menu settings immediately, fit the panel to its content, put No limit only
+  in the timing menu, and show the optional duration ceiling only in process mode.
+- Follow multiple selected or semicolon-separated PIDs until all finish. Refresh
+  the countdown every second, retain one Stop control and add an orange active dot.
+- Add the GitHub footer link and opt-in signed GitHub updates with idle admission,
+  bounded archive validation, same-certificate checks and replacement rollback.
+- Show uninstall progress, bring errors forward and use Finder-style app recycling.
+
 - Run Apple's caffeinate alongside the global sleep hold and verify the child's
   actual idle-sleep assertion on the existing two-second watchdog.
 - Move all preferences into the menu-bar popover, shorten routine text, keep author

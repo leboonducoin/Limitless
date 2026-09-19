@@ -14,10 +14,14 @@ session; independently authorized CLI tasks can continue.
 - One native material surface. Liquid Glass is reserved for native controls;
   do not stack translucent cards or blur readable content.
 - An original drawn loop mark, with an indigo app-icon field and a monochrome
-  template menu-bar version. Use SF Symbols for standard actions and power status.
+  template menu-bar version. A dark-orange bottom-left dot marks observed active
+  protection; the accessible status label supplies the same information in words.
+  Use SF Symbols for standard actions and power status.
 - A 360-point panel with grouped controls, short labels and enough height for
   wrapped error text. The body scrolls within the available screen height. Author,
-  version and MIT information remain in a small footer; there is no About button.
+  version and MIT information remain in a small footer, with a GitHub link at the
+  right; there is no About button. Measure content height rather than reserving
+  empty space. Clicking another app or outside the popover closes it.
 - Native control feedback and popover motion. No decorative loops, countdown
   animation, custom drag physics or delayed keyboard feedback.
 
@@ -38,15 +42,21 @@ Limitless ownership is not our active session. Unknown telemetry cannot become
 Manual stop conditions include 15/30/45 minutes, 1/2/4/8/12/24 hours, a positive
 custom duration, date/time, process completion and unlimited time. CLI commands
 provide command completion. A searchable scrolling list shows readable processes
-owned by the current user; manual PID entry remains available. Selection captures
+owned by the current user; manual semicolon-separated PID entry remains available.
+Multiple selection waits for all selected processes to end or become unreadable.
+Selection captures
 the start timestamp and is revalidated at Start, preventing PID reuse. Names remain
 in memory and command arguments are never read. Tracking uses the same unprivileged
 identity adapter as the CLI. Routine explanatory text is omitted; errors and the
 zero-battery warning remain visible.
-Policy edits are explicit and validated before application; the helper validates
-again. The 0–50% battery control moves in single-percent steps and shows an inline
-warning at zero. An optional maximum per session is separate from the next manual
-session's stop condition.
+Policy edits apply automatically through a serialized queue; replies cannot overwrite
+newer edits. The helper validates again. The 0–50% **Battery reserved limit** moves
+in single-percent steps and shows an inline warning at zero. **Session time limit**
+appears only in process mode. Its configured user ceiling continues to protect all
+sessions; hiding its control never silently relaxes an existing limit. No limit is
+only a timing-menu choice. The single Stop button ends all demands and revokes task
+authorization; watched-process completion releases only the app's own demand.
+Countdown text refreshes each second from the last helper sample and a monotonic clock.
 
 Automation authorization is an independent control, not a consequence of opening
 the app or starting a manual session. Launch at login uses SMAppService.mainApp
@@ -73,6 +83,14 @@ a native confirmation, separate from Stop: all sessions end while commands conti
 Successful cleanup always erases preferences and documented cache/window state,
 then moves the app to Trash. A failed stage retains clear retry guidance. The preview
 can open the confirmation but cannot execute its destructive action.
+Cleanup shows progress. App recycling uses NSWorkspace's Finder-style operation;
+errors are brought to the foreground, and success is confirmed before quitting.
+
+Automatic updates are off by default. Stable GitHub releases are checked at launch
+and every six hours. With automatic updates off, show Update only for a newer release;
+with them on, wait for all sessions to end. Download/installation errors are visible.
+Preferences and login registration survive updates; automation and power sessions
+never resume themselves. macOS owns any new launch/helper approval.
 
 ## Design references and validation
 

@@ -62,10 +62,10 @@ final class HelperRuntime {
                 request.operation, owner: owner, now: SystemClock.now())
             switch request.operation {
             case .rearm: try controller.rearm()
-            case .retryRestoration, .prepareRemoval: controller.retryRestoration()
+            case .retryRestoration, .prepareRemoval, .prepareUpdate: controller.retryRestoration()
             default: break
             }
-            if request.operation == .prepareRemoval {
+            if request.operation == .prepareRemoval || request.operation == .prepareUpdate {
                 removalReady = false
                 let status = try reconcile(owner: owner)
                 guard status.canRemoveService, !backend.hasIdleAssertion

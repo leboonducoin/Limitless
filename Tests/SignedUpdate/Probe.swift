@@ -1,0 +1,44 @@
+import Foundation
+import LimitlessSystem
+
+/// Non-root fixture probe. No app launch, helper installation, or power mutation.
+@main enum UpdateProbe {
+    static func main() async throws {
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        guard arguments.count == 2, geteuid() != 0 else { exit(64) }
+        let candidate = URL(fileURLWithPath: arguments[1])
+        let current = Bundle.main.bundleURL
+        let identity = try SignedIdentity(expectedIdentifier: LimitlessIdentity.application)
+        if arguments[0] == "replace" {
+            let finishedParent = Process()
+            finishedParent.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+            try finishedParent.run()
+            finishedParent.waitUntilExit()
+            let installed = try await GitHubUpdate.finish(
+                app: candidate, parentPID: finishedParent.processIdentifier)
+            let info =
+                try PropertyListSerialization.propertyList(
+                    from: Data(
+                        contentsOf: installed.app.appendingPathComponent("Contents/Info.plist")),
+                    format: nil) as? [String: Any]
+            guard info?["CFBundleShortVersionString"] as? String == "0.2.0" else { exit(1) }
+            // Simulate a refused macOS launch: the original app must be recoverable.
+            _ = try FileManager.default.replaceItemAt(installed.app, withItemAt: installed.backup)
+            let restored =
+                try PropertyListSerialization.propertyList(
+                    from: Data(
+                        contentsOf: installed.app.appendingPathComponent("Contents/Info.plist")),
+                    format: nil) as? [String: Any]
+            guard restored?["CFBundleShortVersionString"] as? String == "0.1.0" else { exit(1) }
+            try FileManager.default.removeItem(at: installed.staging)
+        } else {
+            var accepted = false
+            do {
+                try GitHubUpdate.verify(candidate, identity: identity, newerThan: current)
+                accepted = true
+            } catch {}
+            guard accepted == (arguments[0] == "accept") else { exit(1) }
+        }
+        print("PASS signed update \(arguments[0])")
+    }
+}

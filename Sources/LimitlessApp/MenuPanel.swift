@@ -6,6 +6,7 @@ struct MenuPanel: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
+    private var contentHeight = SwiftUI.State<CGFloat>(wrappedValue: 1)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,37 +38,36 @@ struct MenuPanel: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }.padding(20)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) {
+                        $0.size.height
+                    } action: {
+                        contentHeight.wrappedValue = $0
+                    }
             }
             .scrollBounceBehavior(.basedOnSize)
+            .frame(
+                height: min(
+                    contentHeight.wrappedValue, (NSScreen.main?.visibleFrame.height ?? 740) - 100))
             Divider()
-            Text(
-                "Limitless \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · © 2026 Arthur Barreau · MIT"
-            )
-            .font(.caption2).foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity).padding(.vertical, 10)
+            HStack(spacing: 8) {
+                Text(
+                    "Limitless \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · © 2026 Arthur Barreau · MIT"
+                ).font(.caption2).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Link(destination: URL(string: "https://github.com/leboonducoin/Limitless")!) {
+                    Image(nsImage: BrandArt.github).frame(width: 20, height: 20)
+                }
+                .accessibilityLabel("Limitless on GitHub").help("Limitless on GitHub")
+            }.padding(.horizontal, 16).padding(.vertical, 8)
         }
-        .frame(width: 360, height: panelHeight)
+        .frame(width: 360)
         .background {
             if reduceTransparency || contrast == .increased {
                 Color(nsColor: .windowBackgroundColor)
             }
         }
         .transaction { $0.animation = nil }
-    }
-
-    private var panelHeight: CGFloat {
-        var height: CGFloat = 490
-        if model.ownSession == nil {
-            if model.stopChoice == .process { height += 180 }
-            if model.stopChoice == .custom || model.stopChoice == .date { height += 40 }
-        }
-        if model.draft.limitsDuration { height += 36 }
-        if model.draftChanged { height += 36 }
-        if model.message != nil || model.connectionError != nil || model.status?.sleep.fault != nil
-        {
-            height += 60
-        }
-        return min(height, (NSScreen.main?.visibleFrame.height ?? 740) - 40)
     }
 
     private var statusOverview: some View {
@@ -111,42 +111,39 @@ struct MenuPanel: View {
                 HStack {
                     Text("Current session")
                     Spacer()
-                    if let remaining = session.remainingSeconds {
-                        Text(
-                            Duration.seconds(remaining).formatted(
-                                .units(allowed: [.hours, .minutes, .seconds], width: .abbreviated))
-                        )
-                        .monospacedDigit()
-                    } else {
-                        Text("No limit")
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        if let remaining = model.remainingSeconds(session) {
+                            Text(
+                                Duration.seconds(remaining).formatted(
+                                    .units(
+                                        allowed: [.hours, .minutes, .seconds], width: .abbreviated))
+                            ).monospacedDigit()
+                        } else {
+                            Text("No limit")
+                        }
                     }
                 }.font(.callout).foregroundStyle(.secondary)
-                Button {
-                    Task { await model.stopManual() }
-                } label: {
-                    Label(model.busy ? "Updating…" : "Stop", systemImage: "stop.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .controlSize(.large).buttonStyle(.bordered)
-                .disabled(!model.canControl || model.busy)
             } else {
                 StopEditor(model: model)
                 startButton.disabled(
                     !model.canControl || model.busy || model.status?.sleep.fault != nil)
             }
-            if model.showsTaskCount || (model.status?.sessions.count ?? 0) > 0 {
-                HStack {
-                    if model.showsTaskCount {
-                        Label(
-                            "\(model.taskCount) tracked \(model.taskCount == 1 ? "task" : "tasks")",
-                            systemImage: "terminal")
-                    }
-                    Spacer()
-                    if (model.status?.sessions.count ?? 0) > 0 {
-                        Button("Stop all") { Task { await model.stopAll() } }
-                            .disabled(!model.canControl || model.busy)
-                    }
-                }.font(.caption)
+            if (model.status?.sessions.count ?? 0) > 0 {
+                Button {
+                    Task { await model.stopAll() }
+                } label: {
+                    Label(model.busy ? "Updating…" : "Stop", systemImage: "stop.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .help("End all Limitless sessions; running commands continue.")
+                .controlSize(.large).buttonStyle(.bordered)
+                .disabled(!model.canControl || model.busy)
+            }
+            if model.showsTaskCount {
+                Label(
+                    "\(model.taskCount) tracked \(model.taskCount == 1 ? "task" : "tasks")",
+                    systemImage: "terminal"
+                ).font(.caption)
             }
         }
     }
@@ -201,10 +198,6 @@ private struct StopEditor: View {
                 Text("Date & time…").tag(StopChoice.date)
                 Text("When a process ends…").tag(StopChoice.process)
             }.pickerStyle(.menu)
-            if model.stopChoice != .unlimited {
-                Button("No limit") { model.stopChoice = .unlimited }
-                    .controlSize(.small)
-            }
             switch model.stopChoice {
             case .custom:
                 HStack {
@@ -253,14 +246,14 @@ private struct StopEditor: View {
                                 Text(String(process.id)).monospacedDigit().foregroundStyle(
                                     .secondary)
                                 Image(
-                                    systemName: model.processID == String(process.id)
+                                    systemName: model.isSelected(process)
                                         ? "checkmark.circle.fill" : "circle")
                             }.padding(5).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("\(process.name), PID \(process.id)")
                         .accessibilityAddTraits(
-                            model.processID == String(process.id) ? [.isSelected] : [])
+                            model.isSelected(process) ? [.isSelected] : [])
                     }
                 }
             }
@@ -272,9 +265,10 @@ private struct StopEditor: View {
                 }
             }
             HStack {
-                Text("PID").font(.callout)
-                TextField("Process ID", text: $model.processID)
-                    .textFieldStyle(.roundedBorder).accessibilityLabel("Process ID")
+                Text("PIDs").font(.callout)
+                TextField("697;660;9931", text: $model.processID)
+                    .textFieldStyle(.roundedBorder).accessibilityLabel(
+                        "Process IDs, separated by semicolons")
             }
         }
     }

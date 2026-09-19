@@ -234,13 +234,23 @@ start-time adapter as the CLI every second. Losing a connection clears that watc
 and never recreates a manual demand. A stale reading is visibly unavailable;
 button actions are not reported as applied until the service returns its state.
 
-The app persists only validated power/battery/duration preferences. Automation and
-active demands are never persisted. Setting changes require an explicit Apply;
+The app persists validated power/battery/duration preferences and the separate
+automatic-update choice. Automation and active demands are never persisted.
+Setting changes apply immediately through a serialized queue;
 automation changes use the currently applied policy. Helper registration and login
 registration have separate native controls. Quit requests an owned manual stop and
 warns if restoration is unconfirmed; independently authorized CLI work can remain.
 Debug presentation fixtures disable all external mutations and preference writes.
 See [the interface contract](design.md) for visual and accessibility decisions.
+
+`GitHubUpdate` is an unprivileged adapter for the fixed public repository. It bounds
+HTTPS downloads and native archive extraction, validates the digest, pinned app/CLI/
+helper signatures, hardened runtime and release metadata, then stages a same-volume
+replacement. The installed executable's maintenance mode waits for its parent to
+exit, revalidates the candidate and helper absence, and replaces the bundle with a
+backup. NSWorkspace performs the quarantined launch in a new instance; launch refusal
+restores the backup. This path never executes a downloaded installer or accepts update
+paths in the privileged helper. See [distribution](distribution.md#updates).
 
 ## Removal
 
@@ -252,6 +262,10 @@ that its idle assertion is absent before deleting the unowned journal directory.
 Cleanup uses held directory descriptors, inode/device comparisons and nonrecursive
 unlink operations. Unknown contents or ownership retain the directory. Once
 cleanup begins, that journal instance permanently refuses new ownership writes.
+The application-only `prepareUpdate` shares this cleanup but first rejects any
+remaining session, atomically with closing admission. It cannot stop work that raced
+with an update download. Older helpers reject the unknown operation rather than
+silently treating it as uninstall; regular protocol-3 operations remain unchanged.
 
 For a helper running at the fixed SMJobBless installation path,
 `InstalledHelperFiles` also captures its installed executable and launchd plist.

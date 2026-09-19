@@ -16,6 +16,17 @@ import ServiceManagement
     private(set) var buildTrust = BuildTrust.checking
     var trustedBuild: Bool { buildTrust == .trusted }
     private(set) var removalComplete = false
+    private(set) var removalStep: String?
+    private(set) var availableUpdate: GitHubUpdate.Release?
+    private(set) var updating = false
+    private(set) var updateMessage: String?
+    var automaticUpdates: Bool {
+        didSet {
+            guard !isPreview else { return }
+            preferences.set(automaticUpdates, forKey: "automaticUpdates")
+            automaticAttempt = nil
+        }
+    }
     var message: String?
     var draft = PolicyDraft()
     var stopChoice: StopChoice = .preset(60)
@@ -24,20 +35,30 @@ import ServiceManagement
     var stopDate = Date().addingTimeInterval(3_600)
     var processID = "" {
         didSet {
-            if selectedProcess.map({ String($0.pid) }) != processID { selectedProcess = nil }
+            // Keep captured start times while another token is still being typed.
+            let ids = Set(
+                processID.split(separator: ";").compactMap {
+                    Int32($0.trimmingCharacters(in: .whitespacesAndNewlines))
+                })
+            selectedProcesses = selectedProcesses.filter { ids.contains($0.key) }
         }
     }
     private(set) var processes: [RunningProcess] = []
     var processSearch = ""
     private(set) var processListError: String?
-    private var selectedProcess: ProcessIdentity?
+    private var selectedProcesses: [Int32: ProcessIdentity] = [:]
     private let preferences: UserDefaults
     private let helper: (any HelperInstallation)? =
         (Bundle.main.object(forInfoDictionaryKey: "LimitlessHelperInstallation") as? String)
         .flatMap(HelperInstallationKind.init(rawValue:))?.service
     private var client: ServiceClient?
     private var monitoring: Task<Void, Never>?
-    private var watchedProcess: ProcessIdentity?
+    private var watchedProcesses: [ProcessIdentity]?
+    private var policyApplication: Task<Void, Never>?
+    private var updateMonitoring: Task<Void, Never>?
+    private var updateInstallation: Task<Void, Never>?
+    private var automaticAttempt: String?
+    private var statusReceivedAt = ContinuousClock.now
     private var refreshing = false
     private var revision = 0
     private var quitting = false
@@ -46,6 +67,7 @@ import ServiceManagement
 
     init(preferences: UserDefaults = .standard) {
         self.preferences = preferences
+        automaticUpdates = preferences.bool(forKey: "automaticUpdates")
         if let data = preferences.data(forKey: "userPolicy"),
             let policy = try? JSONDecoder().decode(UserPolicy.self, from: data)
         {
@@ -79,6 +101,20 @@ import ServiceManagement
         connectionError == nil ? status.map(PowerPresentation.init) : nil
     }
     var draftChanged: Bool { draft != baseline }
+    private var readyToUpdate: Bool {
+        guard connectionError == nil, !removalComplete else { return false }
+        guard let status else { return helperStatus == .notRegistered }
+        return status.sessions.isEmpty && !status.sleep.ownsGlobalHold
+            && status.sleep.observed == .allowed
+            && (status.sleep.phase == .inactive || status.sleep.phase == .blocked)
+    }
+
+    func remainingSeconds(_ session: SessionSummary) -> Double? {
+        guard let remaining = session.remainingSeconds else { return nil }
+        let elapsed = statusReceivedAt.duration(to: .now).components
+        return max(
+            0, ceil(remaining - Double(elapsed.seconds) - Double(elapsed.attoseconds) / 1e18))
+    }
 
     func refreshProcesses() {
         do {
@@ -91,26 +127,115 @@ import ServiceManagement
     }
 
     func selectProcess(_ process: RunningProcess) {
-        processID = String(process.id)
-        selectedProcess = process.identity
+        var ids = (try? ProcessSelection.parse(processID)) ?? []
+        if ids.contains(process.id) {
+            ids.removeAll { $0 == process.id }
+        } else {
+            ids.append(process.id)
+        }
+        processID = ids.map(String.init).joined(separator: ";")
+        if ids.contains(process.id) { selectedProcesses[process.id] = process.identity }
+    }
+
+    func isSelected(_ process: RunningProcess) -> Bool {
+        ((try? ProcessSelection.parse(processID)) ?? []).contains(process.id)
     }
 
     func beginMonitoring() {
         guard monitoring == nil, !isPreview, !quitting else { return }
+        if trustedBuild {
+            updateMonitoring = Task { [weak self] in
+                while !Task.isCancelled {
+                    await self?.checkForUpdates()
+                    do { try await Task.sleep(for: .seconds(21_600)) } catch { return }
+                }
+            }
+        }
         monitoring = Task { [weak self] in
             var tick = 0
             while !Task.isCancelled {
                 guard let self else { return }
                 if !quitting {
-                    if let watchedProcess, !watchedProcess.isAlive, ownSession != nil, !busy {
-                        await stopManual()
-                        message = "The followed process ended or became unreadable."
+                    if var followed = watchedProcesses {
+                        let completed = ProcessSelection.allFinished(&followed)
+                        watchedProcesses = followed
+                        if completed, ownSession != nil, !busy {
+                            await stopManual()
+                        }
                     }
                     if tick % 5 == 0 { await refresh() }
+                    if automaticUpdates, let update = availableUpdate,
+                        update.version != automaticAttempt, !busy, !updating,
+                        readyToUpdate
+                    {
+                        requestUpdate()
+                    }
                 }
                 tick &+= 1
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
+        }
+    }
+
+    func checkForUpdates() async {
+        guard trustedBuild, !isPreview, !quitting, !updating else { return }
+        do {
+            availableUpdate = try await GitHubUpdate.latest(
+                currentVersion: LimitlessIdentity.version)
+            updateMessage = nil
+        } catch {
+            updateMessage = "Update check unavailable."
+        }
+    }
+
+    func installUpdate() async {
+        guard trustedBuild, !isPreview, !quitting, !updating, !busy,
+            let availableUpdate
+        else { return }
+        guard readyToUpdate else {
+            updateMessage = "Stop the current sessions before updating."
+            return
+        }
+        updating = true
+        automaticAttempt = availableUpdate.version
+        updateMessage = "Downloading update…"
+        var staged: GitHubUpdate.Staged?
+        var launched = false
+        defer {
+            updating = false
+            if !launched, let staged { try? FileManager.default.removeItem(at: staged.directory) }
+        }
+        do {
+            let identity = try await SignedIdentity.current(
+                expectedIdentifier: LimitlessIdentity.application)
+            let candidate = try await GitHubUpdate.stage(
+                availableUpdate, identity: identity, installedApp: Bundle.main.bundleURL)
+            staged = candidate
+            guard !quitting else { return }
+            updateMessage = "Installing update…"
+            guard await removeIntegration(forUpdate: true) else {
+                updateMessage = message
+                return
+            }
+            try GitHubUpdate.launchInstaller(candidate)
+            launched = true
+            NSApp.terminate(nil)
+        } catch {
+            if removalComplete {
+                quitting = false
+                removalComplete = false
+                monitoring = nil
+                beginMonitoring()
+            }
+            updateMessage = error.localizedDescription
+        }
+    }
+
+    func requestUpdate() {
+        guard updateInstallation == nil else { return }
+        updateInstallation = Task { [weak self] in
+            await self?.installUpdate()
+            self?.updateInstallation = nil
         }
     }
 
@@ -125,7 +250,7 @@ import ServiceManagement
             }
             await client?.close()
             client = nil
-            watchedProcess = nil
+            watchedProcesses = nil
             return
         }
         refreshing = true
@@ -151,7 +276,7 @@ import ServiceManagement
                 "Connection unavailable. The last reading is no longer current. Reconnect to verify restoration."
             await client?.close()
             client = nil
-            watchedProcess = nil
+            watchedProcesses = nil
         }
     }
 
@@ -160,7 +285,8 @@ import ServiceManagement
         if !draftChanged { draft = PolicyDraft(received.policy) }
         baseline = PolicyDraft(received.policy)
         status = received
-        if ownSession == nil { watchedProcess = nil }
+        statusReceivedAt = .now
+        if ownSession == nil { watchedProcesses = nil }
     }
 
     private func perform(_ operation: ServiceOperation) async -> Bool {
@@ -181,7 +307,7 @@ import ServiceManagement
                 connectionError = "Connection lost. Power restoration has not been confirmed."
                 await client.close()
                 self.client = nil
-                watchedProcess = nil
+                watchedProcesses = nil
             }
             return false
         }
@@ -190,31 +316,33 @@ import ServiceManagement
     func startManual() async {
         do {
             let end: SessionEnd
-            var process: ProcessIdentity?
+            var followed: [ProcessIdentity] = []
             switch stopChoice {
             case .unlimited: end = .unlimited
             case .preset(let minutes): end = .after(seconds: Double(minutes) * 60)
             case .custom: end = .after(seconds: customDuration * durationUnit.seconds)
             case .date: end = .at(stopDate)
             case .process:
-                guard let pid = Int32(processID) else { throw WorkError.invalidProcess }
-                process = try selectedProcess ?? ProcessIdentity(pid: pid)
-                guard process?.isAlive == true else { throw WorkError.processUnavailable }
+                followed = try ProcessSelection.parse(processID).map { pid in
+                    let identity = try selectedProcesses[pid] ?? ProcessIdentity(pid: pid)
+                    guard identity.isAlive else { throw WorkError.processUnavailable }
+                    return identity
+                }
                 end = .unlimited
             }
             try end.validate(at: SystemClock.now())
             if await perform(.start(SessionRequest(end: end))), ownSession != nil {
-                watchedProcess = process
+                watchedProcesses = followed.isEmpty ? nil : followed
             }
         } catch {
             message =
-                "Choose a positive duration, a future date, or an available process owned by you."
+                "Choose a valid duration, future date, or available PIDs separated by semicolons."
         }
     }
 
     func stopManual() async {
         guard let session = ownSession else { return }
-        if await perform(.stop(session.id)) { watchedProcess = nil }
+        if await perform(.stop(session.id)) { watchedProcesses = nil }
     }
 
     func stopAll() async { _ = await perform(.stopAll) }
@@ -222,17 +350,38 @@ import ServiceManagement
     func retryRestoration() async { _ = await perform(.retryRestoration) }
 
     func applyPolicy() async {
+        let submitted = draft
         do {
-            let policy = try draft.policy(
+            let policy = try submitted.policy(
                 allowsAutomation: status?.policy.allowsAutomation ?? false)
             if await perform(.configure(policy)) {
-                draft = PolicyDraft(status?.policy ?? policy)
+                let applied = PolicyDraft(status?.policy ?? policy)
+                if draft == submitted { draft = applied }
                 // Persist limits only, never automation authorization or an active demand.
-                let saved = try draft.policy(allowsAutomation: false)
+                let saved = try applied.policy(allowsAutomation: false)
                 preferences.set(try JSONEncoder().encode(saved), forKey: "userPolicy")
                 message = nil
             }
         } catch { message = "Use a battery floor from 0 to 50% and a positive, finite duration." }
+    }
+
+    /// Serialize rapid edits; a reply must never overwrite a newer selection.
+    func policyEdited() {
+        guard !isPreview, !quitting, draftChanged, policyApplication == nil else { return }
+        policyApplication = Task { [weak self] in
+            guard let self else { return }
+            defer { policyApplication = nil }
+            while draftChanged, !quitting {
+                guard canControl else { return }
+                if busy {
+                    do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+                    continue
+                }
+                let submitted = draft
+                await applyPolicy()
+                if draft == submitted { return }  // Invalid or unconfirmed: keep the error visible.
+            }
+        }
     }
 
     func setAutomation(_ enabled: Bool) async {
@@ -280,15 +429,19 @@ import ServiceManagement
 
     /// Shared by the context-menu action and the signed app's maintenance entry point.
     /// No app files, external CLI links or user-created skill copies are deleted here.
-    func removeIntegration() async -> Bool {
+    func removeIntegration(forUpdate: Bool = false) async -> Bool {
         guard trustedBuild, !isPreview, !busy, let helper else {
             message = "Removal requires a correctly signed Limitless installation."
             return false
         }
         quitting = true
         busy = true
+        removalStep = "Restoring normal sleep…"
         revision &+= 1
-        defer { busy = false }
+        defer {
+            busy = false
+            removalStep = nil
+        }
         while refreshing { try? await Task.sleep(for: .milliseconds(50)) }
         do {
             helperStatus = helper.status
@@ -298,7 +451,7 @@ import ServiceManagement
             if helperStatus == .enabled, !filesRemoved {
                 if client == nil { client = try await ServiceClient(role: .application) }
                 guard let client else { throw ServiceError.unavailable }
-                try accept(await client.send(.prepareRemoval))
+                try accept(await client.send(forUpdate ? .prepareUpdate : .prepareRemoval))
                 guard let status, status.removal == .ready, status.canRemoveService,
                     try SecureOwnershipJournal.isStateDirectoryAbsent()
                 else { throw ServiceError.restorationRequired }
@@ -314,35 +467,52 @@ import ServiceManagement
                     throw ServiceError.restorationRequired
                 }
             }
+            removalStep = "Removing the helper…"
             if !helper.removalIsConfirmed { try await helper.unregister() }
             guard helper.removalIsConfirmed else { throw ServiceError.unavailable }
             await client?.close()
             client = nil
+            removalStep = "Removing the login item…"
             // A login item never registered with ServiceManagement reports notFound.
             let absentLoginStates: [SMAppService.Status] = [.notRegistered, .notFound]
-            if !absentLoginStates.contains(SMAppService.mainApp.status) {
+            if !forUpdate, !absentLoginStates.contains(SMAppService.mainApp.status) {
                 try await SMAppService.mainApp.unregister()
             }
-            guard absentLoginStates.contains(SMAppService.mainApp.status),
+            guard forUpdate || absentLoginStates.contains(SMAppService.mainApp.status),
                 helper.removalIsConfirmed
             else { throw ServiceError.restorationRequired }
-            try Self.erasePreferences(
-                preferences, domain: LimitlessIdentity.application,
-                library: FileManager.default.url(
-                    for: .libraryDirectory, in: .userDomainMask,
-                    appropriateFor: nil, create: false))
+            if !forUpdate {
+                removalStep = "Removing preferences…"
+                try Self.erasePreferences(
+                    preferences, domain: LimitlessIdentity.application,
+                    library: FileManager.default.url(
+                        for: .libraryDirectory, in: .userDomainMask,
+                        appropriateFor: nil, create: false))
+            }
             helperStatus = helper.status
             loginStatus = SMAppService.mainApp.status
             status = nil
-            watchedProcess = nil
+            watchedProcesses = nil
             connectionError = nil
             removalComplete = true
             monitoring?.cancel()
+            updateMonitoring?.cancel()
             message =
                 "Helper, login item and preferences removed."
             return true
         } catch {
             quitting = false
+            if forUpdate, error as? ServiceError == .sessionRejected {
+                // Closing a healthy owner here would cancel work that raced with the download.
+                if let reply = try? await client?.send(.status) {
+                    try? accept(reply)
+                } else {
+                    connectionError = "Reconnect before retrying the update."
+                }
+                automaticAttempt = nil
+                message = "Update postponed until current sessions end."
+                return false
+            }
             await client?.close()
             client = nil
             connectionError =
@@ -350,7 +520,7 @@ import ServiceManagement
             helperStatus = helper.status
             loginStatus = SMAppService.mainApp.status
             message =
-                "Removal is incomplete. Keep the app installed and retry. If the helper is unavailable while its state directory remains, restore the signed installation and enable the helper before retrying."
+                "\(removalStep ?? "Uninstall") failed: \(error.localizedDescription) Keep Limitless installed and retry."
             return false
         }
     }
@@ -372,7 +542,8 @@ import ServiceManagement
     func prepareToQuit() async -> Bool {
         if isPreview { return true }
         quitting = true
-        while busy || refreshing { try? await Task.sleep(for: .milliseconds(50)) }
+        if !removalComplete { updateInstallation?.cancel() }
+        while busy || refreshing || updating { try? await Task.sleep(for: .milliseconds(50)) }
         if ownSession != nil { await stopManual() }
         let unresolved =
             (status?.sleep.ownsGlobalHold == true)
@@ -382,6 +553,7 @@ import ServiceManagement
             return false
         }
         monitoring?.cancel()
+        updateMonitoring?.cancel()
         await client?.close()
         return true
     }

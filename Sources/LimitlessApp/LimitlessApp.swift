@@ -1,5 +1,6 @@
 import AppKit
 import Darwin
+import LimitlessSystem
 import Observation
 import SwiftUI
 
@@ -7,6 +8,41 @@ import SwiftUI
 enum LimitlessApp {
     @MainActor static func main() {
         guard geteuid() != 0 else { exit(1) }
+        if CommandLine.arguments.dropFirst().first == "--finish-update" {
+            let args = Array(CommandLine.arguments.dropFirst())
+            guard args.count == 3, let parent = Int32(args[2]) else { exit(64) }
+            let app = NSApplication.shared
+            app.setActivationPolicy(.accessory)
+            Task {
+                do {
+                    let installed = try await GitHubUpdate.finish(
+                        app: URL(fileURLWithPath: args[1]), parentPID: parent)
+                    let configuration = NSWorkspace.OpenConfiguration()
+                    configuration.createsNewApplicationInstance = true
+                    do {
+                        _ = try await NSWorkspace.shared.openApplication(
+                            at: installed.app, configuration: configuration)
+                    } catch {
+                        _ = try FileManager.default.replaceItemAt(
+                            installed.app, withItemAt: installed.backup)
+                        throw error
+                    }
+                    try? FileManager.default.removeItem(at: installed.backup)
+                    try? FileManager.default.removeItem(at: installed.staging)
+                    exit(0)
+                } catch {
+                    let alert = NSAlert()
+                    alert.messageText = "Update incomplete"
+                    alert.informativeText = error.localizedDescription
+                    alert.addButton(withTitle: "OK")
+                    app.activate()
+                    alert.runModal()
+                    exit(1)
+                }
+            }
+            app.run()
+            return
+        }
         if CommandLine.arguments.contains("--prepare-uninstall") {
             let options = Array(CommandLine.arguments.dropFirst())
             guard
@@ -25,19 +61,26 @@ enum LimitlessApp {
     }
 }
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSMenuItemValidation {
     let model: AppModel
     private var previewWindow: NSWindow?
     private var terminating = false
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
+    private let activeDot = StatusDot()
+    private var outsideClickMonitor: Any?
+    private var removalWindow: NSWindow?
 
     override init() {
         #if DEBUG
-            if let index = CommandLine.arguments.firstIndex(of: "--preview"),
-                index + 1 < CommandLine.arguments.count
-            {
-                model = AppModel.preview(CommandLine.arguments[index + 1])
+            let arguments = CommandLine.arguments
+            let preview =
+                arguments.firstIndex(of: "--preview").flatMap {
+                    $0 + 1 < arguments.count ? arguments[$0 + 1] : nil
+                } ?? Bundle.main.object(forInfoDictionaryKey: "LimitlessPreviewState") as? String
+            if let preview {
+                model = AppModel.preview(preview)
             } else {
                 model = AppModel()
             }
@@ -89,7 +132,16 @@ enum LimitlessApp {
         item.button?.action = #selector(clickStatusItem)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         item.button?.setAccessibilityHelp("Click to open. Right-click for Quit and Uninstall.")
+        let dotY = item.button?.isFlipped == true ? (item.button?.bounds.height ?? 22) - 7 : 2
+        activeDot.frame = NSRect(x: 2, y: dotY, width: 5, height: 5)
+        activeDot.wantsLayer = true
+        activeDot.layer?.backgroundColor =
+            NSColor(srgbRed: 0.85, green: 0.36, blue: 0.04, alpha: 1).cgColor
+        activeDot.layer?.cornerRadius = 2.5
+        activeDot.setAccessibilityElement(false)
+        item.button?.addSubview(activeDot)
         popover.behavior = .transient
+        popover.delegate = self
         popover.animates = false
         let host = NSHostingController(rootView: MenuPanel(model: model))
         host.sizingOptions = [.preferredContentSize]
@@ -117,13 +169,31 @@ enum LimitlessApp {
 
     private func observePresentation() {
         withObservationTracking {
-            statusItem?.button?.image =
-                model.presentation == .active ? BrandArt.menuActive : BrandArt.menuIdle
+            statusItem?.button?.image = BrandArt.menuIdle
+            activeDot.isHidden = model.presentation != .active
             statusItem?.button?.setAccessibilityLabel(
                 "Limitless: \(model.presentation?.title ?? "Setup required")")
         } onChange: { [weak self] in
             Task { @MainActor in self?.observePresentation() }
         }
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        popover.performClose(nil)
+    }
+
+    func popoverDidShow(_ notification: Notification) {
+        // Mouse clicks only; no key capture or Accessibility permission is needed.
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [
+            .leftMouseDown, .rightMouseDown,
+        ]) { [weak self] _ in
+            MainActor.assumeIsolated { self?.popover.performClose(nil) }
+        }
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        outsideClickMonitor = nil
     }
 
     @objc private func clickStatusItem() {
@@ -158,8 +228,16 @@ enum LimitlessApp {
 
     @objc private func quit() { NSApp.terminate(nil) }
 
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        menuItem.action != #selector(uninstall) || !model.updating
+    }
+
     @objc private func uninstall() {
-        guard !model.busy else { return }
+        guard removalWindow == nil else {
+            removalWindow?.makeKeyAndOrderFront(nil)
+            NSApp.activate()
+            return
+        }
         popover.performClose(nil)
         let alert = NSAlert()
         alert.messageText = "Uninstall Limitless?"
@@ -170,17 +248,42 @@ enum LimitlessApp {
         alert.buttons.first?.isEnabled = model.trustedBuild && !model.isPreview
         NSApp.activate()
         guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let progress = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 340, height: 110),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        progress.title = "Uninstalling Limitless"
+        progress.isReleasedWhenClosed = false
+        progress.contentView = NSHostingView(rootView: RemovalProgress(model: model))
+        progress.center()
+        progress.makeKeyAndOrderFront(nil)
+        removalWindow = progress
         Task {
+            while model.busy { try? await Task.sleep(for: .milliseconds(50)) }
+            defer {
+                progress.close()
+                removalWindow = nil
+            }
             guard await model.removeIntegration() else {
+                progress.orderOut(nil)
                 showRemovalError()
                 return
             }
             do {
-                try FileManager.default.trashItem(at: Bundle.main.bundleURL, resultingItemURL: nil)
+                _ = try await NSWorkspace.shared.recycle([Bundle.main.bundleURL])
+                progress.orderOut(nil)
+                let done = NSAlert()
+                done.messageText = "Limitless uninstalled"
+                done.informativeText =
+                    "The app is in the Trash. Its helper, login item and preferences have been removed."
+                done.addButton(withTitle: "Done")
+                NSApp.activate()
+                done.runModal()
                 NSApp.terminate(nil)
             } catch {
+                progress.orderOut(nil)
                 model.message =
-                    "Setup and preferences removed. Move Limitless from Applications to the Trash."
+                    "Helper, login item and preferences removed. macOS could not move the app to the Trash: \(error.localizedDescription)"
+                NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
                 showRemovalError()
             }
         }
@@ -191,6 +294,7 @@ enum LimitlessApp {
         alert.messageText = "Uninstall incomplete"
         alert.informativeText = model.message ?? "Keep Limitless installed and retry."
         alert.addButton(withTitle: "OK")
+        NSApp.activate()
         alert.runModal()
     }
 
@@ -214,4 +318,16 @@ enum LimitlessApp {
         }
         return .terminateLater
     }
+}
+
+private struct RemovalProgress: View {
+    @Bindable var model: AppModel
+    var body: some View {
+        ProgressView { Text(model.removalStep ?? "Preparing…") }
+            .padding(24).frame(width: 340, height: 110)
+    }
+}
+
+private final class StatusDot: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

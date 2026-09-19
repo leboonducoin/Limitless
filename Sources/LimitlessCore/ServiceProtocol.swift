@@ -15,11 +15,14 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
     case rearm
     case retryRestoration
     case prepareRemoval
+    case prepareUpdate
     case finishRemoval
 
     public var requiresApplication: Bool {
         switch self {
-        case .configure, .stopAll, .rearm, .retryRestoration, .prepareRemoval, .finishRemoval: true
+        case .configure, .stopAll, .rearm, .retryRestoration, .prepareRemoval, .prepareUpdate,
+            .finishRemoval:
+            true
         case .status, .start, .stop, .heartbeat: false
         }
     }

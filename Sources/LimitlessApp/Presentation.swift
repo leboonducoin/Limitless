@@ -1,5 +1,27 @@
 import Foundation
 import LimitlessCore
+import LimitlessSystem
+
+enum ProcessSelection {
+    static func allFinished(_ identities: inout [ProcessIdentity]) -> Bool {
+        identities.removeAll { !$0.isAlive }
+        return identities.isEmpty
+    }
+
+    static func parse(_ text: String) throws -> [Int32] {
+        let pieces = text.split(separator: ";", omittingEmptySubsequences: false)
+        guard pieces.count <= 128 else { throw WorkError.invalidProcess }
+        var ids: [Int32] = []
+        for piece in pieces {
+            let value = piece.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty, value.utf8.allSatisfy({ (48...57).contains($0) }),
+                let pid = Int32(value), pid > 0
+            else { throw WorkError.invalidProcess }
+            if !ids.contains(pid) { ids.append(pid) }
+        }
+        return ids
+    }
+}
 
 enum PowerPresentation: Equatable {
     case active, inactive, suspended, recovering, restoring, attention, unknown
