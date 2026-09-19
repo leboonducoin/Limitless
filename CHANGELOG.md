@@ -13,6 +13,7 @@ published; [testing evidence](docs/testing.md) and the
 - Add the GitHub footer link and opt-in signed GitHub updates with idle admission,
   bounded archive validation, same-certificate checks and replacement rollback.
 - Show uninstall progress, bring errors forward and use Finder-style app recycling.
+- Link Arthur Barreau's footer credit to his LinkedIn profile.
 
 - Run Apple's caffeinate alongside the global sleep hold and verify the child's
   actual idle-sleep assertion on the existing two-second watchdog.

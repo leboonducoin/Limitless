@@ -390,7 +390,8 @@ public enum GitHubUpdate {
             try identity.verifyExecutable(at: current, identifier: LimitlessIdentity.application)
         } catch {
             if FileManager.default.fileExists(atPath: backup.path) {
-                _ = try? FileManager.default.replaceItemAt(current, withItemAt: backup)
+                _ = try? FileManager.default.replaceItemAt(
+                    current, withItemAt: backup, options: .usingNewMetadataOnly)
             }
             throw UpdateError.failed
         }

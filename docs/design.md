@@ -20,7 +20,8 @@ session; independently authorized CLI tasks can continue.
 - A 360-point panel with grouped controls, short labels and enough height for
   wrapped error text. The body scrolls within the available screen height. Author,
   version and MIT information remain in a small footer, with a GitHub link at the
-  right; there is no About button. Measure content height rather than reserving
+  right; Arthur Barreau's credit links to his LinkedIn profile. There is no About button.
+  Measure content height rather than reserving
   empty space. Clicking another app or outside the popover closes it.
 - Native control feedback and popover motion. No decorative loops, countdown
   animation, custom drag physics or delayed keyboard feedback.

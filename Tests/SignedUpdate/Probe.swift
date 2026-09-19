@@ -23,7 +23,8 @@ import LimitlessSystem
                     format: nil) as? [String: Any]
             guard info?["CFBundleShortVersionString"] as? String == "0.2.0" else { exit(1) }
             // Simulate a refused macOS launch: the original app must be recoverable.
-            _ = try FileManager.default.replaceItemAt(installed.app, withItemAt: installed.backup)
+            _ = try FileManager.default.replaceItemAt(
+                installed.app, withItemAt: installed.backup, options: .usingNewMetadataOnly)
             let restored =
                 try PropertyListSerialization.propertyList(
                     from: Data(

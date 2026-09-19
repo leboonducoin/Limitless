@@ -20,7 +20,7 @@ func main() throws {
         })
     else {
         print(
-            "Usage: swift Tests/SignedUpdate/Run.swift CERT_SHA1 DEBUG_PRODUCTS_DIR BUNDLED_DEBUG_APP NEW_OUTPUT_DIRECTORY"
+            "Usage: swift Tests/SignedUpdate/Run.swift CERT_SHA1 DEBUG_PRODUCTS_DIR TEMPLATE_APP NEW_OUTPUT_DIRECTORY"
         )
         exit(64)
     }
@@ -43,10 +43,18 @@ func main() throws {
     let candidate = staging.appendingPathComponent("Limitless.app")
     let certificate = args[0]
     func sign(_ app: URL, certificate: String) throws {
+        let plist =
+            try PropertyListSerialization.propertyList(
+                from: Data(contentsOf: app.appendingPathComponent("Contents/Info.plist")),
+                format: nil) as! [String: Any]
+        let helper =
+            plist["LimitlessHelperInstallation"] as? String == "blessed"
+            ? "Contents/Library/LaunchServices/io.github.leboonducoin.Limitless.helper"
+            : "Contents/Library/HelperTools/LimitlessHelper"
         for (path, identifier) in [
             ("Contents/MacOS/limitless", "io.github.leboonducoin.Limitless.cli"),
             (
-                "Contents/Library/HelperTools/LimitlessHelper",
+                helper,
                 "io.github.leboonducoin.Limitless.helper"
             ),
         ] {
@@ -69,7 +77,9 @@ func main() throws {
         var info =
             try PropertyListSerialization.propertyList(from: Data(contentsOf: path), format: nil)
             as! [String: Any]
-        guard info["LimitlessHelperInstallation"] as? String == "bundled" else {
+        guard let kind = info["LimitlessHelperInstallation"] as? String,
+            ["bundled", "blessed"].contains(kind)
+        else {
             throw CocoaError(.executableLoad)
         }
         info["CFBundleShortVersionString"] = version

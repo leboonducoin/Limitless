@@ -14,14 +14,16 @@ archive extraction with hostile path/link/size rejection.
 The explicitly authorized local certificate signed **temporary fixtures only** for
 `Tests/SignedUpdate/Run.swift`. Matching release acceptance, altered-resource
 rejection, ad-hoc rejection, downgrade rejection, atomic bundle replacement and
-backup restoration passed. The first fixture exposed Foundation's `/private/tmp`
+backup restoration passed for both bundled and community/blessed layouts. Rollback
+uses the backup's metadata, preserving the original app's quarantine state. The
+first fixture exposed Foundation's `/private/tmp`
 URL alias normalization; production now uses `realpath` and separately rejects
 staging symlinks. This test does not download or launch the new app, change an
 installed app, register services, or exercise Gatekeeper. Synthetic fixture source
 metadata is never release evidence. Reproduce after a Debug `check` build:
 
 ```sh
-rtk proxy swift Tests/SignedUpdate/Run.swift CERT_SHA1 DEBUG_PRODUCTS_DIR BUNDLED_DEBUG_APP NEW_OUTPUT_DIRECTORY
+rtk proxy swift Tests/SignedUpdate/Run.swift CERT_SHA1 DEBUG_PRODUCTS_DIR TEMPLATE_APP NEW_OUTPUT_DIRECTORY
 ```
 
 The runner currently links the local CLT/Xcode build's static libraries; supply the
@@ -33,7 +35,9 @@ A read-only native Debug preview confirmed the content-sized panel, compact foot
 and GitHub link, exact timing list with only one No limit choice, conditional process
 deadline controls, multi-selection and exact `697;660;9931` field input. Tab moved
 focus; the native uninstall confirmation opened and was cancelled (its destructive
-button is disabled in previews). Create a preview that opens through native app tools:
+button is disabled in previews). A fresh preview also confirmed that the compact
+author credit exposes the exact LinkedIn destination and its accessible label.
+Create a preview that opens through native app tools:
 
 ```sh
 rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview-new LIMITLESS_PREVIEW_STATE=inactive swift Tools/ProjectTool.swift bundle
@@ -43,7 +47,9 @@ The active read-only preview also showed its countdown advancing without helper
 polling and only one Stop control. Both previews quit through the native menu.
 Runtime logs included Apple's App Intents connection warnings and an AppKit layout
 re-entrancy warning during menu/window interaction (also present in the build 6
-log). No app-specific crash or visible layout failure was observed; these logs do
+log). The final footer preview also logged AppKit negative-geometry diagnostics
+during accessibility inspection, despite its correctly sized visible panel.
+No app-specific crash or visible layout failure was observed; these logs do
 not support a claim of warning-free native execution.
 
 The uninstall report was investigated read-only: the system log recorded a
@@ -69,8 +75,10 @@ new runtime dependency or downloaded installer is used. Native review:
 | Apply and duplicate stop/no-limit controls | Serialized immediate edits and one Stop | Direct manipulation without duplicate actions |
 | Silent-looking uninstall after confirmation | Progress, foreground errors and Finder-style recycling | Native permissions and visible outcome |
 
-Hosted CI/security results must be checked on the pushed commit; earlier green
-runs do not qualify this revision.
+The first hosted build caught a Swift 6.2 synthesized-initializer visibility
+difference that local Swift 6.4 accepted. `MenuPanel` now has an explicit initializer.
+Hosted CI/security results must be checked on the corrected commit; earlier runs
+do not qualify this revision.
 
 ### 2026-09-19 menu and caffeinate refinement
 

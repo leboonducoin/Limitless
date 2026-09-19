@@ -8,6 +8,10 @@ struct MenuPanel: View {
     @Environment(\.colorSchemeContrast) private var contrast
     private var contentHeight = SwiftUI.State<CGFloat>(wrappedValue: 1)
 
+    init(model: AppModel) {
+        self.model = model
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -51,9 +55,18 @@ struct MenuPanel: View {
                     contentHeight.wrappedValue, (NSScreen.main?.visibleFrame.height ?? 740) - 100))
             Divider()
             HStack(spacing: 8) {
-                Text(
-                    "Limitless \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · © 2026 Arthur Barreau · MIT"
-                ).font(.caption2).foregroundStyle(.secondary)
+                HStack(spacing: 0) {
+                    Text(
+                        "Limitless \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · © 2026 "
+                    )
+                    Link(
+                        "Arthur Barreau",
+                        destination: URL(string: "https://www.linkedin.com/in/arthurbarreau/")!
+                    )
+                    .accessibilityLabel("Arthur Barreau on LinkedIn").help(
+                        "Arthur Barreau on LinkedIn")
+                    Text(" · MIT")
+                }.font(.caption2).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Link(destination: URL(string: "https://github.com/leboonducoin/Limitless")!) {
                     Image(nsImage: BrandArt.github).frame(width: 20, height: 20)

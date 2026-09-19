@@ -24,7 +24,8 @@ enum LimitlessApp {
                             at: installed.app, configuration: configuration)
                     } catch {
                         _ = try FileManager.default.replaceItemAt(
-                            installed.app, withItemAt: installed.backup)
+                            installed.app, withItemAt: installed.backup,
+                            options: .usingNewMetadataOnly)
                         throw error
                     }
                     try? FileManager.default.removeItem(at: installed.backup)
