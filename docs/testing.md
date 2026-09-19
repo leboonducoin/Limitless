@@ -77,6 +77,10 @@ new runtime dependency or downloaded installer is used. Native review:
 
 The first hosted build caught a Swift 6.2 synthesized-initializer visibility
 difference that local Swift 6.4 accepted. `MenuPanel` now has an explicit initializer.
+The next run passed ASan/TSan but exposed a compiler mismatch in the imported-module
+probe: its default subprocess environment selected Swift 6.3 while the Release
+modules used the configured Swift 6.2. The shared command runner now explicitly
+inherits `ProcessInfo`'s environment, including the selected `DEVELOPER_DIR`.
 Hosted CI/security results must be checked on the corrected commit; earlier runs
 do not qualify this revision.
 

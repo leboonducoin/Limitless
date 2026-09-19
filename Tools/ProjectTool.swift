@@ -13,7 +13,7 @@ func run(
     let process = Process()
     process.executableURL = URL(fileURLWithPath: executable)
     process.arguments = arguments
-    process.environment = environment
+    process.environment = environment ?? ProcessInfo.processInfo.environment
     let pipe = capture ? Pipe() : nil
     if let pipe { process.standardOutput = pipe }
     if !capture { print("\(executable) \(arguments.joined(separator: " "))") }
