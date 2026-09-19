@@ -1,9 +1,10 @@
 # Native interface contract
 
-Limitless is a quiet macOS utility. Its main surface is a compact MenuBarExtra
-window, with a separate native settings window. The panel leads with the actual
-observed state, offers one manual session control, and shows independent task
-activity. Closing the panel never ends a session. Quit releases the app's manual
+Limitless is a quiet macOS utility. Its main surface is a compact AppKit popover
+hosting SwiftUI, including all power, automation and login settings. The panel leads
+with the observed state and one manual session control. Empty task counts appear
+only when process completion is selected; actual task activity remains visible.
+Closing the panel never ends a session. Quit releases the app's manual
 session; independently authorized CLI tasks can continue.
 
 ## Visual language
@@ -15,7 +16,8 @@ session; independently authorized CLI tasks can continue.
 - An original drawn loop mark, with an indigo app-icon field and a monochrome
   template menu-bar version. Use SF Symbols for standard actions and power status.
 - A 360-point panel with grouped controls, short labels and enough height for
-  wrapped error text. Settings can grow and scroll; avoid clipped fixed-height forms.
+  wrapped error text. The body scrolls within the available screen height. Author,
+  version and MIT information remain in a small footer; there is no About button.
 - Native control feedback and popover motion. No decorative loops, countdown
   animation, custom drag physics or delayed keyboard feedback.
 
@@ -33,9 +35,14 @@ restoring, unavailable and action-required states. A global disabled flag withou
 Limitless ownership is not our active session. Unknown telemetry cannot become
 "off". Show the last sample only as stale after a connection error.
 
-Manual stop conditions include all core presets, a positive custom duration,
-date/time, process completion and unlimited time. CLI commands provide command
-completion. PID tracking uses the same unprivileged identity adapter as the CLI.
+Manual stop conditions include 15/30/45 minutes, 1/2/4/8/12/24 hours, a positive
+custom duration, date/time, process completion and unlimited time. CLI commands
+provide command completion. A searchable scrolling list shows readable processes
+owned by the current user; manual PID entry remains available. Selection captures
+the start timestamp and is revalidated at Start, preventing PID reuse. Names remain
+in memory and command arguments are never read. Tracking uses the same unprivileged
+identity adapter as the CLI. Routine explanatory text is omitted; errors and the
+zero-battery warning remain visible.
 Policy edits are explicit and validated before application; the helper validates
 again. The 0–50% battery control moves in single-percent steps and shows an inline
 warning at zero. An optional maximum per session is separate from the next manual
@@ -60,11 +67,12 @@ administrator approval and password handling information are never truncated.
 Debug previews are clearly labeled and cannot call the helper, register services,
 change login items or persist power policy.
 
-Removal uses a native confirmation, separate from ordinary Stop. It states that
-all sessions end while commands continue. An explicit preference-erasure option is
-off by default. The preview may open the confirmation, but cannot execute its
-destructive action. Successful preparation leaves clear instructions to quit and
-remove the app; a failure keeps retry guidance and never claims removal succeeded.
+Right-click or Control-click on the status icon opens Quit and Uninstall. Command-Q
+and the native application menu remain available for keyboard users. Uninstall uses
+a native confirmation, separate from Stop: all sessions end while commands continue.
+Successful cleanup always erases preferences and documented cache/window state,
+then moves the app to Trash. A failed stage retains clear retry guidance. The preview
+can open the confirmation but cannot execute its destructive action.
 
 ## Design references and validation
 
@@ -78,6 +86,7 @@ Verify light/dark, reduced transparency/motion, increased contrast, long errors,
 all stop conditions, focus order, native window behavior and runtime logs. A
 preview demonstrates presentation only, never actual power state or lid support.
 
-Primary API references: [MenuBarExtra](https://developer.apple.com/documentation/swiftui/menubarextra),
+Primary API references: [NSStatusItem](https://developer.apple.com/documentation/appkit/nsstatusitem),
+[NSPopover](https://developer.apple.com/documentation/appkit/nspopover),
 [Liquid Glass](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views),
 [SMAppService](https://developer.apple.com/documentation/servicemanagement/smappservice).

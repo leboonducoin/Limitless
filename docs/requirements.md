@@ -7,6 +7,25 @@ running GitHub Actions. Hardware trials and interface acceptance are now owned b
 the maintainer and remain unverified until results are recorded. Source publication
 does not certify a binary release; no public binary release is authorized here.
 
+On 2026-09-19 the maintainer reported that all of their manual tests worked and
+accepted the app, then requested the refinements below. This is recorded as user
+acceptance of the preceding build; it is not newly collected evidence for each
+hardware-matrix row and does not qualify the changed binary automatically.
+
+## Accepted refinements — 2026-09-19
+
+- Run caffeinate alongside the global `pmset disablesleep` hold, verify frequently,
+  and retain source/battery/deadline limits and bounded recovery.
+- All settings in the main menu-bar panel, concise copy, permanent small author/
+  version/license footer, and no separate About button.
+- Presets: 15/30/45 minutes, 1/2/4/8/12/24 hours, and no limit. Keep custom timing.
+- Searchable scrolling process list plus manual PID entry. Hide a zero task count
+  unless process completion is selected; never hide actual active tasks.
+- Right-click Quit and Uninstall; every uninstall erases saved preferences.
+- GitHub Releases is the only installation route, superseding the original
+  Homebrew requirement. Always include the graphical app and show its menu-bar
+  icon on first opening, before helper approval. Keep the CLI as a companion.
+
 ## Required product
 
 | ID | Requirement | Required evidence | Status |
@@ -20,13 +39,13 @@ does not certify a binary release; no public binary release is authorized here.
 | R07 | Launch at login independent of activation | SMAppService integration and fresh-login inactive-state evidence | Actual registration/unregistration succeeded without a helper or awake session; fresh login/reboot open |
 | R08 | Restrained Liquid Glass UI, original icon, discreet motion | Light/dark, contrast, reduced-motion/transparency and visual evidence | Original Swift artwork and native light/dark previews inspected; accessibility gates open |
 | R09 | Swift CLI and AI skill track actual work, release all completed tasks, obey user limits | Concurrent tasks, interruptions, stale owners, PID reuse and policy-boundary tests | Signed task completion, concurrency/manual independence, native Stop all revocation, expiry, user limits, signal forwarding and abrupt watcher loss verified; helper-crash/restart and remaining fault gates open |
-| R10 | Homebrew installation, clean distribution and complete uninstall | Fresh install, upgrade, active-session removal and zap verification | Local cask style/audit and build 5 install, active/inactive removal, same-version reinstall and zap pass; clean-Mac download/opening and upgrade gates open |
+| R10 | GitHub app installation, clean distribution and complete uninstall | Fresh download/opening, upgrade, active-session removal and complete preference erasure | Local signed install and active/inactive removal passed on preceding builds; cleanup regression tests pass; clean-Mac GitHub download and upgrade gates open |
 | R11 | Initial native administrator approval; never retain password | Signed helper approval/revocation and XPC authorization tests | Eight non-root cases and native signed inactive/active lifecycle pass; cancellation/revocation and restart gates open |
 | R12 | Public-ready MIT repository with docs, tests, complete CI and security | Executed checks and release checklist, exact source/artifact linkage | Public docs and issue/PR templates published; local and hosted CI/security pass with one documented Apple compatibility exception; main protected with maintainer bypass; provenance and binary release qualification open |
 | R13 | All authored executable code Swift; no Node/Python product runtime | Source and packaged-artifact inventory | Build 5 source inventory: 44 Swift files and three packaged native executables, no Node/Python runtime; one later Swift maintainer observer added, excluded from the app; repeat for release artifact |
 | R14 | Public Apple APIs; isolate undocumented mechanism | Call-site audit, entitlement inspection and backend tests | Source and signed test linkage inspected; public system frameworks, no entitlements, undocumented backend isolated; hardware qualification open |
 | R15 | Frequent local commits, maintained AGENTS.md, RTK for terminal work | Git history and maintained contributor instructions | In progress |
-| R16 | Usable distribution without the maintainer or users holding a paid Apple Developer membership; Developer ID is optional later | No-account authentication/installation review, GitHub download and dedicated Homebrew tap tested on a clean Mac | Local signing, native helper lifecycle and Homebrew install/CLI/removal pass without membership; initial Gatekeeper block observed; clean-Mac download and opening-flow qualification open |
+| R16 | Usable distribution without the maintainer or users holding a paid Apple Developer membership; Developer ID is optional later | No-account authentication/installation review and GitHub download tested on a clean Mac | Local signing and native helper lifecycle pass without membership; initial Gatekeeper block observed in earlier downloads; clean-Mac GitHub opening qualification remains open |
 
 ## Delivery sequence
 
@@ -35,7 +54,7 @@ does not certify a binary release; no public binary release is authorized here.
 3. Authenticated helper, power observation, narrow backend and recovery journal.
 4. Menu-bar app, settings, login integration, original icon and native polish.
 5. Command/process CLI, concurrent task ownership and AI skill.
-6. Signed distribution, Homebrew integration and complete removal.
+6. Signed GitHub distribution and complete removal.
 7. Complete security/CI audit and physical qualification; publication requires approval.
 
 ## Non-negotiable invariants
@@ -73,7 +92,7 @@ power source, expected result, observation and restoration result for each run:
 
 Apple build tools; a stable signing identity and a qualified native installation
 path for the no-account distribution; final bundle identifiers; private
-vulnerability reporting; a Homebrew tap; authorized Mac integration tests.
+vulnerability reporting; authorized Mac integration tests.
 Apple Developer Program membership, a Team ID, Developer ID Application identity
 and notarization credentials are prerequisites only for the optional notarized
 channel. End users never need developer membership. Do not silently reduce the

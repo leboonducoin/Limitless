@@ -82,7 +82,7 @@ security updates enabled. Source and workflow definitions are now published on
 run on every push to that branch. The exact observed outcomes belong in
 [testing evidence](docs/testing.md), separately from manual hardware acceptance.
 Binary publication requires successful checks and protected release controls.
-A source push is not approval to create a release or publish a cask.
+A source push is not approval to publish a binary release.
 
 On 2026-09-18, `main` protection was enabled with all seven build/sanitizer/security
 job checks pinned to the GitHub Actions app, an up-to-date base requirement and

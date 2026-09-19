@@ -19,7 +19,7 @@ public enum SessionEnd: Codable, Equatable, Sendable {
     case after(seconds: TimeInterval)
     case at(Date)
 
-    public static let presetMinutes = [5, 10, 15, 30, 45, 60, 120, 180, 240, 360, 480, 720, 1440]
+    public static let presetMinutes = [15, 30, 45, 60, 120, 240, 480, 720, 1440]
 
     public func validate(at now: ClockSnapshot) throws {
         switch self {

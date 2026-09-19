@@ -6,6 +6,18 @@ Implemented work and validation are recorded below. No binary release has been
 published; [testing evidence](docs/testing.md) and the
 [acceptance matrix](docs/requirements.md) distinguish verified paths from open gates.
 
+- Run Apple's caffeinate alongside the global sleep hold and verify the child's
+  actual idle-sleep assertion on the existing two-second watchdog.
+- Move all preferences into the menu-bar popover, shorten routine text, keep author
+  and version in the footer, and add a native right-click Quit/Uninstall menu.
+- Reduce presets to 15/30/45 minutes and 1/2/4/8/12/24 hours plus no limit; retain
+  custom duration/date and add a searchable process picker alongside PID entry.
+- Hide empty task counts outside process mode. Always erase user preferences,
+  cache and saved window state after confirmed native removal.
+- Keep GitHub Releases as the single installation route, with the menu-bar app
+  and companion CLI in one archive. Remove the Homebrew template and generation.
+  Retain optional Developer ID signing and notarization for later membership.
+
 - Published the source and CI workflows on `main`, with a documented native preview,
   live workflow badges, architecture overview and contribution guides.
 - Made the native installation error paths compile on the Xcode 26.2 CI baseline,
@@ -48,7 +60,7 @@ published; [testing evidence](docs/testing.md) and the
   signed app hook for packaging. Protocol version 3 separates acknowledged restoration
   from installed-file deletion and rejects earlier clients.
 - Swift release commands for Developer ID signing, notarization, exported-archive
-  verification and digest-backed Homebrew cask generation; source metadata and
+  verification and digest-backed release manifests; source metadata and
   matching CLI/bundle versions. No signed release or publication has been performed.
 - Reciprocal XPC requirements now pin the executable's actual leaf certificate and
   exact peer identifiers, permitting a stable self-signed identity without Apple

@@ -5,8 +5,8 @@ public enum WorkError: Error, Equatable, Sendable {
     case invalidProcess, processUnavailable, differentUser, administratorNotAllowed, alreadyStarted
 }
 
-/// The start timestamp protects against PID reuse. No process name/arguments are collected.
-public struct ProcessIdentity: Sendable {
+/// The start timestamp protects against PID reuse. Command arguments are never collected.
+public struct ProcessIdentity: Equatable, Sendable {
     public let pid: Int32
     private let user: UInt32
     private let startedSeconds: UInt64
@@ -40,6 +40,38 @@ public struct ProcessIdentity: Sendable {
         var info = proc_bsdinfo()
         let size = Int32(MemoryLayout<proc_bsdinfo>.size)
         return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size ? info : nil
+    }
+}
+
+/// A local picker snapshot. Only readable processes owned by the current user qualify.
+/// Names are displayed in memory, never sent to the privileged helper or persisted.
+public struct RunningProcess: Identifiable, Sendable {
+    public let identity: ProcessIdentity
+    public let name: String
+    public var id: Int32 { identity.pid }
+
+    public static func snapshot() throws -> [Self] {
+        guard geteuid() != 0, geteuid() == getuid() else { throw WorkError.administratorNotAllowed }
+        let needed = proc_listpids(UInt32(PROC_UID_ONLY), geteuid(), nil, 0)
+        guard needed > 0 else { throw WorkError.processUnavailable }
+        // Leave room for processes created between the sizing and snapshot calls.
+        var pids = [Int32](repeating: 0, count: Int(needed) / MemoryLayout<Int32>.stride + 256)
+        let bytes = pids.withUnsafeMutableBytes {
+            proc_listpids(UInt32(PROC_UID_ONLY), geteuid(), $0.baseAddress, Int32($0.count))
+        }
+        guard bytes > 0 else { throw WorkError.processUnavailable }
+        return pids.prefix(Int(bytes) / MemoryLayout<Int32>.stride).compactMap { pid in
+            guard let identity = try? ProcessIdentity(pid: pid),
+                var info = ProcessIdentity.read(pid), identity.matches(info)
+            else { return nil }
+            let name = withUnsafeBytes(of: &info.pbi_name) { bytes in
+                String(decoding: bytes.prefix(while: { $0 != 0 }), as: UTF8.self)
+            }
+            return Self(identity: identity, name: name.isEmpty ? "Process \(pid)" : name)
+        }.sorted {
+            let order = $0.name.localizedStandardCompare($1.name)
+            return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
+        }
     }
 }
 

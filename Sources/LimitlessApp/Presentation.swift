@@ -48,18 +48,6 @@ enum PowerPresentation: Equatable {
         }
     }
 
-    var detail: String {
-        switch self {
-        case .active: "The keep-awake setting is confirmed."
-        case .inactive: "Normal sleep is allowed."
-        case .suspended:
-            "Your session is waiting for an allowed power source or readable battery data."
-        case .recovering: "Limitless is checking an unexpected change."
-        case .restoring: "Waiting for macOS to confirm that sleep is allowed."
-        case .attention: "The current setting could not be safely confirmed."
-        case .unknown: "A missing reading is not confirmation that protection is off."
-        }
-    }
 }
 
 struct PolicyDraft: Equatable {

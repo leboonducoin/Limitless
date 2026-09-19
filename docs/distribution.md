@@ -4,10 +4,26 @@ Limitless is not yet published or qualified for privileged installation. Local
 ad-hoc builds and certificate-signed test artifacts exist; neither is a qualified
 production installer. Do not register an ad-hoc helper or bypass Gatekeeper.
 
+## One installation through GitHub Releases
+
+**User decision, 2026-09-19:** GitHub Releases is the single installation route.
+The Homebrew template and cask generation have been removed. Earlier Homebrew
+trials remain historical evidence in [testing](testing.md#homebrew-cask-validation).
+
+Every release archive contains `Limitless.app`: graphical interface, helper and
+companion CLI together. There is no CLI-only installation. The app's entry point
+is `LimitlessApp`, not `limitless`.
+
+Extract the archive, move the app into Applications and open it. First launch
+creates the status icon before helper verification or administrator approval.
+Copying an app does not launch it automatically. Launch at login is a separate
+opt-in and never starts a keep-awake session by itself. No terminal is needed
+for the graphical app; the CLI remains inside its bundle for optional use.
+
 ## Distribution without Apple Developer membership
 
 **User decision, 2026-09-16:** Apple Developer membership will come later. Limitless
-must also be usable through GitHub or a dedicated Homebrew tap before then. Users
+must also be usable through GitHub before then. Users
 must never need their own developer membership. The Developer ID commands below
 remain an optional future channel, not the only acceptable product distribution.
 
@@ -39,7 +55,7 @@ running executable's signed identity; temporary-file tests cover replacement,
 unsafe paths and interrupted removal. This does not qualify a real installation.
 Cancellation and distribution upgrades still require real-Mac evidence. Build 4
 passed local inactive and active removal, including confirmed restoration while
-the tracked command continued. Download/Homebrew and physical compatibility gates
+the tracked command continued. Download and physical compatibility gates
 remain open.
 The removal validator accepts the optional `Program` key written by SMJobBless only
 when it equals the fixed helper path, alongside the exact `ProgramArguments` array.
@@ -64,22 +80,32 @@ notarization claim; certificate validity and expiry need release qualification.
 
 For downloaded non-notarized apps, macOS may require a user decision in Privacy &
 Security; managed systems may disallow it. That choice must remain with the user.
-The app and cask must not remove quarantine, disable Gatekeeper or automate approval.
+The app must not remove quarantine, disable Gatekeeper or automate approval.
 [Apple opening policy](https://support.apple.com/en-gb/102445).
-The official `homebrew/cask` catalogue requires passing its Gatekeeper checks;
-distribution from our own reviewed tap is a distinct channel and cannot claim
-official-catalogue acceptance. No public tap or downloadable release exists yet.
-[Homebrew acceptance policy](https://docs.brew.sh/Acceptable-Casks).
+No downloadable release exists yet. Earlier quarantined trials encountered an
+initial execution block; clean-Mac first opening and removal still require
+qualification. Do not remove quarantine or skip native cleanup to make them pass.
 
-The local Homebrew trial preserved quarantine and passed certificate verification,
-but Gatekeeper initially rejected execution and killed the cleanup hook before
-launch. Homebrew correctly kept the app and receipt. After the exact copy was
-observed open through macOS, its CLI worked and normal Homebrew removal passed.
-No opening exception was automated and no quarantine was removed by the tooling.
-A successful cask install alone therefore does not prove opening or removal;
-the manual opening flow still needs qualification on a clean Mac. Do not remove
-quarantine or skip the cleanup hook to make it pass.
-See [the exact trial](testing.md#homebrew-cask-validation).
+## Adding Apple Developer membership later
+
+GitHub stays the download location. The existing `sign`, `notarize`, `verify` and
+`package` commands build a Developer ID Application-signed, timestamped, notarized
+and stapled archive once the maintainer supplies the real identity, Team ID and
+notarization credentials. No product rewrite or App Store distribution is needed.
+The first migration must use the old matching app to remove its helper before the
+new signed app requests approval; never weaken certificate authentication to
+silently adopt the old service. See the release commands below.
+
+Apple states that membership expiry does not stop users downloading, installing
+or running existing Developer ID-signed applications. A certificate that was valid
+at signing, with the required secure timestamp, can continue to validate after
+certificate expiry. A new certificate requires active membership once the old one
+expires. Revocation is different and can prevent installation or execution.
+Limitless does not depend on advanced-capability provisioning profiles, whose own
+expiry could otherwise block launch. This describes Developer ID distribution,
+not a lifetime guarantee for the current self-signed community certificate.
+[Apple Developer ID expiry policy](https://developer.apple.com/help/account/certificates/create-developer-id-certificates),
+[Apple timestamp validation](https://developer.apple.com/library/archive/technotes/tn2206/).
 
 ## Local app bundle
 
@@ -160,7 +186,7 @@ no entitlements and no timestamp service. It has no ad-hoc fallback. The verifie
 requires the same actual certificate and exact identifiers throughout the app,
 the community layout, matching embedded metadata, ARM64 and clean source metadata.
 `community-package` extracts and verifies the actual exported archive again before
-generating its SHA-256, manifest and draft cask. Its manifest records
+generating its SHA-256 and manifest. Its manifest records
 `channel: community`, `notarized: false` and the certificate fingerprint. The
 Developer ID commands below retain their separate timestamp/notarization gates.
 
@@ -205,25 +231,20 @@ protected CI secrets, outside Git. No artifact upload or release is authorized b
 this document. A source hash, version and signed artifact digest must agree before
 publication. Do not publish the ad-hoc bundle or invent a downloadable release URL.
 
-The Swift release tooling and Homebrew template are implemented. A locally signed
-community archive and its non-quarantined native lifecycle have passed; no public
-or notarized release exists. The local quarantined cask trial covered installation,
-a blocked cleanup before first opening, then successful CLI use and inactive
-uninstall after native opening. Later build 4 and 5 trials passed same-version
-reinstallation and scoped zap; build 5 also passed cask removal during tracked work.
-Clean-Mac downloads and the full Homebrew lifecycle
-remain separate gates, including qualification of the first-open decision; see
-[the local trials](testing.md#homebrew-cask-validation).
-Installation must preserve macOS approval; a cask must not run `sudo pmset`, install
+The Swift release tooling is implemented. A locally signed community archive and
+its native lifecycle have passed; no public or notarized release exists. Clean-Mac
+GitHub download, first opening and upgrade remain separate gates.
+Installation must preserve macOS approval; no installer may run `sudo pmset`, install
 passwordless sudoers rules or disable quarantine. Native first launch separately
 requests helper approval and offers launch at login.
 
 Removal must revoke all sessions, confirm restoration of Limitless-owned state,
-unregister the helper and login item, then remove the app, CLI link and optional
-preferences/skill. An unresolved ownership journal must stop destructive removal.
+unregister the helper and login item, erase preferences and remove the app with its
+bundled CLI. User-created links or skill copies remain user-managed. An unresolved
+ownership journal must stop destructive removal.
 Never promise that deleting an app or rebooting clears the undocumented global
 flag. Upgrade, approval rejection and interrupted cleanup
-remain required tests before a Homebrew release is usable.
+remain required tests before a public release is usable.
 
 ## Maintainer release commands
 
@@ -285,7 +306,7 @@ and a matching universal/Intel recipe require separate evidence.
    `package` refuses existing output, creates `Limitless-VERSION-arm64.zip`,
    extracts it into a fresh temporary directory and repeats signature, identity,
    architecture, metadata, ticket and Gatekeeper verification on the exported app.
-   It then writes `SHA256SUMS`, `release.json` and `limitless.rb` using the actual
+   It then writes `SHA256SUMS` and `release.json` using the actual
    archive's SHA-256. The manifest identifies the version, source commit, team,
    filename and digest. A standalone verification is also available:
 
@@ -293,16 +314,9 @@ and a matching universal/Intel recipe require separate evidence.
    rtk proxy swift Tools/ProjectTool.swift verify /private/tmp/limitless-signed/Limitless.app TEAM_ID
    ```
 
-The cask is generated from `Packaging/limitless.rb.in`. Its GitHub URL follows the
-planned `vVERSION` tag and exact ZIP filename; generation **does not create that
-release or make the URL available**. No public tap has been created. After an
-authorized release actually exists, place the matching generated `limitless.rb`
-in a reviewed tap's `Casks` directory. Validate it with `brew style --cask
-OWNER/TAP/limitless` and `brew audit --cask --strict OWNER/TAP/limitless` before
-publication; replace `OWNER/TAP` with that actual tap. Homebrew's audit rejects
-loose `.rb` paths, and style needs the cask/tap context. These checks do not prove
-download or installation. Never use the template itself as an installable cask,
-substitute a dummy digest, or use `--no-quarantine`.
+Publish the verified ZIP, `SHA256SUMS` and `release.json` together in the authorized
+GitHub Release under `vVERSION`. Local packaging creates no tag, upload or download
+URL. Never advertise an archive until that release exists.
 
 The source record is covered by the app signature; the digest binds the archive.
 Neither proves an independently reproducible build or a GitHub artifact
@@ -313,15 +327,16 @@ manifest and release artifacts together. Protected release approvals and any
 hosted provenance attestation require repository/signing configuration; this
 repository currently performs no automatic credential import, upload or release.
 
-On upgrade/reinstall, the guarded uninstall hook also revokes sessions and removes
-native registrations. Saved preferences remain, but helper approval, login and
-automation must be enabled again through the app. No session resumes automatically.
-`zap` removes only this user's documented preferences/cache/window state. It must
-not delete the protected root journal or user-created AI skill copies.
+For this initial release, use the old app's guarded Uninstall before replacing it.
+This revokes sessions, removes native registrations and erases preferences. Open
+the new app and enable helper approval, login and automation as desired. No session
+resumes automatically. An in-place updater is not implemented.
 
 ## Prepare for removal
 
-In Settings, **Prepare for removal** ends all sessions and disables automation.
+Right-click the menu-bar icon and choose **Uninstall Limitless…** to end all sessions
+and disable automation. The native confirmation also covers preference erasure and
+moving the app to Trash after successful cleanup.
 The helper blocks new activation, policy changes and rearming for the rest of its
 process lifetime, including across reconnects and console-user changes. Running
 commands/processes are never terminated by this operation.
@@ -355,23 +370,19 @@ fixed journal and installed files before reporting completion. A failed or
 unreadable check leaves an error. Finder cannot be prevented from deleting a file;
 keep the app installed until preparation succeeds. [Apple unregister API](https://developer.apple.com/documentation/servicemanagement/smappservice/unregister(completionhandler:)).
 
-The signed app provides the same operation for the generated Homebrew uninstall hook,
-run as the console user, without `sudo`:
+For maintenance, quit the graphical app and run the same preparation as the console
+user, without `sudo`; remove the app only after this command succeeds:
 
 ```sh
 rtk proxy /Applications/Limitless.app/Contents/MacOS/LimitlessApp --prepare-uninstall
 ```
 
 It exits 0 only on confirmed completion, otherwise 1 (64 for invalid arguments).
-An ad-hoc development app refuses it. `--erase-preferences` explicitly removes the
-current user's saved Limitless preferences after successful cleanup; the default
-preserves them. User-created skill copies and external links are not silently deleted.
+An ad-hoc development app refuses it. Every successful removal now erases the current
+user's saved Limitless preferences and its documented cache/saved-window state.
+The old `--erase-preferences` flag remains accepted for compatibility and is redundant.
+User-created skill copies and external links are not silently deleted.
 
-The cask must quit the app before invoking this hook with `must_succeed: true`,
-then let Homebrew remove its app and CLI link. Optional `zap` handles this user's
-preferences/cache/saved-window state. Do not use blanket deletion rules for the
-protected journal or ignore a failed hook. Local cask installation, inactive and
-active uninstall, same-version reinstallation and scoped zap passed on build 5.
-Upgrade remains a signed-Mac test, as do approval loss and a helper restart between
-cleanup and unregistration.
-[Homebrew cask rules](https://docs.brew.sh/Cask-Cookbook#stanza-uninstall).
+Do not use blanket deletion rules for the protected journal or ignore a failed
+preparation. Upgrade remains a signed-Mac test, as do approval loss and a helper
+restart between cleanup and unregistration.

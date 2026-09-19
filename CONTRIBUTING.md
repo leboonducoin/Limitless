@@ -35,7 +35,7 @@ rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-tsan swift Tools/Proje
 ```
 
 `check` validates formatting, builds Release, runs tests with coverage data, and
-checks release inputs and the Homebrew DSL. Sanitizers use separate scratch paths.
+checks release inputs and the graphical app entry point. Sanitizers use separate scratch paths.
 See [testing](docs/testing.md) for the CLT macro workaround and optional read-only
 hardware check. The normal suite must not alter host power settings or install a
 service. Development bundles are for inspection and reject privileged controls.
