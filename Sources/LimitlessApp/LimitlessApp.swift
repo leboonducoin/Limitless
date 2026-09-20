@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Darwin
 import LimitlessSystem
 import Observation
@@ -70,7 +71,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     private var statusItem: NSStatusItem?
     private var lastPresentation: PowerPresentation?
     private let popover = NSPopover()
-    private let activeDot = StatusDot()
     private var outsideClickMonitor: Any?
     private var removalWindow: NSWindow?
 
@@ -136,17 +136,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         item.button?.action = #selector(clickStatusItem)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         item.button?.setAccessibilityHelp("Click to open. Right-click for Quit and Uninstall.")
-        let dotY = item.button?.isFlipped == true ? (item.button?.bounds.height ?? 22) - 7 : 2
-        activeDot.frame = NSRect(
-            x: (item.button?.bounds.width ?? 22) - 7, y: dotY, width: 5, height: 5)
-        activeDot.autoresizingMask = [.minXMargin]
-        activeDot.isHidden = true
-        activeDot.wantsLayer = true
-        activeDot.layer?.backgroundColor =
-            NSColor(srgbRed: 0.85, green: 0.36, blue: 0.04, alpha: 1).cgColor
-        activeDot.layer?.cornerRadius = 2.5
-        activeDot.setAccessibilityElement(false)
-        item.button?.addSubview(activeDot)
         popover.behavior = .transient
         popover.delegate = self
         popover.animates = false
@@ -179,7 +168,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
             let presentation = model.presentation
             if presentation != lastPresentation {
                 lastPresentation = presentation
-                activeDot.isHidden = presentation != .active
+                statusItem?.button?.image =
+                    presentation == .active ? BrandArt.menuActive : BrandArt.menuIdle
                 statusItem?.button?.setAccessibilityLabel(
                     "Limitless: \(presentation?.title ?? "Setup required")")
             }
@@ -304,8 +294,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if model.removalComplete { return .terminateNow }
         guard !terminating else { return .terminateCancel }
+        let quitEvent = NSAppleEventManager.shared().currentAppleEvent
         terminating = true
         Task {
+            if !model.isPreview && Self.isSystemRestart(quitEvent) {
+                await model.refresh()
+                let remaining =
+                    model.status?.sessions.filter { $0.suspension == nil }
+                    .map { model.remainingSeconds($0) } ?? []
+                if Self.shouldDeferRestart(
+                    presentation: model.presentation, remainingSessions: remaining)
+                {
+                    model.message = "Restart postponed. Stop Limitless before restarting your Mac."
+                    terminating = false
+                    sender.reply(toApplicationShouldTerminate: false)
+                    return
+                }
+            }
             let restored = await model.prepareToQuit()
             var shouldQuit = restored
             if !restored {
@@ -322,6 +327,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         }
         return .terminateLater
     }
+
+    // Public Apple-event metadata distinguishes system restart/shutdown from ordinary Quit.
+    // Enforced updates and forced termination can bypass AppKit; this is not an OS update lock.
+    static func isSystemRestart(_ event: NSAppleEventDescriptor?) -> Bool {
+        guard let event, event.eventClass == AEEventClass(kCoreEventClass),
+            event.eventID == AEEventID(kAEQuitApplication),
+            let reason = event.paramDescriptor(forKeyword: AEKeyword(kAEQuitReason))?.enumCodeValue
+        else { return false }
+        return reason == OSType(kAERestart) || reason == OSType(kAEShutDown)
+    }
+
+    static func shouldDeferRestart(
+        presentation: PowerPresentation?, remainingSessions: [TimeInterval?]
+    ) -> Bool {
+        presentation == .active && remainingSessions.contains { $0 == nil || $0! > 0 }
+    }
 }
 
 private struct RemovalProgress: View {
@@ -330,8 +351,4 @@ private struct RemovalProgress: View {
         ProgressView { Text(model.removalStep ?? "Preparing…") }
             .padding(24).frame(width: 340, height: 110)
     }
-}
-
-private final class StatusDot: NSView {
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

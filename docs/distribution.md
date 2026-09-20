@@ -112,7 +112,7 @@ not a lifetime guarantee for the current self-signed community certificate.
 From the repository root, using the selected Apple toolchain:
 
 ```sh
-rtk proxy swift Tools/ProjectTool.swift bundle
+swift Tools/ProjectTool.swift bundle
 ```
 
 The tool prints a new temporary output directory. Set `LIMITLESS_OUTPUT_DIR` for
@@ -120,7 +120,7 @@ a chosen new output directory; an existing directory is refused rather than repl
 On a synced Desktop, keep build output outside the sync provider:
 
 ```sh
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview swift Tools/ProjectTool.swift bundle
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview swift Tools/ProjectTool.swift bundle
 ```
 
 Use `LIMITLESS_CONFIGURATION=release` for an optimized bundle. Both configurations
@@ -151,7 +151,7 @@ maintenance tools. This is structural validation, not notarization or installati
 Build an ad-hoc community inspection bundle without installing anything:
 
 ```sh
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-community-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-community-preview swift Tools/ProjectTool.swift community-bundle
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-community-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-community-preview swift Tools/ProjectTool.swift community-bundle
 ```
 
 This variant puts the helper at
@@ -175,9 +175,9 @@ existing stable code-signing identity in the maintainer's keychain. Set
 below must be replaced with that fingerprint, never a sample value:
 
 ```sh
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-community-release-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-community-signed swift Tools/ProjectTool.swift community-sign
-rtk proxy swift Tools/ProjectTool.swift community-verify /private/tmp/limitless-community-signed/Limitless.app CERT_SHA1
-rtk proxy swift Tools/ProjectTool.swift community-package /private/tmp/limitless-community-signed/Limitless.app CERT_SHA1 /private/tmp/limitless-community-release
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-community-release-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-community-signed swift Tools/ProjectTool.swift community-sign
+swift Tools/ProjectTool.swift community-verify /private/tmp/limitless-community-signed/Limitless.app CERT_SHA1
+swift Tools/ProjectTool.swift community-package /private/tmp/limitless-community-signed/Limitless.app CERT_SHA1 /private/tmp/limitless-community-release
 ```
 
 `community-sign` forces Release, records the clean source commit, embeds exact
@@ -212,7 +212,7 @@ trust exception just to change that listing. The observed test identity was mark
 A Debug bundle supports a labeled presentation fixture:
 
 ```sh
-rtk proxy /private/tmp/limitless-preview/Limitless.app/Contents/MacOS/LimitlessApp --preview active
+/private/tmp/limitless-preview/Limitless.app/Contents/MacOS/LimitlessApp --preview active
 ```
 
 Available states are `active`, `inactive`, `suspended`, `restoration` and `unknown`.
@@ -261,7 +261,7 @@ and a matching universal/Intel recipe require separate evidence.
 2. Select full Xcode for the process with `DEVELOPER_DIR`, without changing the
    system-wide developer directory. Install your own **Developer ID Application**
    certificate/private key through Apple's tools. Check its fingerprint with
-   `rtk proxy security find-identity -v -p codesigning`. No identity or credential
+   `security find-identity -v -p codesigning`. No identity or credential
    is provided by this repository.
 3. Set `LIMITLESS_TEAM_ID` to the real ten-character Apple Team ID and
    `LIMITLESS_SIGNING_IDENTITY` to that certificate's 40-character SHA-1 fingerprint.
@@ -269,7 +269,7 @@ and a matching universal/Intel recipe require separate evidence.
    Then build into a new directory:
 
    ```sh
-   rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-release-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-signed swift Tools/ProjectTool.swift sign
+   env LIMITLESS_BUILD_PATH=/private/tmp/limitless-release-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-signed swift Tools/ProjectTool.swift sign
    ```
 
    `sign` requires a clean committed tree, forces a Release build, embeds its
@@ -286,7 +286,7 @@ and a matching universal/Intel recipe require separate evidence.
    replace the following uppercase labels with your actual values:
 
    ```sh
-   rtk proxy swift Tools/ProjectTool.swift notarize /private/tmp/limitless-signed/Limitless.app TEAM_ID KEYCHAIN_PROFILE
+   swift Tools/ProjectTool.swift notarize /private/tmp/limitless-signed/Limitless.app TEAM_ID KEYCHAIN_PROFILE
    ```
 
    This command **uploads the signed app to Apple**. It requires an `Accepted`
@@ -300,7 +300,7 @@ and a matching universal/Intel recipe require separate evidence.
 5. Create the final archive **after stapling**, from the same clean source commit:
 
    ```sh
-   rtk proxy swift Tools/ProjectTool.swift package /private/tmp/limitless-signed/Limitless.app TEAM_ID /private/tmp/limitless-release
+   swift Tools/ProjectTool.swift package /private/tmp/limitless-signed/Limitless.app TEAM_ID /private/tmp/limitless-release
    ```
 
    `package` refuses existing output, creates `Limitless-VERSION-arm64.zip`,
@@ -311,7 +311,7 @@ and a matching universal/Intel recipe require separate evidence.
    filename and digest. A standalone verification is also available:
 
    ```sh
-   rtk proxy swift Tools/ProjectTool.swift verify /private/tmp/limitless-signed/Limitless.app TEAM_ID
+   swift Tools/ProjectTool.swift verify /private/tmp/limitless-signed/Limitless.app TEAM_ID
    ```
 
 Publish the verified ZIP, `SHA256SUMS` and `release.json` together in the authorized
@@ -414,7 +414,7 @@ For maintenance, quit the graphical app and run the same preparation as the cons
 user, without `sudo`; remove the app only after this command succeeds:
 
 ```sh
-rtk proxy /Applications/Limitless.app/Contents/MacOS/LimitlessApp --prepare-uninstall
+/Applications/Limitless.app/Contents/MacOS/LimitlessApp --prepare-uninstall
 ```
 
 It exits 0 only on confirmed completion, otherwise 1 (64 for invalid arguments).

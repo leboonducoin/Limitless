@@ -159,6 +159,24 @@ A battery floor applies on battery or while the battery is discharging, includin
 an externally powered Mac whose adapter cannot keep up. No-battery and unreadable
 battery are distinct states. The default floor is 20%; 0 explicitly disables it.
 
+## macOS restart deferral
+
+While the menu app is running, its AppKit termination delegate inspects the public
+quit Apple event's `kAEQuitReason` parameter. For restart or shutdown, it refreshes
+authenticated helper status and defers termination only when protection is observed
+active and at least one unsuspended session remains live. An ordinary Quit, logout,
+completed removal, expired session or read-only preview follows the existing exit
+path. No preference, update service or managed-device policy is changed.
+
+This is best-effort interruption protection, not a system update lock. Keep the
+menu app running; a CLI session alone cannot refuse system termination. Stop the
+session before deliberately restarting. Downloads continue, and forced restarts
+or managed update deadlines can override application refusal. Real scheduled-update
+behavior remains a manual Mac acceptance gate.
+
+Apple documents the [AppKit termination protocol](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/AppArchitecture/Tasks/GracefulAppTermination.html)
+and [enforced update behavior](https://support.apple.com/en-au/guide/deployment/depd30715cbb/web).
+
 ## Sessions and time
 
 Each client demand has an independent identity, owner, policy and stop condition.

@@ -2,6 +2,36 @@
 
 ## Current evidence
 
+### 2026-09-20 restart deferral, orange mark and direct CLI (build 9)
+
+`ProjectTool.swift check` passed formatting, Release compilation, release-input
+checks, maintenance-probe typechecks and 110 reported tests (47 core, 48 system,
+3 CLI, 12 app); one opt-in hardware observation was skipped. New regressions
+construct quit Apple events in memory, distinguishing restart/shutdown from logout,
+ordinary Quit and absent/malformed metadata. Session admission covers live, unlimited,
+expired, empty and non-active states. No event is sent to macOS and no actual
+restart or Software Update installation is tested.
+
+The Debug active preview built and opened on this Mac. Its panel remained intact,
+Tab reached the source selector, and the native Quit menu closed the preview;
+process inspection confirmed its exit. The inspection surface did not expose the
+menu-bar extra itself. A separate AppKit render of the production `BrandArt`
+verified the whole orange loop on light/dark backgrounds and the idle-template /
+active-nontemplate flags. Live menu-bar appearance and VoiceOver remain manual
+checks. Existing App Intents/BaseBoard and negative-view-geometry diagnostics
+recurred during accessibility inspection; no new animation was introduced.
+
+The installed CLI's `limitless --help` succeeded with the documented PATH appended
+to a minimal shell environment. No shell configuration, installed app/helper,
+power state or macOS update preference was changed. Public commands no longer
+require the maintainer's RTK wrapper. Graphify's local code-only graph was refreshed;
+Ponytail review found no extra abstraction or dependency to remove.
+
+The new restart policy uses AppKit and only runs in the live app, never in a
+read-only preview. A real scheduled-update refusal is an outstanding manual gate;
+forced restarts and enforced update deadlines are explicitly outside its promise.
+Hosted CI/security must qualify the exact pushed commit separately.
+
 ### 2026-09-19 setup, process tracking and integration help (build 8)
 
 The full `ProjectTool.swift check` passed formatting, Release compilation, release
@@ -74,7 +104,7 @@ installed app, register services, or exercise Gatekeeper. Synthetic fixture sour
 metadata is never release evidence. Reproduce after a Debug `check` build:
 
 ```sh
-rtk proxy swift Tests/SignedUpdate/Run.swift CERT_SHA1 DEBUG_PRODUCTS_DIR TEMPLATE_APP NEW_OUTPUT_DIRECTORY
+swift Tests/SignedUpdate/Run.swift CERT_SHA1 DEBUG_PRODUCTS_DIR TEMPLATE_APP NEW_OUTPUT_DIRECTORY
 ```
 
 The runner currently links the local CLT/Xcode build's static libraries; supply the
@@ -91,7 +121,7 @@ author credit exposes the exact LinkedIn destination and its accessible label.
 Create a preview that opens through native app tools:
 
 ```sh
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview-new LIMITLESS_PREVIEW_STATE=inactive swift Tools/ProjectTool.swift bundle
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview-new LIMITLESS_PREVIEW_STATE=inactive swift Tools/ProjectTool.swift bundle
 ```
 
 The active read-only preview also showed its countdown advancing without helper
@@ -261,9 +291,9 @@ implementation. No source from Apple or Sleepless was copied into this repositor
 With full Xcode selected for the process, from the repository root:
 
 ```sh
-rtk proxy swift Tools/ProjectTool.swift check
-rtk proxy swift Tools/ProjectTool.swift asan
-rtk proxy swift Tools/ProjectTool.swift tsan
+swift Tools/ProjectTool.swift check
+swift Tools/ProjectTool.swift asan
+swift Tools/ProjectTool.swift tsan
 ```
 
 `check` runs whitespace checks, strict formatting, release-tool input checks,
@@ -278,7 +308,7 @@ On the inspected Mac, the Desktop file provider adds Finder metadata to generate
 test bundles, which codesign rejects. Keep build output outside that synced folder:
 
 ```sh
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build swift Tools/ProjectTool.swift check
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build swift Tools/ProjectTool.swift check
 ```
 
 Use distinct scratch paths for simultaneous sanitizer builds. Do not disable code
@@ -289,7 +319,7 @@ are recorded environment warnings, not evidence that full Xcode was tested.
 Opt in to the real, read-only IOKit/IOPowerSources smoke check on a supported Mac:
 
 ```sh
-rtk proxy env LIMITLESS_READ_ONLY_INTEGRATION=1 LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build swift Tools/ProjectTool.swift check
+env LIMITLESS_READ_ONLY_INTEGRATION=1 LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build swift Tools/ProjectTool.swift check
 ```
 
 This checks readable power data and the global flag without creating an assertion
@@ -455,7 +485,7 @@ It contains no power backend, helper runtime, service installer or login action.
 Run it only after explicit signing authorization with an existing test identity:
 
 ```sh
-rtk proxy swift Tests/SignedXPC/Run.swift CERT_SHA1 /private/tmp/limitless-signed-xpc-new
+swift Tests/SignedXPC/Run.swift CERT_SHA1 /private/tmp/limitless-signed-xpc-new
 ```
 
 Replace `CERT_SHA1` with the actual certificate fingerprint and choose a new output
@@ -748,8 +778,8 @@ created with `brew tap-new --no-git limitless-local/checks-20260917`. Both comma
 below exited 0; style reported one file and no offenses:
 
 ```sh
-rtk proxy env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_DEVELOPER=1 brew style --cask limitless-local/checks-20260917/limitless
-rtk proxy env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_DEVELOPER=1 brew audit --cask --strict limitless-local/checks-20260917/limitless
+env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_DEVELOPER=1 brew style --cask limitless-local/checks-20260917/limitless
+env HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 HOMEBREW_DEVELOPER=1 brew audit --cask --strict limitless-local/checks-20260917/limitless
 ```
 
 For an isolated install trial, only the temporary cask's URL was then changed to
@@ -1206,14 +1236,14 @@ app installed and open for restoration or cleanup. With the operator ready:
 2. Run the observer as the normal console user from the repository:
 
    ```sh
-   rtk proxy swift Tests/NativeMac/ObserveHelperRestart.swift --observe-armed-restart
+   swift Tests/NativeMac/ObserveHelperRestart.swift --observe-armed-restart
    ```
 
 3. Only after it prints `READY` with the current helper PID, the operator performs
    the authorized interruption in a separate Terminal, within 60 seconds:
 
    ```sh
-   rtk proxy sudo /bin/launchctl kill SIGKILL system/io.github.leboonducoin.Limitless.helper
+   sudo /bin/launchctl kill SIGKILL system/io.github.leboonducoin.Limitless.helper
    ```
 
 4. Keep the app open without rearming or starting another session until observation

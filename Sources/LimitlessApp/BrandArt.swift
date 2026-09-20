@@ -25,7 +25,8 @@ import AppKit
         return path
     }
 
-    static let menuIdle = menuImage()
+    static let menuIdle = menuImage(active: false)
+    static let menuActive = menuImage(active: true)
 
     // GitHub Octicons mark-github-16; MIT, copyright GitHub Inc. See THIRD_PARTY_NOTICES.md.
     static let github: NSImage = {
@@ -37,15 +38,17 @@ import AppKit
         return image
     }()
 
-    private static func menuImage() -> NSImage {
+    private static func menuImage(active: Bool) -> NSImage {
         let image = NSImage(size: NSSize(width: 24, height: 18), flipped: false) { _ in
-            NSColor.black.setStroke()
+            (active
+                ? NSColor(srgbRed: 0.85, green: 0.36, blue: 0.04, alpha: 1)
+                : NSColor.black).setStroke()
             let path = loop(in: NSRect(x: 1, y: 1, width: 21, height: 16))
             path.lineWidth = 1.8
             path.stroke()
             return true
         }
-        image.isTemplate = true
+        image.isTemplate = !active
         image.accessibilityDescription = "Limitless"
         return image
     }

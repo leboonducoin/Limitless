@@ -8,16 +8,39 @@ The local signed test build has passed native task/limit trials, as recorded in
 [testing evidence](testing.md#live-task-limits-and-idle-observation). Downloaded
 GitHub distribution remains unqualified. The CLI is included inside the graphical
 app at `/Applications/Limitless.app/Contents/MacOS/limitless`; it is not a separate
-installation. The examples below use its full path, with no shell setup required.
+installation. Neither running nor building Limitless requires RTK.
+
+## Use `limitless` in Terminal
+
+The app contains the CLI, but installing an app does not automatically put its
+executables on your shell's `PATH`. For the default macOS shell (zsh), add this
+line to `~/.zshrc`, then open a new Terminal window:
 
 ```sh
-/Applications/Limitless.app/Contents/MacOS/limitless status
-/Applications/Limitless.app/Contents/MacOS/limitless status --json
-/Applications/Limitless.app/Contents/MacOS/limitless run -- swift test
-/Applications/Limitless.app/Contents/MacOS/limitless run -c --for 90m -- xcodebuild -scheme MyApp build
-/Applications/Limitless.app/Contents/MacOS/limitless watch -b --battery-floor 30 --pid 12345
-/Applications/Limitless.app/Contents/MacOS/limitless run --until 2026-10-01T18:00:00+02:00 -- my-command
+export PATH="$PATH:/Applications/Limitless.app/Contents/MacOS"
 ```
+
+You can also paste that line into the current Terminal for this window only.
+For another shell, use its corresponding startup configuration. If the app is
+installed elsewhere, adjust the path. No extra installation, `sudo`, or wrapper
+is needed. You can now type:
+
+```sh
+limitless --help
+limitless status
+limitless status --json
+limitless run -- swift test
+limitless run -c --for 90m -- xcodebuild -scheme MyApp build
+limitless watch -b --battery-floor 30 --pid 12345
+limitless run --until 2026-10-01T18:00:00+02:00 -- my-command
+```
+
+Without shell setup, the full path works immediately:
+`/Applications/Limitless.app/Contents/MacOS/limitless status`.
+To undo the optional shortcut after uninstalling, remove the added line from your
+shell configuration. Limitless never edits shell configuration itself.
+
+## Commands and limits
 
 `-b`, `-c`, and `-a` select battery, AC, or both. Supplying more than one is an
 error, including repeated flags. Omitting the mode inherits the app policy.
@@ -94,7 +117,7 @@ ends protection unless a separate manual session remains. User power, battery an
 duration limits always apply. Chat/model thinking and remote/cloud jobs without a
 local process are not tracked; keeping an idle agent host open is not a task.
 
-If setup fails, check the full-path `status --json` command above, helper approval
+If setup fails, run `/Applications/Limitless.app/Contents/MacOS/limitless status --json`, check helper approval
 and **Allow CLI & AI tasks**. A blocked or ad-hoc build must not bypass macOS security.
 The skill forbids dummy work, detached wrappers and attempts to evade user cutoffs.
 Skill installation is deliberate: Limitless does not modify agent directories.

@@ -14,8 +14,9 @@ session; independently authorized CLI tasks can continue.
 - One native material surface. Liquid Glass is reserved for native controls;
   do not stack translucent cards or blur readable content.
 - An original drawn loop mark, with an indigo app-icon field and a monochrome
-  template menu-bar version. A dark-orange bottom-right dot marks observed active
-  protection; the accessible status label supplies the same information in words.
+  template menu-bar version when idle. The entire menu-bar mark turns dark orange
+  during observed active protection, with no separate dot; the accessible status
+  label supplies the same information in words.
   Use SF Symbols for standard actions and power status.
 - A 360-point panel with grouped controls, short labels and enough height for
   wrapped error text. The body scrolls within the available screen height. Author,
@@ -96,6 +97,14 @@ Cleanup shows progress. App recycling uses NSWorkspace's Finder-style operation;
 errors are brought to the foreground. After verified cleanup and recycling, quit
 immediately without another confirmation dialog or a second asynchronous stop.
 
+While the app is open with an observed active session, ordinary macOS restart or
+shutdown requests are deferred through AppKit. The app refreshes helper status
+before deciding; expired sessions or inactive/suspended protection do not defer.
+The panel explains a deferred restart and the user can stop Limitless to proceed.
+Ordinary Quit, Command-Q, logout and uninstall retain their existing behavior.
+This does not change automatic-update settings, block downloads or guarantee
+protection from a forced restart or a managed update deadline.
+
 Automatic updates are off by default. Stable GitHub releases are checked at launch
 and every six hours after successful checks. Rate limits show GitHub's retry time;
 other failures show their actual reason and retry after fifteen minutes.
@@ -104,7 +113,7 @@ with them on, wait for all sessions to end. Download/installation errors are vis
 Preferences and login registration survive updates; automation and power sessions
 never resume themselves. macOS owns any new launch/helper approval.
 
-Keep the template status image stable across status polling; update the dot and
+Reuse the cached idle/active status images across polling; change the image and
 accessible label only when the observed presentation changes. Activate before
 opening the popover and round measured content height to whole points to avoid
 fractional layout churn. Countdown updates have no implicit animation.

@@ -28,6 +28,16 @@ hardware-matrix row and does not qualify the changed binary automatically.
 
 ## Required product
 
+On 2026-09-20 the maintainer requested an orange active menu-bar mark without a
+separate dot, direct `limitless` command setup, public commands without RTK, and
+protection from macOS update restarts during sessions. They clarified that the
+goal is preventing interruption by a restart, not blocking update downloads.
+The app defers ordinary restart/shutdown requests while observed protection has a
+live session. Forced restarts and managed update enforcement are outside AppKit's
+guarantees; system update settings are not changed. See [design](design.md) and
+[restart deferral](architecture.md#macos-restart-deferral). Real scheduled-update deferral remains a manual
+Mac check; synthetic Apple-event tests do not qualify an actual OS update.
+
 | ID | Requirement | Required evidence | Status |
 | --- | --- | --- | --- |
 | R01 | Native Swift menu-bar app, SwiftUI/AppKit | Native build, UI inspection and keyboard/VoiceOver exercise | Builds, previews and Settings keyboard navigation/inputs/shortcuts verified; complete keyboard/VoiceOver open |

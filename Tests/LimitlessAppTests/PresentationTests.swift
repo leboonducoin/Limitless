@@ -1,9 +1,43 @@
+import AppKit
+import Carbon
 import Foundation
 import LimitlessCore
 import LimitlessSystem
 import Testing
 
 @testable import LimitlessApp
+
+@Test @MainActor func systemRestartAndShutdownAreDistinctFromOrdinaryQuit() {
+    func quit(reason: OSType?) -> NSAppleEventDescriptor {
+        let event = NSAppleEventDescriptor(
+            eventClass: AEEventClass(kCoreEventClass), eventID: AEEventID(kAEQuitApplication),
+            targetDescriptor: nil, returnID: AEReturnID(kAutoGenerateReturnID),
+            transactionID: AETransactionID(kAnyTransactionID))
+        if let reason {
+            event.setParam(
+                NSAppleEventDescriptor(enumCode: reason), forKeyword: AEKeyword(kAEQuitReason))
+        }
+        return event
+    }
+    #expect(AppDelegate.isSystemRestart(quit(reason: OSType(kAERestart))))
+    #expect(AppDelegate.isSystemRestart(quit(reason: OSType(kAEShutDown))))
+    #expect(!AppDelegate.isSystemRestart(quit(reason: OSType(kAEReallyLogOut))))
+    #expect(!AppDelegate.isSystemRestart(quit(reason: nil)))
+    #expect(!AppDelegate.isSystemRestart(nil))
+    #expect(!AppDelegate.isSystemRestart(NSAppleEventDescriptor(string: "restart")))
+}
+
+@Test @MainActor func restartDeferralEndsWithTheLastLiveProtectedSession() {
+    #expect(AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: [120]))
+    #expect(AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: [0, nil]))
+    #expect(!AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: [0]))
+    #expect(!AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: []))
+    for state: PowerPresentation? in [
+        nil, .inactive, .suspended, .recovering, .restoring, .attention, .unknown,
+    ] {
+        #expect(!AppDelegate.shouldDeferRestart(presentation: state, remainingSessions: [120]))
+    }
+}
 
 @Test func durationPresetsMatchTheCompactMenu() {
     #expect(SessionEnd.presetMinutes == [15, 30, 45, 60, 120, 240, 480, 720, 1440])

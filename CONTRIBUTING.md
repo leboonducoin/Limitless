@@ -14,12 +14,12 @@ See [distribution](docs/distribution.md) before changing installation or signing
 
 ## Working locally
 
-Use RTK for terminal work (`rtk proxy` supports commands without a dedicated wrapper).
+The commands below run directly; no terminal wrapper is required.
 Use the existing Git identity and Conventional Commits, for example
 `feat(core): enforce battery and source limits`. Do not add automated attribution.
 Preserve unrelated edits and commit only reviewed intended paths.
 
-Start with `rtk git status` and use a `feature/` branch for new work. Agent
+Start with `git status` and use a `feature/` branch for new work. Agent
 contributors read installed skills from their global locations as directed by
 AGENTS.md; do not copy skill installations or another project's data into Limitless.
 
@@ -29,9 +29,9 @@ the helper. Prefer native APIs and concrete types. Any new dependency or shared
 abstraction should solve a demonstrated need.
 
 ```sh
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-asan swift Tools/ProjectTool.swift asan
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-tsan swift Tools/ProjectTool.swift tsan
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-asan swift Tools/ProjectTool.swift asan
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-tsan swift Tools/ProjectTool.swift tsan
 ```
 
 `check` validates formatting, builds Release, runs tests with coverage data, and

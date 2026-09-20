@@ -120,9 +120,22 @@ preferences and login behavior, verify the same signing certificate, and use mac
 normal launch checks. Helper approval may be needed again. No public binary release
 exists yet, so there is currently no update to download.
 
+While Limitless is open and actively protecting a session, it defers ordinary
+macOS restart/shutdown requests. Stop Limitless to allow the restart. Downloads
+continue normally; forced restarts and managed update deadlines can override this.
+
 ### CLI and AI tasks
 
 After installing the signed helper and enabling **Allow CLI & AI tasks** in the panel:
+
+Add this line to `~/.zshrc` and open a new Terminal window, or paste it into the
+current Terminal to use `limitless` immediately:
+
+```sh
+export PATH="$PATH:/Applications/Limitless.app/Contents/MacOS"
+```
+
+Then run commands directly, without RTK or `sudo`:
 
 ```sh
 limitless status --json
@@ -159,12 +172,11 @@ and automation again. No session is restored automatically. See the complete
 
 Use the Apple Swift toolchain on macOS. CI checks Xcode 26.2 compatibility and runs
 sanitizers with Xcode 26.6; local checks also pass with Command Line Tools Swift 6.4.
-Commands below use the project's
-RTK development wrapper, which is not part of the delivered application.
+The commands below run directly; RTK is not required.
 
 ```sh
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
-rtk proxy env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview swift Tools/ProjectTool.swift bundle
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview swift Tools/ProjectTool.swift bundle
 ```
 
 The output directory must be new; existing files are never replaced. Keeping
@@ -173,7 +185,7 @@ build artifacts outside a synced Desktop avoids FileProvider signing interferenc
 The Debug app supports read-only native previews:
 
 ```sh
-rtk proxy /private/tmp/limitless-preview/Limitless.app/Contents/MacOS/LimitlessApp --preview active
+/private/tmp/limitless-preview/Limitless.app/Contents/MacOS/LimitlessApp --preview active
 ```
 
 Use `community-bundle` to inspect the alternative helper layout. Signed release

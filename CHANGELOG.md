@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — build 9 refinements
+
+- Defer ordinary macOS restart/shutdown requests while the open app observes a
+  live protected session; forced restarts and managed update deadlines remain outside
+  this protection. Keep system update settings and downloads unchanged.
+- Color the whole active menu-bar mark orange and remove the separate dot.
+- Document direct `limitless` commands with optional PATH setup and remove RTK
+  wrappers from public usage, build and maintenance instructions.
+
 ## Unreleased — build 8 refinements
 
 - Keep setup focused on administrator approval and independent launch at login.
