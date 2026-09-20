@@ -28,7 +28,7 @@ struct MenuPanel: View {
             HStack(spacing: 8) {
                 HStack(spacing: 0) {
                     Text(
-                        "Limitless \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · © 2026 "
+                        "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · © 2026 "
                     )
                     Link(
                         "Arthur Barreau",
@@ -46,7 +46,7 @@ struct MenuPanel: View {
                 .accessibilityLabel("Limitless on GitHub").help("Limitless on GitHub")
             }.padding(.horizontal, 16).padding(.vertical, 8)
         }
-        .frame(width: 360)
+        .frame(width: 340)
         .background {
             if reduceTransparency || contrast == .increased {
                 Color(nsColor: .windowBackgroundColor)
@@ -64,7 +64,7 @@ struct MenuPanel: View {
             HStack(spacing: 10) {
                 Image(nsImage: BrandArt.appIcon(size: 64)).resizable()
                     .frame(width: 32, height: 32).accessibilityHidden(true)
-                Text("Limitless").font(.headline)
+                Text("Limitless").font(.system(size: 21, weight: .semibold))
                 Spacer()
                 if model.isPreview {
                     Text("PREVIEW").font(.caption2).foregroundStyle(.secondary)
@@ -103,7 +103,7 @@ struct MenuPanel: View {
                         "\(percent)%",
                         systemImage: model.status?.power.source.symbol ?? "battery.75percent"
                     )
-                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    .font(.callout).monospacedDigit().foregroundStyle(.secondary)
                 }
             }
             if let error = model.connectionError ?? model.status?.sleep.fault?.guidance {

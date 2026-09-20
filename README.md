@@ -1,234 +1,83 @@
 # Limitless
 
-**A little more time.** A native macOS menu-bar app that keeps your Mac awake for
-the time or work you choose.
+**Keep your Mac awake for the time or task you choose.**
 
 [![CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml)
 [![Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![macOS 26+](https://img.shields.io/badge/macOS-26%2B-111111.svg)](docs/requirements.md)
 
-[Preview](#preview) · [Features](#what-limitless-does) · [Installation](#installation-and-signing) · [CLI & AI](#cli-and-ai-tasks) · [Development](#development) · [Documentation](#project-documentation)
-
-By **Arthur Barreau**. [MIT](LICENSE), copyright © 2026 Arthur Barreau.
-
-**In development — not yet a published or hardware-qualified application.**
-The first release targets **macOS 26 or later on Apple Silicon**. The app, CLI,
-helper and distribution tooling are implemented, but there is no qualified public
-download yet. Local signed trials verified native installation,
-live battery keep-awake, concurrent tasks and restoration/removal. Physical
-closed-lid operation, clean-Mac distribution and the remaining security scenarios
-are still release gates. See the [acceptance matrix](docs/requirements.md).
-
-Limitless is an independent Swift implementation inspired by
-[Sleepless](https://github.com/Aboudjem/Sleepless). No Sleepless code or assets are
-included. Public Apple APIs handle idle-sleep assertions, power information,
-native authorization and process tracking. The undocumented global
-`pmset disablesleep` mechanism is isolated in one backend for lid-closed operation
-where the hardware and macOS permit it, without requiring an external display.
-
-## Preview
+I made Limitless as a small, native menu-bar utility. Choose a duration, follow a
+process, or let your AI agent keep the Mac awake while it works. Everything lives
+in one compact menu.
 
 <p align="center">
-  <img src="docs/images/menu-preview.png" width="400" alt="Limitless native menu panel in dark mode, showing a preview session, battery reserve and tracked tasks">
+  <img src="docs/images/menu-preview.png" width="340" alt="Limitless menu-bar panel">
 </p>
 
-Native macOS capture from an earlier read-only development preview. The current
-interface brings settings into this panel; this image has not yet been refreshed.
-The displayed battery and session values are sample data, not evidence of
-closed-lid operation.
+*Earlier development preview with sample values.*
 
-## What Limitless does
+## What it does
 
-| Control | Behavior |
-| --- | --- |
-| Power source | Battery only (`-b`), power adapter only (`-c`), or both (`-a`); exactly one mode at a time |
-| Battery protection | Every integer from 0–50%; default 20%. A value of 0 disables custom protection and shows a warning |
-| Automatic stop | 15/30/45 minutes, 1/2/4/8/12/24 hours, custom duration, date/time, process completion, or no limit |
-| Tracked commands | The Swift CLI holds a session while its foreground command exists and releases it on completion |
-| Concurrent work | Each task owns its session; the last eligible task releases the automatic hold |
-| Observed state | Displays confirmed, suspended, restoring and unavailable states; recovery has a bounded retry budget |
-| Login | Launch at login is independent of enabling keep-awake; active sessions never return after login or reboot |
+- Keeps the Mac awake, including with the lid closed where the Mac and macOS allow it.
+- Stops after a timer, at a date, when selected processes finish, or when you press Stop.
+- Supports battery, power adapter, or both. Battery protection defaults to 20%.
+- Follows CLI commands and entire agent tasks. Your manual session takes priority over AI.
+- Checks the applied power state every two seconds and reports problems.
+- Offers independent launch at login and optional GitHub updates.
 
-The SwiftUI/AppKit interface uses native materials, system typography and original
-icon artwork. The application, CLI, helper and maintenance tools are Swift, with
-no third-party Swift package dependency and **no Node or Python product runtime**.
+The app, CLI and helper are written in Swift. No Node or Python runtime is needed.
 
-## How it works
+## Install
 
-```mermaid
-flowchart LR
-    App[Menu-bar app] -->|Authenticated control XPC| Helper[Privileged helper]
-    CLI[Swift CLI and AI tasks] -->|Authenticated task XPC| Helper
-    Helper --> Core[Shared policy and session core]
-    Helper --> System[Apple power APIs and isolated lid backend]
-```
+**A public download is not available yet.** Local test builds exist; release
+qualification is still in progress. Downloads will be on
+[GitHub Releases](https://github.com/leboonducoin/Limitless/releases).
 
-The helper enforces user limits on every request. Your commands run in the
-unprivileged CLI; the helper accepts no arbitrary command or filesystem path.
-See the [architecture](docs/architecture.md) and [security policy](SECURITY.md).
+Unzip `Limitless.app`, move it to **Applications**, then open it. The icon appears
+in the menu bar. Enable the helper through the app's macOS administrator prompt.
+Your password is never stored. Users do not need an Apple Developer account.
 
-## Installation and signing
+The initial release targets **Apple Silicon, macOS 26+**. Non-notarized builds may
+need a manual macOS opening decision; managed Macs can block them. See
+[installation and signing](docs/distribution.md).
 
-**GitHub Releases is the only planned installation route.** No public binary has
-been published yet. Each release will contain **Limitless.app**, including its
-menu-bar interface and companion CLI.
+## Use it
 
-Extract the release archive, move Limitless.app into Applications and open it.
-The menu-bar icon appears on first launch, before helper approval. Launch at login
-remains an independent choice in the panel. No Terminal command is needed to use
-the graphical app.
+Choose when to stop, then click **Keep awake**. An orange dot means protection is
+active. Click outside to close the panel. Right-click the icon to quit or uninstall.
+Uninstall removes the helper, preferences, cache and app-owned CLI shortcut.
 
-The community channel uses a stable publisher certificate and native macOS
-administrator consent without requiring paid Apple Developer membership from
-the maintainer or users. Users will receive the already signed app; they will not
-need to build it or create a certificate. Developer ID and notarization are an
-optional later channel. The community installer and packaging are implemented;
-the local signed installation/active-removal cycle passed without paid membership
-or added certificate trust. Clean-Mac download qualification is pending.
-
-A downloaded non-notarized app may require an explicit decision in macOS Privacy
-& Security, and managed Macs may prevent opening it. Limitless does not
-remove quarantine or change Gatekeeper. Ad-hoc development builds cannot enable
-the helper or change power settings. See [distribution and trust](docs/distribution.md).
-
-## Using a qualified installation
-
-These steps describe the implemented controls; they are not a claim that the
-current development bundle is ready for privileged use.
-
-1. Open Limitless and choose **Enable Limitless**. macOS handles helper approval;
-   the app never asks for or stores your administrator password itself.
-2. In the menu panel, choose the power source and **Battery reserved limit**; changes apply immediately.
-   Enabling **Launch at login** does not start a session.
-3. Choose the menu panel's stop condition and start a session. A mismatched power
-   source suspends it; returning to an allowed source can resume it before its deadline.
-4. Use **Stop** to revoke all current demands. Expiry, battery cutoff and
-   explicit stop end affected sessions; recovery cannot revive them.
-
-Stopping protection permits ordinary sleep. It does not force sleep or terminate
-your command. If restoration is unconfirmed, keep the app installed and follow
-its status guidance instead of assuming that quitting or rebooting fixed the flag.
-
-**No limit** is in the Stop menu. **When a process ends…** accepts several selections
-or PIDs separated by semicolons; the session ends when all of them finish. Its optional
-**Session time limit** still acts as the user's maximum across sessions.
-
-Enable **Automatic updates** to install newer stable GitHub releases when idle.
-Otherwise an **Update** button appears only when one is available. Updates preserve
-preferences and login behavior, verify the same signing certificate, and use macOS's
-normal launch checks. Helper approval may be needed again. No public binary release
-exists yet, so there is currently no update to download.
-
-While Limitless is open and actively protecting a session, it defers ordinary
-macOS restart/shutdown requests. Stop Limitless to allow the restart. Downloads
-continue normally; forced restarts and managed update deadlines can override this.
-
-### CLI and AI tasks
-
-After installing the signed helper and enabling **Allow CLI & AI tasks** in the panel:
-
-Add this line to `~/.zshrc` and open a new Terminal window, or paste it into the
-current Terminal to use `limitless` immediately:
+Enable **Allow CLI & AI tasks** to use the bundled command directly:
 
 ```sh
-export PATH="$PATH:/Applications/Limitless.app/Contents/MacOS"
+limitless run -- swift test
+limitless watch --pid 12345
+limitless status
 ```
 
-Then run commands directly, without RTK or `sudo`:
+[CLI options and AI setup →](docs/cli.md)
 
-```sh
-limitless status --json
-limitless run -c --for 90m -- swift test
-limitless run -a --unlimited -- my-command
-limitless watch -b --battery-floor 30 --pid 12345
-```
+## Limits
 
-Replace the command and PID with work you actually want to follow. CLI and AI
-requests can tighten your limits, never relax them. A foreground command's exit
-code is preserved. Process observation checks PID, owner and start time; it never
-kills the observed process. Commands are launched as your user, without elevation.
-
-The [AI skill](skills/limitless/SKILL.md) uses the same CLI. Each concurrent task
-must be tracked separately; an idle agent host, dummy command or detached wrapper
-is not evidence of ongoing work. A separate manual session remains independent.
-See [CLI syntax, signals and tracking limits](docs/cli.md).
-
-## Removal and upgrades
-
-Right-click the menu-bar icon and choose **Uninstall Limitless…**.
-This ends sessions, confirms restoration of owned state, removes the helper and
-login registration, and checks the result. Commands themselves keep running.
-All saved preferences, cache and window state are erased, then the app moves to Trash.
-If cleanup fails, keep the matching app
-and retry; do not delete the protected journal manually.
-
-The app's maintenance entry point uses the same guarded cleanup. Upgrades
-also remove the old integrations and preferences: reopen the new app to enable the helper, login
-and automation again. No session is restored automatically. See the complete
-[removal and recovery procedure](docs/distribution.md#prepare-for-removal).
+Closed-lid behavior relies on the undocumented global `pmset disablesleep` setting,
+alongside Apple's `caffeinate`. Compatibility needs a real-Mac test. Limitless
+does not stop battery drain or override user limits. Ordinary restart requests can
+be deferred during a session; forced or managed restarts cannot be guaranteed.
 
 ## Development
 
-Use the Apple Swift toolchain on macOS. CI checks Xcode 26.2 compatibility and runs
-sanitizers with Xcode 26.6; local checks also pass with Command Line Tools Swift 6.4.
-The commands below run directly; RTK is not required.
-
 ```sh
-env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
-env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview swift Tools/ProjectTool.swift bundle
+swift Tools/ProjectTool.swift check
 ```
 
-The output directory must be new; existing files are never replaced. Keeping
-build artifacts outside a synced Desktop avoids FileProvider signing interference.
-`bundle` creates an ad-hoc inspection app without registering a helper or login item.
-The Debug app supports read-only native previews:
+See [contributing](CONTRIBUTING.md), [architecture](docs/architecture.md),
+[tests](docs/testing.md), [design](docs/design.md), and
+[release acceptance](docs/requirements.md). Report vulnerabilities
+[privately](https://github.com/leboonducoin/Limitless/security/advisories/new).
 
-```sh
-/private/tmp/limitless-preview/Limitless.app/Contents/MacOS/LimitlessApp --preview active
-```
+Inspired by [Sleepless](https://github.com/Aboudjem/Sleepless), independently
+implemented without its code or assets.
 
-Use `community-bundle` to inspect the alternative helper layout. Signed release
-commands are documented separately and require an actual signing identity.
-Every push to `main` runs GitHub Actions: Release builds and tests, separate
-Address/Thread Sanitizer runs, both development bundle layouts, workflow linting,
-secret scanning and CodeQL for Swift and Actions. Pull requests also run dependency
-review; security checks run weekly. The badges above link to the actual results.
-CI never installs a privileged helper or changes the runner's power settings.
-See [testing and observed results](docs/testing.md) for the exact checks and manual
-acceptance gates. A green workflow does not certify physical Mac compatibility.
-
-## Project documentation
-
-- [Requirements and acceptance tracking](docs/requirements.md)
-- [Architecture and behavior](docs/architecture.md)
-- [CLI and AI integration](docs/cli.md)
-- [Native interface contract](docs/design.md)
-- [Build, installation and removal](docs/distribution.md)
-- [Security policy](SECURITY.md)
-- [Testing and evidence](docs/testing.md)
-- [Contributing](CONTRIBUTING.md)
-- [Code of conduct](CODE_OF_CONDUCT.md)
-- [Agent instructions](AGENTS.md)
-
-## Safety boundary
-
-Lid-closed support depends on the Mac and macOS version. Reading a power flag is
-not proof of physical operation. Limitless must not claim that an unverified
-change succeeded. `disablesleep` is global: `-b` and `-c` are policies enforced by
-Limitless as power changes, not independent OS settings. Missing telemetry cannot
-be treated as successful protection or restoration. Another privileged utility
-can interfere with this global flag, and helper/OS failure can delay cleanup.
-
-No claim of thermal safety or universal closed-lid compatibility is made. Physical
-acceptance includes the Mac model, exact OS version, battery/AC transitions,
-crashes and confirmed restoration. Do not run privileged experiments without
-their explicit authorization and restoration procedure.
-
-## Contributing and reporting problems
-
-Follow [CONTRIBUTING.md](CONTRIBUTING.md) for focused changes and validation.
-Bug reports should identify the app commit/version, macOS version, Mac model,
-power conditions and observed result, without serial numbers or private commands.
-Report security vulnerabilities privately through [SECURITY.md](SECURITY.md).
-The [changelog](CHANGELOG.md) records implemented work; it does not imply a release.
+By [Arthur Barreau](https://www.linkedin.com/in/arthurbarreau/).
+[MIT](LICENSE) · Copyright © 2026 Arthur Barreau.

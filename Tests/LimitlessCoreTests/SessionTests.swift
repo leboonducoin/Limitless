@@ -135,13 +135,15 @@ func batteryFloorPermanentlyStopsEvenWhenAdapterCannotKeepUp(_ source: PowerSour
     #expect(registry.evaluate(power: ac, now: try clock()).stopped[id] == .policyChanged)
 }
 
-@Test func stopAllCannotBeUndoneByAutomatedReacquisition() throws {
+@Test func stopRetainsConsentWhileFaultsRevokeIt() throws {
     var registry = SessionRegistry(policy: try UserPolicy(allowsAutomation: true))
     let owner = UUID()
     let id = try registry.start(.init(), owner: owner, kind: .task, now: clock())
-    try registry.stopAll()
+    registry.stopAll()
     let duplicateRelease = registry.stop(id, owner: owner)
     #expect(!duplicateRelease)
+    #expect(registry.policy.allowsAutomation)
+    try registry.revokeAutomationAndStop()
     #expect(throws: PolicyError.automationNotAuthorized) {
         try registry.start(.init(), owner: owner, kind: .task, now: clock())
     }

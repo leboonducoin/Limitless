@@ -66,7 +66,8 @@ public struct ServiceSessions: Sendable {
         }
         if isRemoving {
             switch operation {
-            case .configure, .start, .rearm: throw ServiceError.removalInProgress
+            case .configure, .start, .startAgent, .rearm, .installCLI:
+                throw ServiceError.removalInProgress
             case .status, .stop, .stopAll, .heartbeat, .retryRestoration, .prepareRemoval,
                 .prepareUpdate, .finishRemoval:
                 break
@@ -76,33 +77,49 @@ public struct ServiceSessions: Sendable {
         clients[owner] = client
         switch operation {
         case .configure(let policy): registry.updatePolicy(policy)
-        case .start(let request):
+        case .start, .startAgent:
             guard client.role == .application || !client.hasStarted else {
                 throw ServiceError.ownerExpired
             }
             guard !registry.sessions.values.contains(where: { $0.owner == owner }) else {
                 throw PolicyError.duplicateSession
             }
-            let id = try registry.start(
-                request, owner: owner, kind: client.role == .application ? .manual : .task, now: now
-            )
+            let request: SessionRequest
+            let kind: SessionKind
+            if case .start(let submitted) = operation {
+                request = submitted
+                kind = client.role == .application ? .manual : .task
+            } else {
+                guard client.role == .task else { throw ServiceError.unauthorized }
+                // Both sources and 20%, constrained by any stricter user limits.
+                request = SessionRequest(
+                    mode: registry.policy.mode,
+                    batteryFloor: max(20, registry.policy.batteryFloor))
+                kind = .agent
+            }
+            // An agent ignored during manual work cannot retry on this connection later.
+            if kind == .agent {
+                client.hasStarted = true
+                clients[owner] = client
+            }
+            let id = try registry.start(request, owner: owner, kind: kind, now: now)
             client.hasStarted = true
             clients[owner] = client
             return id
         case .stop(let id):
             guard registry.stop(id, owner: owner) else { throw ServiceError.unauthorized }
-        case .stopAll: try registry.stopAll()
+        case .stopAll: registry.stopAll()
         case .prepareRemoval, .prepareUpdate:
             // The check and admission closure share the helper's serial worker.
             // Automatic updates cannot interrupt work that started during a download.
             if operation == .prepareUpdate, !registry.sessions.isEmpty {
                 throw ServiceError.sessionRejected
             }
-            try registry.stopAll()
+            try registry.revokeAutomationAndStop()
             isRemoving = true
         case .finishRemoval:
             guard isRemoving else { throw ServiceError.restorationRequired }
-        case .status, .heartbeat, .rearm, .retryRestoration: break
+        case .status, .heartbeat, .rearm, .retryRestoration, .installCLI: break
         }
         return nil
     }
@@ -111,7 +128,7 @@ public struct ServiceSessions: Sendable {
         registry.evaluate(power: power, now: now)
     }
 
-    public mutating func revokeAutomationAndStop() throws { try registry.stopAll() }
+    public mutating func revokeAutomationAndStop() throws { try registry.revokeAutomationAndStop() }
 
     public func summaries(
         for owner: UUID, evaluation: SessionEvaluation, now: ClockSnapshot

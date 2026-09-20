@@ -70,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     private var terminating = false
     private var statusItem: NSStatusItem?
     private var lastPresentation: PowerPresentation?
+    private let activeDot = StatusDot()
     private let popover = NSPopover()
     private var outsideClickMonitor: Any?
     private var removalWindow: NSWindow?
@@ -128,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     }
 
     private func installStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        let item = NSStatusBar.system.statusItem(withLength: 34)
         statusItem = item
         item.button?.image = BrandArt.menuIdle
         item.button?.setAccessibilityLabel("Limitless: Setup required")
@@ -136,6 +137,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         item.button?.action = #selector(clickStatusItem)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         item.button?.setAccessibilityHelp("Click to open. Right-click for Quit and Uninstall.")
+        if let button = item.button {
+            activeDot.frame = NSRect(
+                x: button.bounds.midX + 10,
+                y: button.isFlipped ? button.bounds.maxY - 7 : 3, width: 4, height: 4)
+            activeDot.isHidden = true
+            activeDot.wantsLayer = true
+            activeDot.layer?.backgroundColor =
+                NSColor(srgbRed: 0.85, green: 0.36, blue: 0.04, alpha: 1).cgColor
+            activeDot.layer?.cornerRadius = 2
+            activeDot.setAccessibilityElement(false)
+            button.addSubview(activeDot)
+        }
         popover.behavior = .transient
         popover.delegate = self
         popover.animates = false
@@ -168,8 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
             let presentation = model.presentation
             if presentation != lastPresentation {
                 lastPresentation = presentation
-                statusItem?.button?.image =
-                    presentation == .active ? BrandArt.menuActive : BrandArt.menuIdle
+                activeDot.isHidden = presentation != .active
                 statusItem?.button?.setAccessibilityLabel(
                     "Limitless: \(presentation?.title ?? "Setup required")")
             }
@@ -207,6 +219,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         } else if popover.isShown {
             popover.performClose(nil)
         } else {
+            popover.animates =
+                !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                && NSApp.currentEvent?.type == .leftMouseUp
             NSApp.activate()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
@@ -245,6 +260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
             "Ends all sessions and removes the helper, login item and preferences. Then moves Limitless to the Trash. Running commands continue."
         alert.addButton(withTitle: "Uninstall")
         alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
         alert.buttons.first?.isEnabled = model.trustedBuild && !model.isPreview
         NSApp.activate()
         guard alert.runModal() == .alertFirstButtonReturn else { return }
@@ -351,4 +367,8 @@ private struct RemovalProgress: View {
         ProgressView { Text(model.removalStep ?? "Preparing…") }
             .padding(24).frame(width: 340, height: 110)
     }
+}
+
+private final class StatusDot: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

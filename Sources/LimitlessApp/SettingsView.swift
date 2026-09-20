@@ -10,23 +10,30 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             if model.showsPowerControls {
                 Group {
-                    Picker("Power source", selection: $model.draft.mode) {
-                        ForEach(PowerMode.allCases, id: \.self) { mode in Text(mode.label).tag(mode)
+                    if model.showsPowerSource {
+                        Picker("Power source", selection: $model.draft.mode) {
+                            ForEach(PowerMode.allCases, id: \.self) { mode in
+                                Text(mode.label).tag(mode)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("Power source")
                     }
-                    .pickerStyle(.segmented)
-                    .accessibilityLabel("Power source")
-                    Stepper(value: $model.draft.batteryFloor, in: 0...50, step: 1) {
-                        LabeledContent(
-                            "Battery reserved limit", value: "\(model.draft.batteryFloor)%"
-                        )
-                        .monospacedDigit()
-                    }
-                    .accessibilityLabel("Battery reserved limit")
-                    .accessibilityValue("\(model.draft.batteryFloor)%")
-                    if model.draft.batteryFloor == 0 {
-                        Label("Battery protection is off", systemImage: "exclamationmark.triangle")
+                    if model.showsBatteryLimit {
+                        Stepper(value: $model.draft.batteryFloor, in: 0...50, step: 1) {
+                            LabeledContent(
+                                "Battery reserved limit", value: "\(model.draft.batteryFloor)%"
+                            )
+                            .monospacedDigit()
+                        }
+                        .accessibilityLabel("Battery reserved limit")
+                        .accessibilityValue("\(model.draft.batteryFloor)%")
+                        if model.draft.batteryFloor == 0 {
+                            Label(
+                                "Battery protection is off", systemImage: "exclamationmark.triangle"
+                            )
                             .font(.caption)
+                        }
                     }
                     if model.stopChoice == .process {
                         Toggle("Session time limit", isOn: $model.draft.limitsDuration)
@@ -44,7 +51,7 @@ struct SettingsView: View {
                         }
                     }
                 }.disabled(!model.canControl && !model.isPreview)
-                Divider()
+                if model.showsPowerSource || model.stopChoice == .process { Divider() }
                 HStack {
                     Toggle(
                         "Allow CLI & AI tasks",

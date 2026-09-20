@@ -55,12 +55,18 @@ final class HelperRuntime {
         do {
             let request = try ServiceWire.decodeRequest(data)
             _ = try reconcile(owner: owner)
-            if case .start = request.operation, controller.fault != nil {
-                throw ServiceError.restorationRequired
+            if controller.fault != nil {
+                switch request.operation {
+                case .start, .startAgent: throw ServiceError.restorationRequired
+                default: break
+                }
             }
             let started = try sessions.apply(
                 request.operation, owner: owner, now: SystemClock.now())
             switch request.operation {
+            case .installCLI:
+                guard let user = sessions.consoleUser else { throw ServiceError.unauthorized }
+                try InstalledCLI.install(identity: identity, user: user)
             case .rearm: try controller.rearm()
             case .retryRestoration, .prepareRemoval, .prepareUpdate: controller.retryRestoration()
             default: break
@@ -70,6 +76,9 @@ final class HelperRuntime {
                 let status = try reconcile(owner: owner)
                 guard status.canRemoveService, !backend.hasIdleAssertion
                 else { throw ServiceError.restorationRequired }
+                if request.operation == .prepareRemoval, let user = sessions.consoleUser {
+                    try InstalledCLI.remove(user: user)
+                }
                 if installedFiles == nil {
                     installedFiles = try InstalledHelperFiles(identity: identity)
                 }

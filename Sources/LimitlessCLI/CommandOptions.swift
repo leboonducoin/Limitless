@@ -10,12 +10,18 @@ enum CommandOptions: Equatable {
     case status(json: Bool)
     case run(command: [String], request: SessionRequest)
     case watch(pid: Int32, request: SessionRequest)
+    case hook(provider: String)
 
     static func parse(_ arguments: [String]) throws -> Self {
         if arguments.isEmpty || arguments == ["--help"] || arguments == ["help"] { return .help }
         if arguments == ["--version"] { return .version }
         if arguments == ["status"] { return .status(json: false) }
         if arguments == ["status", "--json"] { return .status(json: true) }
+        if arguments.count == 2, arguments[0] == "hook",
+            ["codex", "claude", "cursor", "gemini", "other"].contains(arguments[1])
+        {
+            return .hook(provider: arguments[1])
+        }
         guard let verb = arguments.first, verb == "run" || verb == "watch" else {
             throw CLIError.usage("Expected run, watch or status. Use --help for syntax.")
         }

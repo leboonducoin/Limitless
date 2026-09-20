@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — build 10 refinements
+
+- Restore a separate orange dot below/right of the menu-bar mark.
+- Narrow the panel, enlarge the title, align battery/time text and restore native opening motion.
+- Hide unavailable desktop battery controls and the battery limit in adapter-only mode.
+- Keep CLI consent after Stop and remember its opt-in; install the command shortcut automatically.
+- Track whole agent tasks through native Swift lifecycle hooks, with manual-session priority.
+- Use a red uninstall confirmation and remove the app-owned CLI link during cleanup.
+- Shorten public guides and keep older test evidence in a separate history document.
+
 ## Unreleased — build 9 refinements
 
 - Defer ordinary macOS restart/shutdown requests while the open app observes a

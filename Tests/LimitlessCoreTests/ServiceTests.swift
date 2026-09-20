@@ -18,12 +18,39 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     return (value, app, task)
 }
 
+@Test func rememberedAutomationCannotWeakenLiveLimitsOrRestoreDuringFaults() throws {
+    let policy = try UserPolicy(mode: .external, batteryFloor: 35, maximumDuration: 60)
+    let saved = try UserPolicy(mode: .all, batteryFloor: 20, maximumDuration: 120)
+    func snapshot(
+        _ phase: SleepPhase = .inactive, observed: SleepObservation = .allowed,
+        fault: SleepFault? = nil, removal: RemovalState = .none,
+        sessions: [SessionSummary] = []
+    ) -> ServiceStatus {
+        ServiceStatus(
+            policy: policy, power: .init(source: .external, battery: .notPresent),
+            sleep: .init(phase: phase, observed: observed, ownsGlobalHold: false, fault: fault),
+            sessions: sessions, sampledAt: Date(), removal: removal)
+    }
+    let proposed = try snapshot().automationPolicyToRestore(saved)
+    let restored = try #require(proposed)
+    #expect(restored.mode == .external && restored.batteryFloor == 35)
+    #expect(restored.maximumDuration == 60 && restored.allowsAutomation)
+    #expect(try snapshot(observed: .unknown).automationPolicyToRestore(saved) == nil)
+    #expect(try snapshot(fault: .interrupted).automationPolicyToRestore(saved) == nil)
+    #expect(try snapshot(removal: .ready).automationPolicyToRestore(saved) == nil)
+    let active = SessionSummary(
+        id: UUID(), kind: .manual, end: .unlimited, startedAt: Date(),
+        remainingSeconds: nil, suspension: nil, belongsToClient: true)
+    #expect(try snapshot(sessions: [active]).automationPolicyToRestore(saved) == nil)
+}
+
 @Test func taskEndpointCannotChangePolicyOrRearmAndCannotImpersonateApp() throws {
     var (value, app, task) = try service()
     let now = try serviceClock(0)
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
         .stopAll, .rearm, .retryRestoration, .prepareRemoval, .prepareUpdate, .finishRemoval,
+        .installCLI,
     ] {
         #expect(throws: ServiceError.unauthorized) {
             try value.apply(operation, owner: task, now: now)
@@ -37,6 +64,76 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     let id = try #require(started)
     #expect(value.registry.sessions[id]?.kind == .task)
     #expect(throws: ServiceError.unauthorized) { try value.apply(.stop(id), owner: app, now: now) }
+}
+
+@Test func stopKeepsCLIEnabledButCannotRestartExistingWork() throws {
+    var (value, app, task) = try service()
+    let now = try serviceClock(0)
+    _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
+    _ = try value.apply(.start(SessionRequest()), owner: task, now: now)
+    _ = try value.apply(.stopAll, owner: app, now: now)
+    #expect(value.registry.policy.allowsAutomation)
+    #expect(value.registry.sessions.isEmpty)
+    #expect(throws: ServiceError.ownerExpired) {
+        try value.apply(.start(SessionRequest()), owner: task, now: now)
+    }
+    let next = UUID()
+    try value.connect(owner: next, user: 501, role: .task, now: now)
+    #expect(try value.apply(.start(SessionRequest()), owner: next, now: now) != nil)
+}
+
+@Test func agentsShareAwakeTimeAndYieldPermanentlyToManualSessions() throws {
+    var (value, app, first) = try service()
+    let now = try serviceClock(0)
+    _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
+    let startedA = try value.apply(.startAgent, owner: first, now: now)
+    let a = try #require(startedA)
+    let second = UUID()
+    try value.connect(owner: second, user: 501, role: .task, now: now)
+    let startedB = try value.apply(.startAgent, owner: second, now: now)
+    let b = try #require(startedB)
+    #expect(value.registry.sessions[a]?.request.mode == .all)
+    #expect(value.registry.sessions[a]?.request.batteryFloor == 20)
+    _ = try value.apply(.stop(a), owner: first, now: now)
+    #expect(value.registry.sessions[b] != nil)
+    let startedManual = try value.apply(.start(.init()), owner: app, now: now)
+    let manual = try #require(startedManual)
+    #expect(value.registry.sessions.count == 1 && value.registry.sessions[manual] != nil)
+    #expect(throws: ServiceError.ownerExpired) {
+        try value.apply(.startAgent, owner: second, now: now)
+    }
+    let third = UUID()
+    try value.connect(owner: third, user: 501, role: .task, now: now)
+    let original = value.registry.policy
+    #expect(throws: ServiceError.sessionRejected) {
+        try value.apply(.startAgent, owner: third, now: now)
+    }
+    #expect(value.registry.policy == original && value.registry.sessions[manual] != nil)
+    _ = try value.apply(.stop(manual), owner: app, now: now)
+    #expect(throws: ServiceError.ownerExpired) {
+        try value.apply(.startAgent, owner: third, now: now)
+    }
+}
+
+@Test func agentsRespectStricterLimitsAndNeverReacquireAfterBatteryCutoff() throws {
+    var (value, app, task) = try service()
+    let now = try serviceClock(0)
+    _ = try value.apply(
+        .configure(
+            try UserPolicy(
+                mode: .battery, batteryFloor: 35,
+                maximumDuration: 60, allowsAutomation: true)), owner: app, now: now)
+    let started = try value.apply(.startAgent, owner: task, now: now)
+    let id = try #require(started)
+    #expect(value.registry.sessions[id]?.request.mode == .battery)
+    #expect(value.registry.sessions[id]?.request.batteryFloor == 35)
+    #expect(value.registry.sessions[id]?.authorizedDuration == 60)
+    let power = PowerSnapshot(
+        source: .battery, battery: .available(percent: 35, isDischarging: true))
+    #expect(value.evaluate(power: power, now: now).stopped[id] == .batteryFloor)
+    #expect(throws: ServiceError.ownerExpired) {
+        try value.apply(.startAgent, owner: task, now: now)
+    }
 }
 
 @Test func expiredLeaseCannotBeRenewedOrResurrectWork() throws {

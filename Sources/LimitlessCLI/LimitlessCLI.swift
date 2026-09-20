@@ -6,11 +6,16 @@ import LimitlessSystem
 @main
 struct LimitlessCLI {
     @MainActor static func main() async {
+        if Array(CommandLine.arguments.dropFirst()) == ["_agent-hold"] {
+            await holdAgent()
+            return
+        }
         do {
             let options = try CommandOptions.parse(Array(CommandLine.arguments.dropFirst()))
             switch options {
             case .help: print(help)
             case .version: print("Limitless \(LimitlessIdentity.version)")
+            case .hook(let provider): await AgentHook.run(provider: provider)
             case .status(let json):
                 let client = try await ServiceClient(role: .task)
                 do {
@@ -54,15 +59,20 @@ struct LimitlessCLI {
     }
 
     @MainActor private static func follow(
-        command: TrackedCommand?, process: ProcessIdentity?, request: SessionRequest
+        command: TrackedCommand?, process: ProcessIdentity?, request: SessionRequest,
+        agent: AgentActivity? = nil
     ) async throws -> Int32 {
         let client = try await ServiceClient(role: .task)
         do {
-            let reply = try await client.send(.start(request))
+            let reply = try await client.send(agent == nil ? .start(request) : .startAgent)
             guard let id = reply.startedSession, let status = reply.status,
                 let session = status.sessions.first(where: { $0.id == id && $0.belongsToClient }),
                 status.sleep.fault == nil
             else { throw ServiceError.sessionRejected }
+            if agent != nil {
+                FileHandle.standardOutput.write(Data([1]))
+                try FileHandle.standardOutput.close()
+            }
             if max(request.batteryFloor ?? 0, status.policy.batteryFloor) == 0 {
                 report("Warning: custom battery protection is disabled (0%).")
             }
@@ -83,6 +93,7 @@ struct LimitlessCLI {
                         try await Task.sleep(for: .seconds(ServiceSessions.heartbeatSeconds))
                         if let command, !command.isRunning { return }
                         if let process, !process.isAlive { return }
+                        if let agent, !agent.isAlive { return }
                         let current = try await client.send(.heartbeat)
                         guard !protectionEnded else { return }
                         guard let status = current.status,
@@ -133,7 +144,7 @@ struct LimitlessCLI {
             if let command {
                 result = await command.result()
             } else {
-                while interrupted == 0, let process, process.isAlive {
+                while interrupted == 0, process?.isAlive ?? agent?.isAlive ?? false {
                     try await Task.sleep(for: .seconds(1))
                 }
                 result = interrupted == 0 ? 0 : 128 + interrupted
@@ -149,6 +160,26 @@ struct LimitlessCLI {
             await client.close()
             throw error
         }
+    }
+
+    @MainActor private static func holdAgent() async {
+        // Detached only for an explicit lifecycle event; never a login/background service.
+        _ = setsid()
+        signal(SIGPIPE, SIG_IGN)
+        do {
+            let data = try AgentHook.readInput(maximum: 8_192)
+            let context = try JSONDecoder().decode(AgentActivity.Context.self, from: data)
+            let activity = try AgentActivity(context)
+            defer { activity.finish() }
+            do {
+                _ = try await follow(command: nil, process: nil, request: .init(), agent: activity)
+            } catch {
+                try? FileHandle.standardOutput.close()
+                // Preserve the marker through a manual session, refusal or connection loss.
+                // A later duplicate hook must not turn protection back on for this task.
+                while activity.isAlive { try await Task.sleep(for: .seconds(1)) }
+            }
+        } catch { return }
     }
 
     private static func release(_ id: UUID, client: ServiceClient) async {
@@ -200,6 +231,7 @@ struct LimitlessCLI {
           limitless status [--json]
           limitless run [options] -- command [arguments...]
           limitless watch [options] --pid ID
+          limitless hook codex|claude|cursor|gemini|other   (lifecycle JSON on stdin)
           limitless --version
 
         Options:

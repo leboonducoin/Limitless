@@ -34,6 +34,11 @@ public struct SessionRegistry: Sendable {
         try request.validate(policy: policy, kind: kind, now: now)
         guard sessions[id] == nil else { throw PolicyError.duplicateSession }
         guard sessions.count < Self.capacity else { throw PolicyError.sessionLimitReached }
+        if kind == .agent, sessions.values.contains(where: { $0.kind == .manual }) {
+            throw ServiceError.sessionRejected
+        }
+        // A manual session takes over; an interrupted agent cannot reacquire on its connection.
+        if kind == .manual { sessions = sessions.filter { $0.value.kind != .agent } }
         sessions[id] = Session(
             id: id, owner: owner, kind: kind, request: request,
             started: now, authorizedDuration: policy.maximumDuration
@@ -53,9 +58,13 @@ public struct SessionRegistry: Sendable {
         sessions = sessions.filter { $0.value.owner != owner }
     }
 
-    /// App-only operation. New automated work needs fresh user authorization afterwards.
-    public mutating func stopAll() throws {
+    /// Stop existing work without changing the user's CLI preference.
+    public mutating func stopAll() {
         sessions.removeAll()
+    }
+
+    public mutating func revokeAutomationAndStop() throws {
+        stopAll()
         policy = try UserPolicy(
             mode: policy.mode, batteryFloor: policy.batteryFloor,
             maximumDuration: policy.maximumDuration, allowsAutomation: false
@@ -68,7 +77,7 @@ public struct SessionRegistry: Sendable {
         var stopped: [UUID: SessionStopReason] = [:]
 
         for session in sessions.values {
-            if session.kind == .task, !policy.allowsAutomation {
+            if session.kind != .manual, !policy.allowsAutomation {
                 stopped[session.id] = .automationRevoked
                 continue
             }

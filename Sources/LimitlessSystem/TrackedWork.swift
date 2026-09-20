@@ -6,7 +6,7 @@ public enum WorkError: Error, Equatable, Sendable {
 }
 
 /// The start timestamp protects against PID reuse. Command arguments are never collected.
-public struct ProcessIdentity: Equatable, Sendable {
+public struct ProcessIdentity: Codable, Equatable, Sendable {
     public let pid: Int32
     private let user: UInt32
     private let startedSeconds: UInt64
@@ -28,7 +28,26 @@ public struct ProcessIdentity: Equatable, Sendable {
     }
 
     /// Failed observation ends protection, instead of assuming the original task still exists.
-    public var isAlive: Bool { Self.read(pid).map(matches) ?? false }
+    public var isAlive: Bool {
+        user == geteuid() && getuid() == geteuid() && geteuid() != 0
+            && pid > 1 && pid != getpid() && (Self.read(pid).map(matches) ?? false)
+    }
+
+    /// Hook commands may be launched through a shell. The first non-shell ancestor
+    /// is only a crash guard; explicit task events still control start and finish.
+    public static func hookHost() throws -> Self {
+        var pid = getppid()
+        for _ in 0..<8 {
+            let identity = try Self(pid: pid)
+            guard var info = read(pid) else { throw WorkError.processUnavailable }
+            let name = withUnsafeBytes(of: &info.pbi_comm) {
+                String(decoding: $0.prefix(while: { $0 != 0 }), as: UTF8.self)
+            }
+            if !["sh", "bash", "zsh", "fish", "env"].contains(name) { return identity }
+            pid = Int32(info.pbi_ppid)
+        }
+        throw WorkError.processUnavailable
+    }
 
     func matches(_ info: proc_bsdinfo) -> Bool {
         info.pbi_pid == UInt32(pid) && info.pbi_uid == user && info.pbi_ruid == user

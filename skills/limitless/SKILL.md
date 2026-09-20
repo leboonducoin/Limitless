@@ -1,60 +1,28 @@
 ---
 name: limitless
-description: Keep an authorized macOS task awake with Limitless while its real command or process is running. Use for long builds, tests, exports, or explicitly tracked local work; not for idle chat or unobservable agent activity.
+description: Keep this Mac awake for the whole agent task with Limitless, including thinking between commands. Use when the user asks for Limitless during agent work.
 ---
 
 # Limitless
 
-Use the installed, signed Swift CLI at
-`/Applications/Limitless.app/Contents/MacOS/limitless`. If the user installed the app
-elsewhere, use the executable inside that app's `Contents/MacOS` directory; do not
-create a PATH shim or install another copy. The native app must already have
-approved its helper and enabled automation. This skill does not authorize changing
-those settings, installing software, or weakening the user's limits.
+Use `limitless` with the installed lifecycle hooks in `hooks/`. They start an
+agent session at task start and release it at completion, interruption or session
+exit where the agent exposes those events. Keep the hooks active through thinking
+and tool calls; do not wrap each command separately.
+Wait for delegated work before finishing the turn. Work detached beyond that
+turn needs its own real lifecycle; an idle parent is not a valid substitute.
 
-Read the CLI's `--help` and `status --json` before the first tracked task
-in a session. Follow any terminal-wrapper convention required by the workspace.
-If the CLI is unavailable, incompatible, blocked, or automation is disabled,
-explain the missing prerequisite. Continue independently useful work within the
-user's instructions; never substitute `sudo`, `pmset`, `caffeinate`, a dummy
-`sleep`, or a security bypass to simulate successful Limitless integration.
+The helper uses both power sources and a 20% battery floor, respecting any stricter
+user limits. Each task releases only its own session; the last one ends the hold.
+If the user started Keep awake in the menu, leave it alone. Starting a manual
+session also ends existing agent holds. Never change app preferences, stop a manual
+session, rearm protection, or restart a task hold after a cutoff.
 
-Wrap the actual foreground command:
+Check `limitless status` if protection is uncertain. If the CLI, helper permission,
+or lifecycle hooks are missing, say so; do not claim whole-task coverage. Setup is
+documented at https://github.com/leboonducoin/Limitless/blob/main/docs/cli.md#ai-agent-setup.
+Installing this skill alone does not install hooks or grant permission to do so.
 
-```sh
-/Applications/Limitless.app/Contents/MacOS/limitless run -- swift test
-/Applications/Limitless.app/Contents/MacOS/limitless run -c --for 2h -- xcodebuild -scheme MyApp build
-```
-
-Omit options to inherit the app's limits. `-b`, `-c`, `-a` are mutually exclusive;
-they can only narrow the allowed power sources. A requested battery floor must be
-at least the app's floor. Never select 0%, extend an authorized duration, change
-the system clock, rearm a stopped session, or reconnect to evade a cutoff.
-
-For an already running, specifically identified user task, use
-the same CLI with `watch --pid PID`. Confirm that the PID belongs to the requested work.
-Limitless binds it to its start time and ends protection if it exits, changes
-identity or becomes unreadable. Do not watch Codex, a terminal, an editor, a
-browser, a shell waiting for input, or an agent host as a proxy for actual work.
-
-Keep the tool's execution session attached and await its real result. Do not
-background or detach the wrapper. For parallel commands, wrap each actual command
-independently and wait for every result. Each completion releases only its own
-demand; protection ends after the last eligible task finishes unless the user
-also has an independent manual session in the app.
-
-Cancellation must reach the wrapper (Ctrl-C/SIGINT or SIGTERM). `run` forwards the
-signal to its command; `watch` only stops watching. A timer, battery cutoff or
-connection failure ends protection without killing the user's work. Report that
-distinction and do not silently restart protection. Child processes deliberately
-detached by a command are outside that command's completion boundary.
-
-Do not claim to follow model thinking, a remote job without a locally observable
-lifecycle, or all future agent activity. Use the original command's result to
-report task completion; use Limitless's observed status to report protection.
-Never log or send command contents, credentials or arguments to the helper.
-
-The repository's development builds are not yet a signed public distribution.
-An ad-hoc build refusing the privileged channel is expected, not a reason to
-weaken authentication. Signed XPC and physical lid operation require separate
-release qualification.
+For another local agent, connect its real start/end/cancel events to
+`limitless hook other` as described in the guide. Do not infer work from an open
+agent window, poll transcripts, create dummy work, run sudo, or bypass a user limit.

@@ -1,32 +1,15 @@
 # Contributing
 
-Read [AGENTS.md](AGENTS.md), [the requirements](docs/requirements.md), and the
-canonical document for the area you change. Limitless is entirely Swift and targets
-native macOS. Keep changes focused, dependencies justified, and security boundaries
-explicit. All contributions are made under the [MIT license](LICENSE).
-Please follow the [code of conduct](CODE_OF_CONDUCT.md) in project discussions.
+Limitless is native Swift for macOS 26+ on Apple Silicon. Contributions use the
+[MIT license](LICENSE). Read [AGENTS.md](AGENTS.md), the
+[requirements](docs/requirements.md), and the document for the area you change.
 
-The current minimum is macOS 26 on Apple Silicon with Swift 6 language mode.
-There are no Swift package dependencies. A paid Apple Developer account is not
-required to work on the project or its community distribution channel. Native
-authorization, reciprocal certificate checks and user limits must remain intact.
-See [distribution](docs/distribution.md) before changing installation or signing.
+Keep changes focused. Reuse the shared core for policy; keep platform code in
+LimitlessSystem and privileged operations in the helper. Prefer Apple APIs and
+the standard library. No Node/Python product runtime or dependency without a need.
 
-## Working locally
-
-The commands below run directly; no terminal wrapper is required.
-Use the existing Git identity and Conventional Commits, for example
-`feat(core): enforce battery and source limits`. Do not add automated attribution.
-Preserve unrelated edits and commit only reviewed intended paths.
-
-Start with `git status` and use a `feature/` branch for new work. Agent
-contributors read installed skills from their global locations as directed by
-AGENTS.md; do not copy skill installations or another project's data into Limitless.
-
-The core owns policy and session decisions; the app and CLI present or request
-those decisions. Keep OS behavior in `LimitlessSystem` and helper privileges in
-the helper. Prefer native APIs and concrete types. Any new dependency or shared
-abstraction should solve a demonstrated need.
+Start with `git status`, preserve unrelated edits, and use a `feature/` branch.
+Commit only intended paths with Conventional Commits and the existing Git identity.
 
 ```sh
 env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
@@ -34,36 +17,14 @@ env LIMITLESS_BUILD_PATH=/private/tmp/limitless-asan swift Tools/ProjectTool.swi
 env LIMITLESS_BUILD_PATH=/private/tmp/limitless-tsan swift Tools/ProjectTool.swift tsan
 ```
 
-`check` validates formatting, builds Release, runs tests with coverage data, and
-checks release inputs and the graphical app entry point. Sanitizers use separate scratch paths.
-See [testing](docs/testing.md) for the CLT macro workaround and optional read-only
-hardware check. The normal suite must not alter host power settings or install a
-service. Development bundles are for inspection and reject privileged controls.
+Add meaningful regression tests and update the nearest document. Include what
+changed, what you tested and any gaps in the PR. UI changes need native inspection
+and accessibility checks; simulations do not establish lid-closed compatibility.
+See [testing](docs/testing.md) for security gates and optional Mac probes.
 
-## Reviewing a change
+Never commit secrets or private task contents. Keep certificate checks, native
+administrator consent and user limits intact. Signing, installation, power tests
+and publication each require authorization. A passing build is not a release.
 
-Add meaningful behavior tests and update documentation in the same change. Run the
-checks in [testing.md](docs/testing.md). Include the actual validation performed and
-any gaps in a pull request; do not equate simulations with hardware qualification.
-
-Explain the concrete problem, resulting behavior and validation. Reference the
-affected requirement from [the acceptance matrix](docs/requirements.md) when
-changing product behavior. Report skipped or unavailable gates explicitly, and
-include native visual/accessibility evidence for interface changes. Documentation
-changes need accurate commands, links and claims; do not add implementation-mirroring
-tests for prose. Workflow changes require actionlint and zizmor; staged changes
-and history are scanned with Gitleaks. Do not label unexecuted GitHub checks as passed.
-
-The [pull request template](.github/pull_request_template.md) keeps this evidence
-with the change. Issue forms request reproducible behavior and minimal environment
-information. Their GitHub rendering is only verifiable after an authorized push.
-
-## Security and publication
-
-Never commit credentials or signing material. Never include private command contents
-in bug reports. Security reports belong in a private channel, not public issues.
-Publishing, pushing, privileged installation and power-setting tests require the
-corresponding explicit authorization.
-Keep signing keys and credentials outside Git. A release needs the full security
-checks, source/artifact linkage and physical acceptance evidence, even when it uses
-the community signing channel. A passing local build is not publication approval.
+[Report vulnerabilities privately](https://github.com/leboonducoin/Limitless/security/advisories/new).
+Please follow the [code of conduct](CODE_OF_CONDUCT.md).

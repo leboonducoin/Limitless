@@ -38,7 +38,7 @@ public enum SessionEnd: Codable, Equatable, Sendable {
 }
 
 public enum SessionKind: String, Codable, Sendable {
-    case manual, task
+    case manual, task, agent
 }
 
 /// Transport data is validated on admission, even when decoded successfully.
@@ -54,7 +54,7 @@ public struct SessionRequest: Codable, Equatable, Sendable {
     }
 
     public func validate(policy: UserPolicy, kind: SessionKind, now: ClockSnapshot) throws {
-        if kind == .task, !policy.allowsAutomation { throw PolicyError.automationNotAuthorized }
+        if kind != .manual, !policy.allowsAutomation { throw PolicyError.automationNotAuthorized }
         if let mode, !mode.isWithin(policy.mode) { throw PolicyError.powerModeNotAuthorized }
         if let batteryFloor {
             guard (0...50).contains(batteryFloor) else { throw PolicyError.invalidBatteryFloor }

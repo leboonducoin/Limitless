@@ -1,113 +1,57 @@
-# Security policy
+# Security
 
-Limitless is in development. There is no supported public release yet. Do not
-install development privileged helpers on a machine you cannot recover safely.
+Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/leboonducoin/Limitless/security/advisories/new),
+not public issues. Do not include credentials or private task contents.
+Limitless has no supported public binary release yet.
 
-Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/leboonducoin/Limitless/security/advisories/new).
-It was verified enabled on 2026-09-18; recheck availability before release. Do not post
-credentials, exploit details or private command arguments in public issues.
+## Boundaries
 
-## Required boundaries
+- App and CLI are unprivileged. Native macOS consent installs a narrowly scoped helper.
+- Both XPC directions pin the actual certificate and exact identifier; separate
+  app/task listeners enforce privileges before allocating owners. Ad-hoc clients fail closed.
+- Requests are validated regardless of signer. Tasks cannot configure policy,
+  rearm recovery, remove another owner's session, or run a root command.
+- Session ownership is tied to authenticated connections, console user and leases.
+  Stop, expiry and owner loss outrank recovery. AI yields to manual sessions.
+- Helper startup/user switch clears demands and authorization. The native app can
+  reapply an explicitly saved CLI opt-in only while idle and fault-free. A fault
+  clears that preference. No old demand is recreated.
+- The only CLI-install path is a fixed symlink to the verified bundled executable.
+  No arbitrary path is accepted, no foreign command overwritten.
+- Agent hooks run as the user, consume only lifecycle identifiers and never read
+  transcripts or save prompts. Provider event-delivery gaps are documented.
+- Restoration is acknowledged before signature-checked native helper files are
+  deleted. Failed cleanup retains ownership and a visible retry path.
 
-The app and CLI are unprivileged. A signed, user-approved helper applies a narrow
-power-management operation through authenticated XPC. It must never accept arbitrary
-commands or paths, store administrator passwords, or install sudoers permissions.
-Client input is untrusted, including signed CLI input. Limits are enforced by the
-helper. Signing identity alone does not prove that an AI agent has user permission.
+Self-signed community certificates are supported; they do not claim Apple
+notarization or Gatekeeper acceptance. No password storage, sudoers grant,
+identifier-only authentication or automatic security bypass is permitted.
+See [architecture](docs/architecture.md) and [distribution](docs/distribution.md).
 
-Separate app/task endpoints enforce different privileges. Both directions pin the
-current executable's validated leaf certificate and exact peer identifiers using
-the public XPC code-signing requirement API. A self-signed certificate is accepted;
-ad-hoc signatures have no certificate. The helper binds owners to connections and to the
-current console UID. Automation starts disabled after service startup or user
-switch; a task cannot configure policy, rearm recovery or release another owner.
-Ad-hoc builds fail closed. No test-only authentication bypass is shipped.
-Listener-level requirements reject foreign clients before the admission delegate
-can reconcile state or allocate a connection owner; per-message requirements still
-protect the accepted channel. Role-specific pins apply to both control and task listeners.
-
-The stable certificate pin replaces the earlier Apple-only Team ID boundary.
-Certificate selection uses the SHA-1 fingerprint mandated by Apple's requirement
-language, not an archive integrity digest. The release verifier also requires the
-same actual certificate bytes on all three executables. A local signed probe
-verifies cross-process authentication and rejects mismatched pins/identifiers in
-both directions. Local native installation, privileged status, live battery hold
-and inactive/active removal passed without Apple membership or added certificate
-trust. Downloaded artifacts and the complete release matrix remain unqualified.
-This identity does not establish Apple notarization. No identifier-only acceptance
-or automatic Gatekeeper exception is authorized by the no-account requirement.
-
-Community bundles use public deprecated SMJobBless/SMJobRemove with native
-Authorization Services. Both peers' exact certificate requirements and helper
-metadata are checked before consent. The authorization reference is destroyed
-after each operation; no password is read or stored. A loaded installation must
-be drained and removed through the matching app before an upgrade or channel
-change. The embedded development requirements authorize nobody. Consent cancellation,
-revocation, restart and release-artifact qualification remain open gates.
-
-Removal is application-only and first revokes all demands. A protected ownership
-record is never deleted to bypass a failed restoration. Journal cleanup refuses
-unknown contents and replaced directories/locks, uses no recursive deletion, and
-retires the writer. Restoration is acknowledged before the separate, application-only
-file-deletion request: unlinking the executable can invalidate its final XPC reply.
-Certificate checks remain enabled. Proven absence of the fixed protected paths
-and a fresh allowed sleep observation gate unregistration, including interrupted
-retries after deletion. Service unregistration and final absence checks must succeed
-before a packaging hook reports success. The unprivileged CLI cannot request removal.
-
-The lid-closed mechanism uses an undocumented global OS setting. A successful read
-does not establish hardware compatibility, continued execution, or thermal safety.
-Another privileged tool can change the same state. Helper or OS failure may prevent
-timely cleanup. Ownership checks, bounded recovery and explicit reporting are required;
-"always safe" and "never drains the battery" are not acceptable claims.
-
-The final signed helper, XPC authentication, recovery, installation and uninstall
-paths require a dedicated security review before release. See
-[requirements.md](docs/requirements.md) for acceptance evidence.
+The undocumented global lid setting has residual risks: competing privileged tools,
+OS/helper failure, hardware incompatibility and delayed restoration. A readback
+is not proof of physical operation or thermal safety.
 
 ## Supply chain
 
-Use pinned tools/actions, minimal workflow permissions, no release secrets on PR
-jobs, and a protected publication environment. Secret detection, CodeQL, workflow
-analysis and dependency review are release gates. Verify signatures, checksums,
-source provenance and, for the Developer ID channel, notarization separately.
-The community channel must explicitly identify itself as not notarized.
-Never bypass a security control.
+Pinned GitHub Actions run build/tests, ASan, TSan, CodeQL, workflow lint/security,
+Gitleaks and PR dependency review. PR jobs receive no release signing secrets.
+Verify archive SHA-256, source linkage and executable signatures separately from
+notarization. Publication still needs explicit approval and the hardware matrix.
 
-GitHub inspection on 2026-09-18 confirmed a public repository with private
-vulnerability reporting, secret scanning, secret push protection and Dependabot
-security updates enabled. Source and workflow definitions are now published on
-`main`; [CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml) and
-[Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml)
-run on every push to that branch. The exact observed outcomes belong in
-[testing evidence](docs/testing.md), separately from manual hardware acceptance.
-Binary publication requires successful checks and protected release controls.
-A source push is not approval to publish a binary release.
-
-On 2026-09-18, `main` protection was enabled with all seven build/sanitizer/security
-job checks pinned to the GitHub Actions app, an up-to-date base requirement and
-resolved review conversations. Force pushes and deletion are disabled by the rule.
-Administrator enforcement remains off to preserve the maintainer's explicitly
-requested direct-push workflow: administrators can bypass these branch rules.
-This is not a release approval gate; protected binary publication remains separate.
-The additional `CodeQL alert review on main` ruleset requires CodeQL results and
-blocks all security-alert severities plus error/warning findings for ordinary
-contributions. The repository owner retains an explicit, audited bypass for direct
-pushes. Both settings were read back through GitHub's API; no rejection trial or
-dummy vulnerability was introduced into `main`.
+The public repository's secret scanning, push protection, private reporting,
+Dependabot and branch/check rules were read back on 2026-09-18. Main's maintainer
+bypass supports the approved direct-push workflow; it is not a binary-release gate.
+Current execution results belong in [testing](docs/testing.md).
 
 ## Reviewed compatibility exception
 
 [CodeQL alert 1](https://github.com/leboonducoin/Limitless/security/code-scanning/1)
-(`swift/weak-sensitive-data-hashing`) was reviewed on 2026-09-18 and dismissed as
-**won't fix**, with the reason retained in GitHub. `SignedIdentity` computes SHA-1
-only over the public leaf certificate for Apple's `certificate leaf = H"…"`
-selector. This is a legacy platform constraint documented in Apple's
-[requirement language](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html),
-not a claim that SHA-1 is suitable for new cryptographic designs.
+was reviewed and dismissed as won't fix on 2026-09-18. Apple requires a SHA-1
+fingerprint for its `certificate leaf = H"…"` selector. It identifies a public
+certificate; it does not hash passwords, keys or release archives. Native signature
+validation and exact peer IDs remain mandatory; archive integrity uses SHA-256.
 
-Native code-signature validity and exact peer identifiers remain mandatory;
-passwords and private keys are never hashed by this path. Release archive integrity
-uses SHA-256. The CodeQL query remains enabled, with no repository-wide suppression.
-Reassess this exception if Apple supports a stronger certificate selector or if the
-data flow changes. This reviewed alert is distinct from an analysis with no findings.
+The query remains enabled, with no broad suppression. Reassess if Apple supports a
+stronger selector or the data flow changes.
+[Apple requirement language](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).

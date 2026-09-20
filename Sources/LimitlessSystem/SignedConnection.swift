@@ -21,7 +21,7 @@ public enum SignatureError: Error, Sendable {
 /// A self-signed identity is sufficient; ad-hoc signatures have no certificate and are rejected.
 public struct SignedIdentity: Sendable {
     public let certificateFingerprint: String
-    let executableURL: URL
+    public let executableURL: URL
 
     /// Security may evaluate certificate trust while reading signing information.
     @concurrent public static func current(expectedIdentifier: String) async throws -> Self {

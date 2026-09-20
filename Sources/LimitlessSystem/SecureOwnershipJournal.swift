@@ -248,7 +248,7 @@ public final class SecureOwnershipJournal: OwnershipJournal {
         try rejectExtendedAccess(file)
     }
 
-    static func rejectExtendedAccess(_ file: Int32) throws {
+    public static func rejectExtendedAccess(_ file: Int32) throws {
         guard let acl = acl_get_fd_np(file, ACL_TYPE_EXTENDED) else {
             // On macOS, a valid descriptor with no extended ACL reports ENOENT.
             if errno == ENOENT { return }

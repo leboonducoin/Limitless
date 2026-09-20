@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "/Applications/Limitless.app/Contents/MacOS/limitless hook cursor"
+      }
+    ],
+    "stop": [
+      {
+        "command": "/Applications/Limitless.app/Contents/MacOS/limitless hook cursor"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "/Applications/Limitless.app/Contents/MacOS/limitless hook cursor"
+      }
+    ]
+  }
+}

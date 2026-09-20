@@ -9,6 +9,7 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
     case status
     case configure(UserPolicy)
     case start(SessionRequest)
+    case startAgent
     case stop(UUID)
     case stopAll
     case heartbeat
@@ -17,13 +18,14 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
     case prepareRemoval
     case prepareUpdate
     case finishRemoval
+    case installCLI
 
     public var requiresApplication: Bool {
         switch self {
         case .configure, .stopAll, .rearm, .retryRestoration, .prepareRemoval, .prepareUpdate,
-            .finishRemoval:
+            .finishRemoval, .installCLI:
             true
-        case .status, .start, .stop, .heartbeat: false
+        case .status, .start, .startAgent, .stop, .heartbeat: false
         }
     }
 }
@@ -82,6 +84,20 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
             && sleep.observed == .allowed && (sleep.phase == .inactive || sleep.phase == .blocked)
     }
 
+    /// Reapply a native-app opt-in without weakening any live helper limit or resuming work.
+    public func automationPolicyToRestore(_ saved: UserPolicy) throws -> UserPolicy? {
+        guard !policy.allowsAutomation, sessions.isEmpty, removal == .none,
+            sleep.phase == .inactive, sleep.observed == .allowed, !sleep.ownsGlobalHold,
+            sleep.fault == nil
+        else { return nil }
+        return try UserPolicy(
+            mode: policy.mode == .all ? saved.mode : policy.mode,
+            batteryFloor: max(policy.batteryFloor, saved.batteryFloor),
+            maximumDuration: [policy.maximumDuration, saved.maximumDuration].compactMap { $0 }
+                .min(),
+            allowsAutomation: true)
+    }
+
     public init(
         policy: UserPolicy, power: PowerSnapshot, sleep: SleepReport,
         sessions: [SessionSummary], sampledAt: Date, removal: RemovalState = .none
@@ -113,7 +129,7 @@ public struct ServiceReply: Codable, Sendable {
 
 /// NSData is the only XPC payload type; decoding and semantic validation happen in the helper.
 public enum ServiceWire {
-    public static let version = 3
+    public static let version = 4
     public static let maximumMessageBytes = 131_072
 
     public static func decodeRequest(_ data: Data) throws -> ServiceRequest {

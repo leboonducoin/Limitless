@@ -676,7 +676,7 @@ do {
             "CLI and bundle versions disagree.")
         let contents = app.appendingPathComponent("Contents", isDirectory: true)
         for directory in [
-            "MacOS", "Resources/limitless-skill",
+            "MacOS", "Resources",
         ]
             + (community
                 ? ["Library/LaunchServices"] : ["Library/LaunchDaemons", "Library/HelperTools"])
@@ -707,8 +707,8 @@ do {
             at: URL(fileURLWithPath: "THIRD_PARTY_NOTICES.md"),
             to: contents.appendingPathComponent("Resources/THIRD_PARTY_NOTICES.md"))
         try manager.copyItem(
-            at: URL(fileURLWithPath: "skills/limitless/SKILL.md"),
-            to: contents.appendingPathComponent("Resources/limitless-skill/SKILL.md"))
+            at: URL(fileURLWithPath: "skills/limitless"),
+            to: contents.appendingPathComponent("Resources/limitless-skill"))
         let record = BuildRecord(
             sourceRevision: try run(
                 "/usr/bin/git", ["rev-parse", "--verify", "HEAD"], capture: true),

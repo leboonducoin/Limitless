@@ -52,6 +52,7 @@ import ServiceManagement
         (Bundle.main.object(forInfoDictionaryKey: "LimitlessHelperInstallation") as? String)
         .flatMap(HelperInstallationKind.init(rawValue:))?.service
     private var client: ServiceClient?
+    private var restoredAutomationPreference = false
     private var monitoring: Task<Void, Never>?
     private(set) var watchedProcesses: [ProcessIdentity]?
     private var policyApplication: Task<Void, Never>?
@@ -95,12 +96,14 @@ import ServiceManagement
     var showsPowerControls: Bool {
         canControl || (isPreview && helperStatus == .enabled && !removalComplete)
     }
+    var showsPowerSource: Bool { showsPowerControls && status?.power.battery != .notPresent }
+    var showsBatteryLimit: Bool { showsPowerSource && draft.mode != .external }
     var removalInProgress: Bool { status.map { $0.removal != .none } ?? false }
     var ownSession: SessionSummary? {
         status?.sessions.first(where: { $0.belongsToClient && $0.kind == .manual })
     }
     var taskCount: Int {
-        (status?.sessions.filter { $0.kind == .task }.count ?? 0)
+        (status?.sessions.filter { $0.kind != .manual }.count ?? 0)
             + (watchedProcesses?.count ?? 0)
     }
     var showsTaskCount: Bool { taskCount > 0 || stopChoice == .process }
@@ -282,9 +285,43 @@ import ServiceManagement
                     return
                 }
                 client = connected
+                restoredAutomationPreference = false
             }
             guard let client else { return }
-            let reply = try await client.send(.status)
+            var reply = try await client.send(.status)
+            guard currentRevision == revision, !busy, !quitting else { return }
+            if let received = reply.status, received.sleep.fault != nil {
+                preferences.set(false, forKey: "allowsAutomation")
+            }
+            if !restoredAutomationPreference {
+                restoredAutomationPreference = true
+                if let received = reply.status, preferences.bool(forKey: "allowsAutomation"),
+                    Bundle.main.bundleURL.standardizedFileURL.path == "/Applications/Limitless.app"
+                {
+                    let saved =
+                        preferences.data(forKey: "userPolicy").flatMap {
+                            try? JSONDecoder().decode(UserPolicy.self, from: $0)
+                        } ?? received.policy
+                    if let restored = try received.automationPolicyToRestore(saved) {
+                        _ = try await client.send(.installCLI)
+                        guard currentRevision == revision, !busy, !quitting else { return }
+                        reply = try await client.send(.configure(restored))
+                    }
+                }
+            }
+            guard currentRevision == revision, !busy, !quitting else { return }
+            if let received = reply.status, received.power.battery == .notPresent,
+                received.policy.mode != .all, received.removal == .none
+            {
+                let policy = received.policy
+                reply = try await client.send(
+                    .configure(
+                        try UserPolicy(
+                            mode: .all,
+                            batteryFloor: policy.batteryFloor,
+                            maximumDuration: policy.maximumDuration,
+                            allowsAutomation: policy.allowsAutomation)))
+            }
             guard currentRevision == revision else { return }
             try accept(reply)
             connectionError = nil
@@ -404,11 +441,25 @@ import ServiceManagement
 
     func setAutomation(_ enabled: Bool) async {
         guard let policy = status?.policy else { return }
+        if enabled {
+            guard Bundle.main.bundleURL.standardizedFileURL.path == "/Applications/Limitless.app"
+            else {
+                message = "Move Limitless to Applications to enable the CLI."
+                return
+            }
+            guard await perform(.installCLI) else {
+                message =
+                    "The limitless command could not be installed. An existing command was left unchanged."
+                return
+            }
+        }
         do {
             let updated = try UserPolicy(
                 mode: policy.mode, batteryFloor: policy.batteryFloor,
                 maximumDuration: policy.maximumDuration, allowsAutomation: enabled)
-            _ = await perform(.configure(updated))
+            if await perform(.configure(updated)) {
+                preferences.set(enabled, forKey: "allowsAutomation")
+            }
         } catch { message = "The automation limits could not be validated." }
     }
 
@@ -446,7 +497,7 @@ import ServiceManagement
     }
 
     /// Shared by the context-menu action and the signed app's maintenance entry point.
-    /// No app files, external CLI links or user-created skill copies are deleted here.
+    /// The helper removes its fixed CLI link; user-created links and skill copies are untouched.
     func removeIntegration(forUpdate: Bool = false) async -> Bool {
         guard trustedBuild, !isPreview, !busy, let helper else {
             message = "Removal requires a correctly signed Limitless installation."
@@ -486,6 +537,9 @@ import ServiceManagement
                 }
             }
             removalStep = "Removing the helper…"
+            if !forUpdate, try InstalledCLI.isAppOwnedLinkPresent() {
+                throw ServiceError.restorationRequired
+            }
             if !helper.removalIsConfirmed { try await helper.unregister() }
             guard helper.removalIsConfirmed else { throw ServiceError.unavailable }
             await client?.close()
@@ -590,7 +644,9 @@ import ServiceManagement
             let waiting = state == "suspended"
             let failed = state == "restoration"
             let unknown = state == "unknown"
-            let policy = try! UserPolicy(mode: waiting ? .external : .all, allowsAutomation: true)
+            let policy = try! UserPolicy(
+                mode: waiting || state == "external" ? .external : .all,
+                allowsAutomation: true)
             let session = SessionSummary(
                 id: UUID(), kind: .manual, end: .after(seconds: 3_600),
                 startedAt: Date().addingTimeInterval(-900), remainingSeconds: 2_700,
@@ -598,7 +654,11 @@ import ServiceManagement
             model.status = ServiceStatus(
                 policy: policy,
                 power: PowerSnapshot(
-                    source: .battery, battery: .available(percent: 76, isDischarging: true)),
+                    source: state == "desktop" ? .external : .battery,
+                    battery: state == "desktop"
+                        ? .notPresent
+                        : (state == "battery-unknown"
+                            ? .unavailable : .available(percent: 76, isDischarging: true))),
                 sleep: SleepReport(
                     phase: active ? .active : (failed ? .restoring : .inactive),
                     observed: unknown ? .unknown : (active || failed ? .disabled : .allowed),

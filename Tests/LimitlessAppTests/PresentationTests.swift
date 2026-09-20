@@ -162,6 +162,17 @@ private func status(
 }
 
 #if DEBUG
+    @Test @MainActor func powerControlsMatchHardwareAndSelectedSource() {
+        let desktop = AppModel.preview("desktop")
+        #expect(!desktop.showsPowerSource && !desktop.showsBatteryLimit)
+        let external = AppModel.preview("external")
+        #expect(external.showsPowerSource && !external.showsBatteryLimit)
+        external.draft.mode = .all
+        #expect(external.showsBatteryLimit)
+        let unreadable = AppModel.preview("battery-unknown")
+        #expect(unreadable.showsPowerSource && unreadable.showsBatteryLimit)
+    }
+
     @Test @MainActor func setupHidesPowerControlsUntilTheHelperIsAvailable() {
         #expect(!AppModel().showsPowerControls)
         for state in ["setup", "removed"] {

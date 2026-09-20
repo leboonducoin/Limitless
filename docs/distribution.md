@@ -1,428 +1,144 @@
-# Build, installation and removal
-
-Limitless is not yet published or qualified for privileged installation. Local
-ad-hoc builds and certificate-signed test artifacts exist; neither is a qualified
-production installer. Do not register an ad-hoc helper or bypass Gatekeeper.
+# Installation and distribution
 
 ## One installation through GitHub Releases
 
-**User decision, 2026-09-19:** GitHub Releases is the single installation route.
-The Homebrew template and cask generation have been removed. Earlier Homebrew
-trials remain historical evidence in [testing](testing.md#homebrew-cask-validation).
+The download contains one `Limitless.app`, with the menu-bar interface, helper,
+CLI and AI skill. Unzip it, move it to Applications and open it. The icon appears
+before administrator approval. Copying an app alone does not launch it.
+Homebrew is no longer an installation route.
 
-Every release archive contains `Limitless.app`: graphical interface, helper and
-companion CLI together. There is no CLI-only installation. The app's entry point
-is `LimitlessApp`, not `limitless`.
-
-Extract the archive, move the app into Applications and open it. First launch
-creates the status icon before helper verification or administrator approval.
-Copying an app does not launch it automatically. Launch at login is a separate
-opt-in and never starts a keep-awake session by itself. No terminal is needed
-for the graphical app; the CLI remains inside its bundle for optional use.
+**No public release is available yet.** Local signed test builds are separate from
+a qualified download. Initial target: Apple Silicon and macOS 26+.
 
 ## Distribution without Apple Developer membership
 
-**User decision, 2026-09-16:** Apple Developer membership will come later. Limitless
-must also be usable through GitHub before then. Users
-must never need their own developer membership. The Developer ID commands below
-remain an optional future channel, not the only acceptable product distribution.
+Users never need a developer account. The community channel uses a stable publisher
+certificate, which may be self-signed. App, CLI and helper pin that same certificate
+and their exact identifiers. Ad-hoc builds remain unable to use privileged controls.
 
-This route is implemented but not yet qualified for release. `SignedIdentity` pins
-the exact peer identifier and the executable's own signing certificate, including
-a self-signed certificate. The installed Apple SDK's public `SMAppService.h`
-requires notarization for apps containing LaunchDaemons, so the community bundle
-uses a separate native installation adapter. Ad-hoc development bundles remain
-disabled; removing the Team ID requirement does not remove authentication.
+The community helper installs through Apple's public, deprecated SMJobBless API
+and native Authorization Services. No password is stored. SMAppService is retained
+for the optional notarized channel. Identifier-only or UID-only authentication is
+not an alternative.
 
-Certificate-signed, non-root XPC probes now verify a real cross-process reply and
-reject mismatched certificate pins and identifiers in both directions. A bundle
-identifier or UID alone remains insufficient. The first authorized SMJobBless
-installation, authenticated app/CLI exchanges and complete inactive removal succeeded
-on the test Mac after correcting plist validation, XPC teardown ordering and an
-unseen login-item state; see
-[the integration record](testing.md#privileged-installation-trial).
-Apple's
-code-signing requirements support a self-signed certificate pin; that does not
-prove a complete installation flow.
-[Apple certificate requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
-
-The implementation retains `SMAppService` for the notarized channel and uses
-the older public, deprecated `SMJobBless` API for the no-account channel. The Swift
-installer validates both signatures and embedded reciprocal requirements before
-requesting administrator consent through Authorization Services. The helper
-has guarded cleanup for the two fixed files that SMJobBless installs, using the
-running executable's signed identity; temporary-file tests cover replacement,
-unsafe paths and interrupted removal. This does not qualify a real installation.
-Cancellation and distribution upgrades still require real-Mac evidence. Build 4
-passed local inactive and active removal, including confirmed restoration while
-the tracked command continued. Download and physical compatibility gates
-remain open.
-The removal validator accepts the optional `Program` key written by SMJobBless only
-when it equals the fixed helper path, alongside the exact `ProgramArguments` array.
-Keep the shared session/controller/backend and all user limits;
-do not add a password field,
-passwordless sudoers rule, unsigned-client acceptance or an arbitrary root executor.
-[Apple SMJobBless contract](https://developer.apple.com/documentation/servicemanagement/smjobbless(_:_:_:_:)).
-
-The native adapter rejects replacement of a loaded job. To upgrade or change
-certificate/channel, first use the old matching app's guarded removal, then enable
-the new installation. An interrupted, unloaded installation can be repaired only
-when any remaining executable satisfies the same certificate requirement. macOS
-still decides whether registration succeeds. No channel migration is automatic.
-
-A stable publisher signing certificate/private key is still required, but it need
-not be issued by Apple. Certificate creation, keychain changes and trust changes
-are separate authorized maintainer actions; this repository performs none of them.
-Users receive the already signed app and never need a signing key. Losing or
-rotating the publisher key requires the old matching app to remove its helper.
-The community channel does not use Apple's secure timestamp service and makes no
-notarization claim; certificate validity and expiry need release qualification.
-
-For downloaded non-notarized apps, macOS may require a user decision in Privacy &
-Security; managed systems may disallow it. That choice must remain with the user.
-The app must not remove quarantine, disable Gatekeeper or automate approval.
+A self-signed signature does not establish Gatekeeper acceptance. macOS may require
+a user opening decision; managed systems can refuse it. Never strip quarantine,
+change trust, disable Gatekeeper or automate security approval. Clean-Mac download,
+first opening and removal remain release gates.
 [Apple opening policy](https://support.apple.com/en-gb/102445).
-No downloadable release exists yet. Earlier quarantined trials encountered an
-initial execution block; clean-Mac first opening and removal still require
-qualification. Do not remove quarantine or skip native cleanup to make them pass.
+
+Keep the publisher key stable and outside Git. Certificate creation/trust changes
+are separate authorized actions. Losing or rotating the key requires removal through
+the old matching app. Community builds make no notarization or secure-timestamp claim.
+[Apple signature requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
 
 ## Adding Apple Developer membership later
 
-GitHub stays the download location. The existing `sign`, `notarize`, `verify` and
-`package` commands build a Developer ID Application-signed, timestamped, notarized
-and stapled archive once the maintainer supplies the real identity, Team ID and
-notarization credentials. No product rewrite or App Store distribution is needed.
-The first migration must use the old matching app to remove its helper before the
-new signed app requests approval; never weaken certificate authentication to
-silently adopt the old service. See the release commands below.
+GitHub remains the download location. Developer ID signing, notarization and
+stapling are already supported by the build tool; no App Store rewrite is needed.
+Migrating certificate/channel requires removing the old helper through the matching
+app before approving the new one. It is never a silent automatic update.
 
-Apple states that membership expiry does not stop users downloading, installing
-or running existing Developer ID-signed applications. A certificate that was valid
-at signing, with the required secure timestamp, can continue to validate after
-certificate expiry. A new certificate requires active membership once the old one
-expires. Revocation is different and can prevent installation or execution.
-Limitless does not depend on advanced-capability provisioning profiles, whose own
-expiry could otherwise block launch. This describes Developer ID distribution,
-not a lifetime guarantee for the current self-signed community certificate.
-[Apple Developer ID expiry policy](https://developer.apple.com/help/account/certificates/create-developer-id-certificates),
-[Apple timestamp validation](https://developer.apple.com/library/archive/technotes/tn2206/).
+Existing properly timestamped Developer ID apps can continue to work after membership
+or certificate expiry. Revocation is different; new certificates require active
+membership. A free developer account does not provide Developer ID distribution
+or notarization.
+[Apple membership support](https://developer.apple.com/support/renewal/).
 
 ## Local app bundle
 
-From the repository root, using the selected Apple toolchain:
+From the repository root:
 
 ```sh
-swift Tools/ProjectTool.swift bundle
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview swift Tools/ProjectTool.swift bundle
 ```
 
-The tool prints a new temporary output directory. Set `LIMITLESS_OUTPUT_DIR` for
-a chosen new output directory; an existing directory is refused rather than replaced.
-On a synced Desktop, keep build output outside the sync provider:
+Output must be new. This creates an ad-hoc development app without registering a
+helper or login item. It must fail both release verifiers.
 
-```sh
-env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-preview swift Tools/ProjectTool.swift bundle
-```
-
-Use `LIMITLESS_CONFIGURATION=release` for an optimized bundle. Both configurations
-are signed ad hoc for local inspection. This signature does **not** satisfy the
-app/helper's required certificate identity. Power and login controls stay disabled.
-Nothing is copied to Applications, no service is registered and no login item is
-changed. The bundle includes:
-
-| Path within `Limitless.app/Contents` | Purpose |
-| --- | --- |
-| `MacOS/LimitlessApp` | SwiftUI/AppKit menu-bar executable |
-| `MacOS/limitless` | Unprivileged Swift command/process CLI |
-| `Library/HelperTools/LimitlessHelper` | Swift privileged service; not registered by the build |
-| `Library/LaunchDaemons/io.github.leboonducoin.Limitless.helper.plist` | SMAppService bundled-daemon declaration |
-| `Resources/Limitless.icns` | Original artwork exported by Swift/AppKit at native icon sizes |
-| `Resources/limitless-skill` | Distributable AI instructions |
-| `Resources/LICENSE` | MIT attribution |
-| `Resources/Build.json` | Source revision, configuration and worktree cleanliness |
-
-`Tools/ExportIcon.swift` shares `BrandArt.swift` with the app. No generated image
-runtime, downloaded image, Node or Python is packaged. The bundle command runs
-strict Swift formatting/build checks, `iconutil`, `plutil -lint` and recursive strict
-signature verification. CI builds a Release bundle; CodeQL includes both Swift
-maintenance tools. This is structural validation, not notarization or installation.
+For native inspection, add `LIMITLESS_PREVIEW_STATE=inactive`, `active`, `process`,
+`setup`, `desktop`, `external` or `battery-unknown`. Fixtures are read-only Debug
+content; Release/signing refuses them. Use separate output directories.
+Preview data never proves physical power behavior.
 
 ## Community bundle and release commands
 
-Build an ad-hoc community inspection bundle without installing anything:
+`community-bundle` checks the SMJobBless layout using intentionally unusable
+development requirements. It does not install a service.
+
+Signing requires an authorized existing certificate and a clean committed checkout.
+Set `LIMITLESS_SIGNING_IDENTITY` to its real 40-character certificate fingerprint.
+No Team ID is required. Replace `CERT_SHA1` below with the actual fingerprint:
 
 ```sh
-env LIMITLESS_BUILD_PATH=/private/tmp/limitless-community-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-community-preview swift Tools/ProjectTool.swift community-bundle
-```
-
-This variant puts the helper at
-`Contents/Library/LaunchServices/io.github.leboonducoin.Limitless.helper`.
-Its `__TEXT,__info_plist` and `__TEXT,__launchd_plist` sections contain the helper's
-identity/version, authorized clients and launchd declaration. `SMJobBless` supplies
-the installed `ProgramArguments`; the embedded plist deliberately has no program
-path or arguments. The app's `SMPrivilegedExecutables` must agree with the helper.
-Ad-hoc bundles use the requirement `false` for both peers, authorizing nobody.
-
-The builder passes generated metadata to the helper linker only, verifies the
-actual Mach-O sections and Security's signed Info.plist view, and resets the
-metadata environment for ordinary builds/checks. No root tool runs. Both bundle
-variants must fail the actual-certificate release verifier. CI includes both
-development layouts; this does not qualify native installation.
-
-After explicit signing authorization, use a clean committed checkout and an
-existing stable code-signing identity in the maintainer's keychain. Set
-`LIMITLESS_SIGNING_IDENTITY` to its actual 40-character SHA-1 fingerprint; no
-`LIMITLESS_TEAM_ID` or paid membership is required. The placeholder `CERT_SHA1`
-below must be replaced with that fingerprint, never a sample value:
-
-```sh
-env LIMITLESS_BUILD_PATH=/private/tmp/limitless-community-release-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-community-signed swift Tools/ProjectTool.swift community-sign
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-community-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-community-signed swift Tools/ProjectTool.swift community-sign
 swift Tools/ProjectTool.swift community-verify /private/tmp/limitless-community-signed/Limitless.app CERT_SHA1
 swift Tools/ProjectTool.swift community-package /private/tmp/limitless-community-signed/Limitless.app CERT_SHA1 /private/tmp/limitless-community-release
 ```
 
-`community-sign` forces Release, records the clean source commit, embeds exact
-certificate requirements and signs all three executables with hardened runtime,
-no entitlements and no timestamp service. It has no ad-hoc fallback. The verifier
-requires the same actual certificate and exact identifiers throughout the app,
-the community layout, matching embedded metadata, ARM64 and clean source metadata.
-`community-package` extracts and verifies the actual exported archive again before
-generating its SHA-256 and manifest. Its manifest records
-`channel: community`, `notarized: false` and the certificate fingerprint. The
-Developer ID commands below retain their separate timestamp/notarization gates.
-
-None of these commands creates a certificate, installs a helper, changes trust,
-publishes a download or bypasses Gatekeeper. On 2026-09-17, explicit user consent
-authorized a dedicated local test identity and test signatures. The resulting
-community bundle and re-extracted ZIP passed the verifiers with no trust-store
-changes. This is a test certificate, not a qualified publisher identity or release.
-Clean-Mac approval and upgrades remain open; local cask installation, inactive and
-active removal, same-version reinstallation and scoped zap passed on build 5.
-The repeated trials also observed initial execution blocks followed
-by successful execution without establishing the cause of that change. See
-[the build 5 cask trials](testing.md#build-5-active-cask-removal-and-repeat-installation).
-
-An untrusted self-signed identity may be absent from `security find-identity -v`
-while still supporting exact-certificate code-signing requirements. Do not add a
-trust exception just to change that listing. The observed test identity was marked
-`CSSMERR_TP_NOT_TRUSTED`; signing, strict verification and the XPC probe succeeded.
-[Apple's distinction between signature validity and subsystem trust](https://developer.apple.com/library/archive/technotes/tn2206/).
-
-## Read-only UI inspection
-
-A Debug bundle supports a labeled presentation fixture:
-
-```sh
-/private/tmp/limitless-preview/Limitless.app/Contents/MacOS/LimitlessApp --preview active
-```
-
-Available states are `active`, `inactive`, `suspended`, `restoration` and `unknown`.
-Add `--light` for an app-local light appearance, or `--light --contrast` for AppKit's
-high-contrast light appearance. These flags never change system preferences and
-are absent from Release behavior. Draft controls remain inspectable, while all
-power, policy, helper and login mutations are disabled. See [testing](testing.md)
-for observed evidence and remaining keyboard/accessibility gates.
-
-## Notarized-channel prerequisites and acceptance
-
-The optional notarized channel requires a Developer ID Application identity, confirmed
-team/bundle identifiers, hardened-runtime signing of each executable, notarization
-and stapling, and verification on a clean Mac. Credentials stay in the keychain or
-protected CI secrets, outside Git. No artifact upload or release is authorized by
-this document. A source hash, version and signed artifact digest must agree before
-publication. Do not publish the ad-hoc bundle or invent a downloadable release URL.
-
-The Swift release tooling is implemented. A locally signed community archive and
-its native lifecycle have passed; no public or notarized release exists. Clean-Mac
-GitHub download, first opening and upgrade remain separate gates.
-Installation must preserve macOS approval; no installer may run `sudo pmset`, install
-passwordless sudoers rules or disable quarantine. Native first launch separately
-requests helper approval and offers launch at login.
-
-Removal must revoke all sessions, confirm restoration of Limitless-owned state,
-unregister the helper and login item, erase preferences and remove the app with its
-bundled CLI. User-created links or skill copies remain user-managed. An unresolved
-ownership journal must stop destructive removal.
-Never promise that deleting an app or rebooting clears the undocumented global
-flag. Upgrade, approval rejection and interrupted cleanup
-remain required tests before a public release is usable.
+The builder forces Release, records clean source, signs all three executables,
+and checks exact identities, certificate bytes, metadata, architecture and absence
+of entitlements. Packaging re-extracts and verifies the exported ZIP before writing
+its SHA-256 and `release.json`. The manifest says community / not notarized.
+No command creates a key, changes trust or publishes anything.
 
 ## Maintainer release commands
 
-Run these commands from the repository root **only after authorization for the
-corresponding signature, Apple upload or publication**. They do not install the
-app, helper or login item. The first release recipe targets Apple Silicon and
-macOS 26 or later; it rejects other binary architectures. Intel qualification
-and a matching universal/Intel recipe require separate evidence.
+For the Developer ID channel, set the real `LIMITLESS_TEAM_ID` and
+`LIMITLESS_SIGNING_IDENTITY`. Select full Xcode with process-local `DEVELOPER_DIR`.
+Keep notarization credentials in Apple's named keychain profile, never in Git.
 
-1. Set the same numeric `major.minor.patch` in `Packaging/Info.plist` and
-   `LimitlessIdentity.version`; advance `CFBundleVersion` in the plist. The builder
-   executes the unprivileged CLI's `--version` and rejects a mismatch. Commit all
-   source changes, run full CI/security checks, and complete the hardware matrix.
-2. Select full Xcode for the process with `DEVELOPER_DIR`, without changing the
-   system-wide developer directory. Install your own **Developer ID Application**
-   certificate/private key through Apple's tools. Check its fingerprint with
-   `security find-identity -v -p codesigning`. No identity or credential
-   is provided by this repository.
-3. Set `LIMITLESS_TEAM_ID` to the real ten-character Apple Team ID and
-   `LIMITLESS_SIGNING_IDENTITY` to that certificate's 40-character SHA-1 fingerprint.
-   SHA-1 here selects a keychain identity; artifact integrity uses SHA-256.
-   Then build into a new directory:
+```sh
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-release-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-signed swift Tools/ProjectTool.swift sign
+swift Tools/ProjectTool.swift notarize /private/tmp/limitless-signed/Limitless.app TEAM_ID KEYCHAIN_PROFILE
+swift Tools/ProjectTool.swift verify /private/tmp/limitless-signed/Limitless.app TEAM_ID
+swift Tools/ProjectTool.swift package /private/tmp/limitless-signed/Limitless.app TEAM_ID /private/tmp/limitless-release
+```
 
-   ```sh
-   env LIMITLESS_BUILD_PATH=/private/tmp/limitless-release-build LIMITLESS_OUTPUT_DIR=/private/tmp/limitless-signed swift Tools/ProjectTool.swift sign
-   ```
+`notarize` uploads to Apple and requires separate upload approval. It requires an
+Accepted result, staples the ticket and checks Gatekeeper. A wait timeout does not
+cancel Apple's processing: inspect the submission ID before retrying.
+[Apple notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
 
-   `sign` requires a clean committed tree, forces a Release build, embeds its
-   source revision, and verifies the tree again before signing. It signs the CLI
-   and helper before the app, with hardened runtime and secure timestamps. Each
-   executable must satisfy the exact Developer ID Application certificate class,
-   bundle ID and requested Team ID, and all three must contain the same leaf
-   certificate. Entitlements are not needed by this design
-   and are rejected. There is no `--deep` signing or silent ad-hoc fallback.
-   [Apple signing guidance](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac),
-   [certificate requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
-4. Store notarization credentials in a named keychain profile using Apple's
-   interactive `notarytool store-credentials`, outside Git. After upload approval,
-   replace the following uppercase labels with your actual values:
+Before either channel is published:
+- Match the marketing version in the plist and `LimitlessIdentity`; increment build number.
+- Observe the exact commit's complete CI/security results and finish the
+  [hardware acceptance matrix](requirements.md).
+- Verify the exported archive, checksum and source manifest, including clean-Mac opening/removal.
+- Publish the verified ZIP, `SHA256SUMS` and `release.json` together under `vVERSION`,
+  only after publication approval.
 
-   ```sh
-   swift Tools/ProjectTool.swift notarize /private/tmp/limitless-signed/Limitless.app TEAM_ID KEYCHAIN_PROFILE
-   ```
-
-   This command **uploads the signed app to Apple**. It requires an `Accepted`
-   result, staples the ticket, validates it and asks Gatekeeper to assess the
-   app. It prints a diagnostic directory containing the submitted ZIP and JSON
-   response, including when a nonzero tool result supplies JSON. A 30-minute
-   wait timeout does not cancel Apple's processing: inspect the submission ID
-   with `notarytool info`/`log` before deciding whether to submit again. No
-   automatic resubmission, password argument or security bypass is used.
-   [Apple notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
-5. Create the final archive **after stapling**, from the same clean source commit:
-
-   ```sh
-   swift Tools/ProjectTool.swift package /private/tmp/limitless-signed/Limitless.app TEAM_ID /private/tmp/limitless-release
-   ```
-
-   `package` refuses existing output, creates `Limitless-VERSION-arm64.zip`,
-   extracts it into a fresh temporary directory and repeats signature, identity,
-   architecture, metadata, ticket and Gatekeeper verification on the exported app.
-   It then writes `SHA256SUMS` and `release.json` using the actual
-   archive's SHA-256. The manifest identifies the version, source commit, team,
-   filename and digest. A standalone verification is also available:
-
-   ```sh
-   swift Tools/ProjectTool.swift verify /private/tmp/limitless-signed/Limitless.app TEAM_ID
-   ```
-
-Publish the verified ZIP, `SHA256SUMS` and `release.json` together in the authorized
-GitHub Release under `vVERSION`. Local packaging creates no tag, upload or download
-URL. Never advertise an archive until that release exists.
-
-The source record is covered by the app signature; the digest binds the archive.
-Neither proves an independently reproducible build or a GitHub artifact
-attestation. Before publication, record the exact successful CI/security runs,
-hardware acceptance, clean-Mac Gatekeeper result, certificate/channel (and team
-for Developer ID), tag/commit,
-manifest and release artifacts together. Protected release approvals and any
-hosted provenance attestation require repository/signing configuration; this
-repository currently performs no automatic credential import, upload or release.
+A source record and archive digest are not a reproducible-build or hosted-attestation
+claim. Local packaging creates no tag or public download.
 
 ## Updates
 
-The menu checks the fixed repository's latest stable GitHub Release at launch and
-every six hours. No release (HTTP 404), equal/older versions, drafts and prereleases
-produce no Update button. GitHub rate limits (403 with rate-limit headers, or 429)
-show the retry time and defer the next check until that time (at least one minute).
-Other failures show the actual error and retry after fifteen minutes. Checks are
-unauthenticated; they need neither helper permission nor an Apple account. The
-settings are hidden until app setup is complete. Release tags and the bundle must use matching `major.minor.patch`
-versions and the `Limitless-VERSION-arm64.zip` asset. The GitHub asset's SHA-256 digest
-is mandatory. Bump the marketing version for every public update; build numbers alone
-do not trigger an update.
+The app checks the fixed GitHub repository at launch and every six hours. GitHub
+rate limits use its retry time; other errors retry after fifteen minutes.
+Updates require a newer marketing version, not merely a build number.
 
-Automatic installation is opt-in and waits until every session ends. Manual Update
-requires idle sessions too. The helper atomically refuses update preparation when
-any demand remains, closes new admission, proves restoration and removes itself
-through the existing native-consent path. User preferences and login registration
-survive; automation authorization and awake sessions do not. Re-enable the helper
-through macOS after opening the new version. Older builds without the updater still
-use guarded Uninstall before manual replacement, which erases preferences.
+Automatic updates are opt-in and wait for no active sessions. Manual Update appears
+only when a release is available. Archives have bounded extraction, SHA-256,
+source/metadata and pinned app/CLI/helper signature checks. Quarantine is preserved.
+The helper closes new admission while idle; replacement retains a backup and rolls
+back on failure. A changed certificate/channel requires manual installation.
 
-Downloads use an ephemeral, credential-free HTTPS session restricted to GitHub and
-its release-asset hosts. Archive size is capped at 64 MiB; extraction allows at most
-512 plain entries and 256 MiB in a private same-volume staging directory. Absolute
-paths, traversal, symbolic/hard links, special files, duplicate names and privileged
-mode bits are refused. Apple's bsdtar retains its path/symlink protections. The app,
-CLI and helper must have the installed app's exact signing certificate, correct
-identifiers, hardened runtime, no entitlements and clean Release provenance.
-Channel changes and signing-certificate rotation require an explicit manual install.
-
-The already installed executable performs the final unprivileged replacement after
-the GUI exits, rechecks signatures and helper absence, retains a backup, and asks
-NSWorkspace to launch the replacement. Quarantine is applied, never removed.
-A macOS launch refusal restores the old app; native Gatekeeper and administrator
-approval still apply, including with a free/self-signed distribution. This is not
-a promise of unattended Gatekeeper acceptance. No public binary exists yet; a
-successful check therefore offers no update. A GitHub rate limit is a separate
-temporary failure, not evidence that a release exists.
-
-Primary references: [GitHub Releases API](https://docs.github.com/en/rest/releases/releases),
-[Finder-style recycling](https://developer.apple.com/documentation/appkit/nsworkspace/recycle(_:completionhandler:)).
+Preferences and login registration survive. Active sessions do not. The native app
+may reapply the saved CLI opt-in only after the new helper is approved and healthy.
+No public release currently means there is nothing to update to.
 
 ## Prepare for removal
 
-Right-click the menu-bar icon and choose **Uninstall Limitless…** to end all sessions
-and disable automation. The native confirmation also covers preference erasure and
-moving the app to Trash after successful cleanup.
-The app shows cleanup progress and foreground errors, uses macOS's Finder-style
-recycling operation, and exits immediately after successful cleanup and recycling.
-There is no final Done dialog. A failed cleanup keeps the app open with the error.
-The helper blocks new activation, policy changes and rearming for the rest of its
-process lifetime, including across reconnects and console-user changes. Running
-commands/processes are never terminated by this operation.
+Right-click the menu icon and choose **Uninstall Limitless…**, then confirm the red
+button. Limitless ends sessions, confirms restored sleep, removes the helper and
+its CLI shortcut, unregisters login, erases all preferences/cache/window state,
+moves the app to Trash and quits.
 
-Only a confirmed allowed sleep flag, no owned hold, no remaining idle assertion
-and no sessions permit the helper to remove its empty state directory. It checks
-the held directory and lock against their original filesystem identities. Unknown
-files, a still-owned/corrupt journal, changed permissions or replaced links block
-cleanup. There is no recursive root deletion. The retired journal cannot accept
-new writes. A partial failure can be retried without recreating a demand.
+If restoration or native cleanup fails, removal stops with a visible error.
+Keep the matching app and its ownership journal until cleanup is confirmed.
+Never force-remove root files to get around this gate. The helper never overwrites
+a foreign command, and removal leaves foreign links alone.
 
-In the community channel, preparation acknowledges restoration while the executable
-still exists. A separate application-only request removes the two fixed installed
-files with the checks described in [architecture](architecture.md#removal). Its reply
-may fail XPC signature validation after unlinking the executable. The app therefore
-requires proven path absence and a fresh allowed sleep observation; it never disables
-the certificate requirement or treats a transport error alone as successful cleanup.
-The app then uses native `SMJobRemove` with administrator consent for that job, or
-asynchronous `SMAppService.unregister()` for an enabled or approval-pending bundled
-helper. An absent helper needs no unregister call only when native status is
-`notRegistered` or `notFound`, an independent system-job lookup confirms absence,
-all protected paths are absent, and a fresh sleep observation is allowed. An
-ambiguous `notFound` response alone never confirms removal. Login removal
-always uses `SMAppService`. A login item that macOS has never registered can report
-`notFound`; it needs no unregister call, like `notRegistered`. Enabled and
-approval-pending login items still require successful native unregistration.
-The login-item interpretation does not replace the helper's independent job,
-file and power checks. [Apple's explanation of a previously unseen login service](https://developer.apple.com/forums/thread/719862).
-The app checks registration states and absence of the
-fixed journal and installed files before reporting completion. A failed or
-unreadable check leaves an error. Finder cannot be prevented from deleting a file;
-keep the app installed until preparation succeeds. [Apple unregister API](https://developer.apple.com/documentation/servicemanagement/smappservice/unregister(completionhandler:)).
-
-For maintenance, quit the graphical app and run the same preparation as the console
-user, without `sudo`; remove the app only after this command succeeds:
-
-```sh
-/Applications/Limitless.app/Contents/MacOS/LimitlessApp --prepare-uninstall
-```
-
-It exits 0 only on confirmed completion, otherwise 1 (64 for invalid arguments).
-An ad-hoc development app refuses it. Every successful removal now erases the current
-user's saved Limitless preferences and its documented cache/saved-window state.
-The old `--erase-preferences` flag remains accepted for compatibility and is redundant.
-User-created skill copies and external links are not silently deleted.
-
-Do not use blanket deletion rules for the protected journal or ignore a failed
-preparation. Upgrade remains a signed-Mac test, as do approval loss and a helper
-restart between cleanup and unregistration.
+Copied AI skills and agent hook entries remain in their user-managed configuration;
+remove the Limitless entries as explained in [AI setup](cli.md#ai-agent-setup).
+Old local installation evidence is in the [test history](testing-history.md).
