@@ -17,7 +17,6 @@ import Testing
             SecRequirementCreateWithString(requirement as CFString, [], &parsed) == errSecSuccess)
         #expect(requirement.contains("certificate leaf = H\"\(fingerprint)\""))
         #expect(requirement.contains(identifier))
-        // Foundation also validates this language before any connection is activated.
         let connection = NSXPCConnection(
             machServiceName: "io.github.leboonducoin.Limitless.test-unregistered")
         connection.setCodeSigningRequirement(requirement)

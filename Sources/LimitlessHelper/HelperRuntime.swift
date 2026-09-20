@@ -2,7 +2,6 @@ import Foundation
 import LimitlessCore
 import LimitlessSystem
 
-/// Confined to HelperServer's serial queue, including all bounded blocking OS operations.
 final class HelperRuntime {
     var sessions: ServiceSessions
     var controller: SleepController
@@ -19,7 +18,6 @@ final class HelperRuntime {
         sessions = try ServiceSessions()
         journal = try SecureOwnershipJournal()
         controller = SleepController(restoringOwnedHold: try journal.loadOwned())
-        // Restore a surviving journal before the listeners accept any request.
         _ = try reconcile(owner: UUID())
     }
 
@@ -90,8 +88,6 @@ final class HelperRuntime {
                 guard removalReady, journal.isRemoved, status.canRemoveService,
                     !backend.hasIdleAssertion
                 else { throw ServiceError.restorationRequired }
-                // Acknowledge restoration before unlinking our signing identity.
-                // The app proves final deletion through the fixed root-owned paths.
                 try installedFiles?.remove()
             }
             return ServiceReply(status: try reconcile(owner: owner), startedSession: started)

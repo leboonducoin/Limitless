@@ -7,8 +7,8 @@ Limitless is a compact native menu-bar utility. All essential settings live in i
 
 - System type, native material, short labels and standard controls.
 - A 21-point title; battery and remaining time use the same callout size.
-- Monochrome loop in the menu bar. The dark orange active dot sits below and to
-  the right, with its own space so it never covers the loop.
+- Standard square menu-bar item with an 18-point monochrome loop image. The small
+  dark orange active dot sits below/right, clear of the loop, without extra width.
 - A small footer: version, blue Arthur Barreau link, MIT, and GitHub at the right.
 - Content determines height; long content scrolls instead of leaving empty space.
 - Native popover opening motion for mouse clicks. Keyboard opening and Reduce

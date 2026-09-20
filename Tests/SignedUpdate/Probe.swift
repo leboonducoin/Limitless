@@ -1,7 +1,6 @@
 import Foundation
 import LimitlessSystem
 
-/// Non-root fixture probe. No app launch, helper installation, or power mutation.
 @main enum UpdateProbe {
     static func main() async throws {
         let arguments = Array(CommandLine.arguments.dropFirst())
@@ -22,7 +21,6 @@ import LimitlessSystem
                         contentsOf: installed.app.appendingPathComponent("Contents/Info.plist")),
                     format: nil) as? [String: Any]
             guard info?["CFBundleShortVersionString"] as? String == "0.2.0" else { exit(1) }
-            // Simulate a refused macOS launch: the original app must be recoverable.
             _ = try FileManager.default.replaceItemAt(
                 installed.app, withItemAt: installed.backup, options: .usingNewMetadataOnly)
             let restored =

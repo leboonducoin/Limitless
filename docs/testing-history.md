@@ -287,7 +287,7 @@ execution, source transitions or restart behavior.
 Read-only inspection outside the tool sandbox found an absent `SleepDisabled`
 line in `pmset -g`, while IORegistry reported a Boolean false. The sandboxed pmset
 read had returned only a header. Neither empty output is treated as false by the
-implementation. No source from Apple or Sleepless was copied into this repository.
+implementation. This repository contains an independent implementation.
 
 ## Local commands
 

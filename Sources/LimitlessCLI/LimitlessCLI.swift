@@ -163,7 +163,6 @@ struct LimitlessCLI {
     }
 
     @MainActor private static func holdAgent() async {
-        // Detached only for an explicit lifecycle event; never a login/background service.
         _ = setsid()
         signal(SIGPIPE, SIG_IGN)
         do {
@@ -175,8 +174,6 @@ struct LimitlessCLI {
                 _ = try await follow(command: nil, process: nil, request: .init(), agent: activity)
             } catch {
                 try? FileHandle.standardOutput.close()
-                // Preserve the marker through a manual session, refusal or connection loss.
-                // A later duplicate hook must not turn protection back on for this task.
                 while activity.isAlive { try await Task.sleep(for: .seconds(1)) }
             }
         } catch { return }
@@ -186,7 +183,6 @@ struct LimitlessCLI {
         do {
             let reply: ServiceReply
             do { reply = try await client.send(.stop(id)) } catch ServiceError.unauthorized {
-                // The deadline may have removed the session just before its explicit release.
                 reply = try await client.send(.status)
             }
             guard let status = reply.status,

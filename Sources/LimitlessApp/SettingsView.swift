@@ -2,7 +2,6 @@ import LimitlessCore
 import ServiceManagement
 import SwiftUI
 
-/// Essential preferences live in the popover, using the same validated policy draft.
 struct SettingsView: View {
     @Bindable var model: AppModel
 

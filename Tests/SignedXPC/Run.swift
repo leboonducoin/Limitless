@@ -1,4 +1,3 @@
-// Explicit, maintainer-authorized integration test. Never run by ordinary CI.
 import Foundation
 
 struct ProbeFailure: Error { let message: String }
@@ -29,7 +28,6 @@ func main() throws {
     let files = FileManager.default
     let certificate = arguments[0]
     let root = URL(fileURLWithPath: arguments[1], isDirectory: true)
-    // Atomic refusal of any existing output, including symbolic links.
     guard mkdir(root.path, 0o700) == 0 else {
         throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
     }

@@ -17,13 +17,10 @@ public enum SignatureError: Error, Sendable {
     case untrustedIdentity, invalidRequirement
 }
 
-/// Pin the current executable's actual signing certificate and exact peer identifiers.
-/// A self-signed identity is sufficient; ad-hoc signatures have no certificate and are rejected.
 public struct SignedIdentity: Sendable {
     public let certificateFingerprint: String
     public let executableURL: URL
 
-    /// Security may evaluate certificate trust while reading signing information.
     @concurrent public static func current(expectedIdentifier: String) async throws -> Self {
         try Task.checkCancellation()
         let identity = try Self(expectedIdentifier: expectedIdentifier)
@@ -46,8 +43,6 @@ public struct SignedIdentity: Sendable {
             let executable = details[kSecCodeInfoMainExecutable as String] as? URL,
             details[kSecCodeInfoIdentifier as String] as? String == expectedIdentifier
         else { throw SignatureError.untrustedIdentity }
-        // Apple's requirement language selects certificates with a SHA-1 fingerprint.
-        // This is a certificate selector, not the digest used to authenticate release archives.
         let fingerprint = Insecure.SHA1.hash(data: SecCertificateCopyData(leaf) as Data)
             .map { String(format: "%02x", $0) }.joined()
         let requirement = try Self.requirement(

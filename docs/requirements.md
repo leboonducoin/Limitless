@@ -26,7 +26,7 @@ new binary. No public binary release is authorized by this document.
 | R12 | Public MIT repository, concise docs, CI and security gates | Actual final-commit checks and release evidence |
 | R13 | All executable product/maintenance code Swift; no Node/Python runtime | Source and exported-artifact inventory |
 | R14 | Public Apple APIs; isolated undocumented lid mechanism | Source/API and privilege review |
-| R15 | Scoped commits, current contributor instructions | Reviewed history and AGENTS.md |
+| R15 | Scoped commits, current contributor instructions | Reviewed history and CONTRIBUTING.md |
 | R16 | Distribution without paid Apple membership | Stable certificate and clean-Mac native installation |
 
 Implemented code and automated checks are recorded in [testing](testing.md).

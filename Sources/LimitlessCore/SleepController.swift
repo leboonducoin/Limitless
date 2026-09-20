@@ -1,12 +1,9 @@
 import Foundation
 
-/// Observation of the global OS flag, not proof that a closed MacBook stays awake.
 public enum SleepObservation: String, Codable, Sendable {
     case allowed, disabled, unknown
 }
 
-/// OS boundary. Implementations must bound blocking operations and verify writes.
-/// The helper calls it on its serial worker, never on the app's main actor.
 public protocol SleepBackend {
     var hasIdleAssertion: Bool { get }
     mutating func observe() -> SleepObservation
@@ -14,7 +11,6 @@ public protocol SleepBackend {
     mutating func setIdleAssertion(_ held: Bool) throws
 }
 
-/// A successful claim must be durable before a global setting can be changed.
 public protocol OwnershipJournal {
     mutating func storeOwned(_ owned: Bool) throws
 }
@@ -44,7 +40,6 @@ public struct SleepReport: Equatable, Codable, Sendable {
     }
 }
 
-/// Owns decisions, not OS handles. Access and all backend calls must be serialized.
 public struct SleepController: Sendable {
     public private(set) var ownsGlobalHold: Bool
     public private(set) var fault: SleepFault?
@@ -55,13 +50,11 @@ public struct SleepController: Sendable {
     private var lastTime: TimeInterval?
     public static let retryLimit = 3
 
-    /// Loaded from the protected journal. A prior claim always requires cleanup.
     public init(restoringOwnedHold: Bool) {
         ownsGlobalHold = restoringOwnedHold
         fault = restoringOwnedHold ? .interrupted : nil
     }
 
-    /// Explicit app-authorized rearming, never a watchdog or lease renewal.
     public mutating func rearm() throws {
         guard !ownsGlobalHold else { throw SleepFault.restorationPending }
         fault = nil
@@ -71,7 +64,6 @@ public struct SleepController: Sendable {
         restorationAt = 0
     }
 
-    /// Explicitly retry a failed stop, without granting permission to activate.
     public mutating func retryRestoration() {
         restorationAttempts = 0
         restorationAt = 0
@@ -89,7 +81,6 @@ public struct SleepController: Sendable {
         lastTime = now.continuous
         let observed = backend.observe()
 
-        // Stop, suspension and any latched fault always outrank recovery.
         if !wantsAwake || fault != nil {
             return restore(now: now.continuous, backend: &backend, journal: &journal)
         }
@@ -126,8 +117,6 @@ public struct SleepController: Sendable {
             try backend.setSleepDisabled(true)
             let applied = backend.observe()
             guard applied == .disabled else { throw SleepFault.activationFailed }
-            // Do not reset this budget after success: repeated external interference
-            // must eventually stop, even when each individual repair succeeds.
             recoveryAt = now.continuous + pow(2, Double(recoveryAttempts))
             return report(.active, applied)
         } catch {
@@ -140,7 +129,6 @@ public struct SleepController: Sendable {
         now: TimeInterval, backend: inout some SleepBackend, journal: inout some OwnershipJournal
     ) -> SleepReport {
         guard ownsGlobalHold else {
-            // Never write a global value without a durable claim, even if it is on.
             let observed = backend.observe()
             return report(fault == nil ? .inactive : .blocked, observed)
         }
@@ -157,11 +145,8 @@ public struct SleepController: Sendable {
             try backend.setIdleAssertion(false)
             assertionReleased = !backend.hasIdleAssertion
         } catch {
-            // Still attempt global restoration if the independent assertion fails.
         }
         do {
-            // Write zero even when a prior failed activation appeared not to apply.
-            // A successful process exit or an earlier observation is not an ack.
             try backend.setSleepDisabled(false)
             guard backend.observe() == .allowed, assertionReleased else {
                 throw SleepFault.restorationFailed

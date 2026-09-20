@@ -15,7 +15,7 @@ in one compact menu.
   <img src="docs/images/menu-preview.png" width="340" alt="Limitless menu-bar panel">
 </p>
 
-*Earlier development preview with sample values.*
+*Current development preview with sample values.*
 
 ## What it does
 
@@ -75,9 +75,6 @@ See [contributing](CONTRIBUTING.md), [architecture](docs/architecture.md),
 [tests](docs/testing.md), [design](docs/design.md), and
 [release acceptance](docs/requirements.md). Report vulnerabilities
 [privately](https://github.com/leboonducoin/Limitless/security/advisories/new).
-
-Inspired by [Sleepless](https://github.com/Aboudjem/Sleepless), independently
-implemented without its code or assets.
 
 By [Arthur Barreau](https://www.linkedin.com/in/arthurbarreau/).
 [MIT](LICENSE) · Copyright © 2026 Arthur Barreau.

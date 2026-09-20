@@ -3,7 +3,6 @@ import Foundation
 import MachO
 import Security
 
-// Run from the repository root: swift Tools/ProjectTool.swift check
 func run(
     _ executable: String, _ arguments: [String], capture: Bool = false, saveOutput: URL? = nil,
     environment: [String: String]? = nil
@@ -126,7 +125,6 @@ func communityMetadata(info: [String: Any], certificate: String?) throws
             && matches(build, "[1-9][0-9]*")
             && info["CFBundleIdentifier"] as? String == identifier,
         "Invalid helper metadata version or identity.")
-    // Ad-hoc inspection bundles explicitly authorize nobody; never use a dummy certificate pin.
     let appRequirement =
         try certificate.map { try certificateRequirement(identifier: identifier, certificate: $0) }
         ?? "false"
@@ -151,7 +149,6 @@ func communityMetadata(info: [String: Any], certificate: String?) throws
     return (app, helper, daemon)
 }
 
-/// Inspect the actual thin ARM64 executable without loading or executing its code.
 func embeddedPropertyList(_ data: Data, section name: String) throws -> [String: Any] {
     func read<T>(_ offset: Int, as type: T.Type) throws -> T {
         try require(
@@ -225,7 +222,6 @@ func verifyCommunityMetadata(_ app: URL, certificate: String?) throws {
             && NSDictionary(dictionary: try embeddedPropertyList(data, section: "__launchd_plist"))
                 .isEqual(to: expected.daemon),
         "App and embedded helper metadata disagree with the signing identity.")
-    // Exercise the same Security view that native installation validates before admin consent.
     var code: SecStaticCode?
     var information: CFDictionary?
     try require(
@@ -530,7 +526,6 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
         let zip = output.appendingPathComponent("Limitless-\(version)-arm64.zip")
         try archive(app, to: zip)
-        // Inspect the actual exported archive, not just its input bundle.
         let extracted = FileManager.default.temporaryDirectory.appendingPathComponent(
             "Limitless-verify-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: extracted, withIntermediateDirectories: false)
@@ -611,14 +606,11 @@ do {
     let buildPath =
         ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]
         .map { ["--scratch-path", $0] } ?? []
-    // CLT 6.4 ships the macro but SwiftPM does not discover its nested directory.
-    // Load only the Apple-supplied plugin; no download or toolchain modification.
     if URL(fileURLWithPath: developer).lastPathComponent == "CommandLineTools",
         FileManager.default.fileExists(atPath: plugin)
     {
         compilerFlags += ["-Xswiftc", "-load-plugin-library", "-Xswiftc", plugin]
     }
-    // Do not inherit a caller's stale helper metadata into checks or the other channel.
     var buildEnvironment = ProcessInfo.processInfo.environment
     buildEnvironment.removeValue(forKey: "LIMITLESS_HELPER_METADATA")
     if bundle {
@@ -740,7 +732,6 @@ do {
                 try cleanRevision() == sourceRevision && record.sourceRevision == sourceRevision,
                 "Source changed during the release build.")
         }
-        // Sign nested executables explicitly before sealing the outer bundle.
         let signature = signing ? certificate : "-"
         let signingOptions =
             signing
@@ -782,7 +773,6 @@ do {
             environment: buildEnvironment)
     } else {
         try selfTest()
-        // Typecheck opt-in integration tools without signing, launching or changing the host.
         for sources in [
             [
                 "-parse-as-library", "Sources/LimitlessSystem/SignedConnection.swift",

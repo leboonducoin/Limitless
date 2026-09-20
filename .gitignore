@@ -75,3 +75,5 @@ graphify-out/
 *.mobileprovision
 *.provisionprofile
 *.xcresult
+AGENTS.md
+CODEX_CHECKPOINT.md

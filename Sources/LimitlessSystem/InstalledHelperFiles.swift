@@ -1,8 +1,6 @@
 import Darwin
 import Foundation
 
-/// The two files installed by SMJobBless. Confined to the helper's serial worker.
-/// Capture before removing anything; revalidate held entries before each unlink.
 public final class InstalledHelperFiles {
     public static let executablePath =
         "/Library/PrivilegedHelperTools/" + LimitlessIdentity.helper
@@ -23,7 +21,6 @@ public final class InstalledHelperFiles {
     private let verifyHelper: (URL) throws -> Void
     private var entries: [Entry] = []
 
-    /// A bundled SMAppService helper has no copied files to remove.
     public convenience init?(identity: SignedIdentity) throws {
         guard identity.executableURL.path == Self.executablePath else { return nil }
         guard geteuid() == 0 else { throw JournalError.administratorRequired }
@@ -32,7 +29,6 @@ public final class InstalledHelperFiles {
         }
     }
 
-    // Internal, unprivileged filesystem fixture. Never accepts a path over XPC.
     convenience init(testRoot: URL, verifyHelper: @escaping (URL) throws -> Void) throws {
         try self.init(rootURL: testRoot, owner: geteuid(), verifyHelper: verifyHelper)
     }
@@ -50,7 +46,6 @@ public final class InstalledHelperFiles {
         self.verifyHelper = verifyHelper
         helperURL = rootURL.appendingPathComponent("Library/PrivilegedHelperTools/")
             .appendingPathComponent(LimitlessIdentity.helper)
-        // All stored properties are initialized: deinit closes captured descriptors on failure.
         try validateParents()
         for (directory, name) in [
             ("LaunchDaemons", LimitlessIdentity.daemonPlist),
@@ -86,8 +81,6 @@ public final class InstalledHelperFiles {
             && SecureOwnershipJournal.directoryIsAbsent(at: daemonPath)
     }
 
-    /// Only call after all sessions end and restoration is confirmed. A partial
-    /// failure retains the remaining descriptors for a retry, without reinstalling.
     public func remove() throws {
         try validateRemaining()
         for index in entries.indices {
@@ -147,7 +140,6 @@ public final class InstalledHelperFiles {
                 let value = try PropertyListSerialization.propertyList(from: data, format: nil)
                     as? [String: Any],
                 value["Label"] as? String == LimitlessIdentity.helper,
-                // SMJobBless may add Program as well as ProgramArguments.
                 value["Program"] == nil || value["Program"] as? String == Self.executablePath,
                 value["ProgramArguments"] as? [String] == [Self.executablePath],
                 value["UserName"] as? String == "root",
@@ -163,7 +155,6 @@ public final class InstalledHelperFiles {
         }
         if let helper = entries.last, !helper.removed {
             try verifyHelper(helperURL)
-            // Static signature validation uses a pathname; ensure it still names our held file.
             try validateEntry(helper)
         }
     }

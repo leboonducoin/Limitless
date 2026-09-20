@@ -129,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     }
 
     private func installStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: 34)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem = item
         item.button?.image = BrandArt.menuIdle
         item.button?.setAccessibilityLabel("Limitless: Setup required")
@@ -139,13 +139,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         item.button?.setAccessibilityHelp("Click to open. Right-click for Quit and Uninstall.")
         if let button = item.button {
             activeDot.frame = NSRect(
-                x: button.bounds.midX + 10,
-                y: button.isFlipped ? button.bounds.maxY - 7 : 3, width: 4, height: 4)
+                x: button.bounds.midX + 6,
+                y: button.isFlipped ? button.bounds.maxY - 6 : 3, width: 3, height: 3)
             activeDot.isHidden = true
             activeDot.wantsLayer = true
             activeDot.layer?.backgroundColor =
                 NSColor(srgbRed: 0.85, green: 0.36, blue: 0.04, alpha: 1).cgColor
-            activeDot.layer?.cornerRadius = 2
+            activeDot.layer?.cornerRadius = 1.5
             activeDot.setAccessibilityElement(false)
             button.addSubview(activeDot)
         }
@@ -155,7 +155,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         let host = NSHostingController(rootView: MenuPanel(model: model))
         host.sizingOptions = [.preferredContentSize]
         popover.contentViewController = host
-        // Keep the native application menu and Command-Q available to keyboard users.
         let mainMenu = NSMenu()
         let application = NSMenuItem()
         application.submenu = actionsMenu()
@@ -195,7 +194,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     }
 
     func popoverDidShow(_ notification: Notification) {
-        // Mouse clicks only; no key capture or Accessibility permission is needed.
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [
             .leftMouseDown, .rightMouseDown,
         ]) { [weak self] _ in
@@ -344,8 +342,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         return .terminateLater
     }
 
-    // Public Apple-event metadata distinguishes system restart/shutdown from ordinary Quit.
-    // Enforced updates and forced termination can bypass AppKit; this is not an OS update lock.
     static func isSystemRestart(_ event: NSAppleEventDescriptor?) -> Bool {
         guard let event, event.eventClass == AEEventClass(kCoreEventClass),
             event.eventID == AEEventID(kAEQuitApplication),

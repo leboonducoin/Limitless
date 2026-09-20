@@ -23,7 +23,6 @@ public enum UpdateError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Fixed public repository, no credentials, no privileged installation or executable paths over XPC.
 public enum GitHubUpdate {
     public static let repository = URL(string: "https://github.com/leboonducoin/Limitless")!
     private static let latestURL = URL(
@@ -125,7 +124,6 @@ public enum GitHubUpdate {
         return data
     }
 
-    /// False means there is no published release, not that checking failed.
     static func validateResponse(
         _ response: HTTPURLResponse, limit: Int, allowsMissing: Bool = false, now: Date = Date()
     ) throws -> Bool {
@@ -156,7 +154,6 @@ public enum GitHubUpdate {
     ) async throws -> Staged {
         let target = try canonical(installedApp)
         try requireWritableApp(target)
-        // Same volume for atomic replacement; private staging never overwrites an existing entry.
         let directory = target.deletingLastPathComponent().appendingPathComponent(
             ".Limitless-update-\(UUID().uuidString)")
         try FileManager.default.createDirectory(
@@ -179,7 +176,6 @@ public enum GitHubUpdate {
     }
 
     static func quarantine(_ app: URL, downloadedFrom url: URL) throws {
-        // URLSession does not apply quarantine itself. Let macOS make its normal launch decision.
         try (app as NSURL).setResourceValue(
             [
                 "LSQuarantineAgentName": "Limitless",
@@ -196,7 +192,6 @@ public enum GitHubUpdate {
         }
     }
 
-    /// Read the listing before extraction. Only plain files/directories with bounded total size.
     static func validateListing(_ listing: String) throws {
         let lines = listing.split(separator: "\n")
         guard !lines.isEmpty, lines.count <= 512 else { throw UpdateError.invalidArchive }
@@ -229,7 +224,6 @@ public enum GitHubUpdate {
     static func extract(_ archive: URL, to directory: URL) async throws {
         let listing = try await tar(["-tvf", archive.path], directory: directory)
         try validateListing(listing)
-        // bsdtar's default path/symlink protections stay enabled (-P/-U are never used).
         _ = try await tar(
             [
                 "-xkf", archive.path, "--no-same-owner", "--no-same-permissions", "--no-acls",
@@ -360,8 +354,6 @@ public enum GitHubUpdate {
         }
     }
 
-    /// The already installed app runs this unprivileged maintenance mode, then exits.
-    /// No downloaded executable runs before macOS approves the replacement through NSWorkspace.
     public static func launchInstaller(_ staged: Staged) throws {
         guard let executable = Bundle.main.executableURL else { throw UpdateError.failed }
         let child = Process()
@@ -423,7 +415,6 @@ public enum GitHubUpdate {
             }
             throw UpdateError.failed
         }
-        // Keep the old bundle until NSWorkspace confirms that macOS allowed the new launch.
         return (current, backup, directory)
     }
 }

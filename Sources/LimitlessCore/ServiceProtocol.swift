@@ -1,6 +1,5 @@
 import Foundation
 
-/// Roles come from separate authenticated endpoints, never from request data.
 public enum ClientRole: Sendable {
     case application, task
 }
@@ -84,7 +83,6 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
             && sleep.observed == .allowed && (sleep.phase == .inactive || sleep.phase == .blocked)
     }
 
-    /// Reapply a native-app opt-in without weakening any live helper limit or resuming work.
     public func automationPolicyToRestore(_ saved: UserPolicy) throws -> UserPolicy? {
         guard !policy.allowsAutomation, sessions.isEmpty, removal == .none,
             sleep.phase == .inactive, sleep.observed == .allowed, !sleep.ownsGlobalHold,
@@ -127,7 +125,6 @@ public struct ServiceReply: Codable, Sendable {
     }
 }
 
-/// NSData is the only XPC payload type; decoding and semantic validation happen in the helper.
 public enum ServiceWire {
     public static let version = 4
     public static let maximumMessageBytes = 131_072

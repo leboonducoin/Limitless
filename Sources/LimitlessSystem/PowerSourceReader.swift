@@ -3,7 +3,6 @@ import Foundation
 import IOKit.ps
 import LimitlessCore
 
-/// Public IOPowerSources adapter. It never substitutes 100% for missing telemetry.
 public struct PowerSourceReader: Sendable {
     private var hasSeenInternalBattery = false
 
@@ -33,7 +32,7 @@ public struct PowerSourceReader: Sendable {
         switch provider {
         case kIOPMACPowerKey: source = .external
         case kIOPMBatteryPowerKey: source = .battery
-        default: source = .unknown  // UPS and unknown providers need separate qualification.
+        default: source = .unknown
         }
         let batteries =
             descriptions?.filter {
@@ -50,7 +49,6 @@ public struct PowerSourceReader: Sendable {
             return PowerSnapshot(
                 source: source, battery: hasSeenInternalBattery ? .unavailable : .notPresent)
         }
-        // Current target hardware has one internal battery. Ambiguous topology fails closed.
         guard batteries.count == 1 else {
             return PowerSnapshot(source: source, battery: .unavailable)
         }
@@ -69,7 +67,6 @@ public struct PowerSourceReader: Sendable {
         switch state {
         case kIOPSBatteryPowerValue: discharging = true
         case kIOPSACPowerValue:
-            // A connected adapter can be insufficient: use signed current, not its presence.
             guard let amperage = number(description[kIOPSCurrentKey]) else { return .unavailable }
             discharging = amperage < 0
         default: return .unavailable

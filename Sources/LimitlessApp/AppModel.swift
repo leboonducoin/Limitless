@@ -35,7 +35,6 @@ import ServiceManagement
     var stopDate = Date().addingTimeInterval(3_600)
     var processID = "" {
         didSet {
-            // Keep captured start times while another token is still being typed.
             let ids = Set(
                 processID.split(separator: ";").compactMap {
                     Int32($0.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -151,7 +150,6 @@ import ServiceManagement
         ((try? ProcessSelection.parse(processID)) ?? []).contains(process.id)
     }
 
-    /// Remove ended identities once; a reused PID must never rejoin the session.
     func pollWatchedProcesses() -> Bool {
         guard var followed = watchedProcesses else { return false }
         let completed = ProcessSelection.allFinished(&followed)
@@ -412,7 +410,6 @@ import ServiceManagement
             if await perform(.configure(policy)) {
                 let applied = PolicyDraft(status?.policy ?? policy)
                 if draft == submitted { draft = applied }
-                // Persist limits only, never automation authorization or an active demand.
                 let saved = try applied.policy(allowsAutomation: false)
                 preferences.set(try JSONEncoder().encode(saved), forKey: "userPolicy")
                 message = nil
@@ -420,7 +417,6 @@ import ServiceManagement
         } catch { message = "Use a battery floor from 0 to 50% and a positive, finite duration." }
     }
 
-    /// Serialize rapid edits; a reply must never overwrite a newer selection.
     func policyEdited() {
         guard !isPreview, !quitting, draftChanged, policyApplication == nil else { return }
         policyApplication = Task { [weak self] in
@@ -434,7 +430,7 @@ import ServiceManagement
                 }
                 let submitted = draft
                 await applyPolicy()
-                if draft == submitted { return }  // Invalid or unconfirmed: keep the error visible.
+                if draft == submitted { return }
             }
         }
     }
@@ -496,8 +492,6 @@ import ServiceManagement
         SMAppService.openSystemSettingsLoginItems()
     }
 
-    /// Shared by the context-menu action and the signed app's maintenance entry point.
-    /// The helper removes its fixed CLI link; user-created links and skill copies are untouched.
     func removeIntegration(forUpdate: Bool = false) async -> Bool {
         guard trustedBuild, !isPreview, !busy, let helper else {
             message = "Removal requires a correctly signed Limitless installation."
@@ -525,8 +519,6 @@ import ServiceManagement
                     try SecureOwnershipJournal.isStateDirectoryAbsent()
                 else { throw ServiceError.restorationRequired }
                 if try !InstalledHelperFiles.areAbsent() {
-                    // Unlinking the executable can invalidate its XPC signature before a reply.
-                    // Only proven file absence permits unregistration after this request.
                     _ = try? await client.send(.finishRemoval)
                 }
             } else {
@@ -545,7 +537,6 @@ import ServiceManagement
             await client?.close()
             client = nil
             removalStep = "Removing the login item…"
-            // A login item never registered with ServiceManagement reports notFound.
             let absentLoginStates: [SMAppService.Status] = [.notRegistered, .notFound]
             if !forUpdate, !absentLoginStates.contains(SMAppService.mainApp.status) {
                 try await SMAppService.mainApp.unregister()
@@ -575,7 +566,6 @@ import ServiceManagement
         } catch {
             quitting = false
             if forUpdate, error as? ServiceError == .sessionRejected {
-                // Closing a healthy owner here would cancel work that raced with the download.
                 if let reply = try? await client?.send(.status) {
                     try? accept(reply)
                 } else {
@@ -597,8 +587,6 @@ import ServiceManagement
         }
     }
 
-    /// Only the current user's Limitless domain and documented cache/window-state entries.
-    /// Called after native cleanup, so an error never causes an unsafe helper removal.
     static func erasePreferences(_ defaults: UserDefaults, domain: String, library: URL) throws {
         defaults.removePersistentDomain(forName: domain)
         guard defaults.synchronize() else { throw ServiceError.unavailable }
@@ -606,7 +594,6 @@ import ServiceManagement
             do {
                 try FileManager.default.removeItem(at: library.appendingPathComponent(relative))
             } catch let error as CocoaError where error.code == .fileNoSuchFile {
-                // Already absent is the expected result on installations without cached state.
             }
         }
     }
@@ -633,7 +620,6 @@ import ServiceManagement
 
 #if DEBUG
     extension AppModel {
-        /// Read-only presentation fixtures. Every mutation path still rejects isPreview.
         static func preview(_ state: String, watchedProcesses: [ProcessIdentity]? = nil) -> AppModel
         {
             let model = AppModel()

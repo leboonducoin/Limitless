@@ -3,7 +3,6 @@ import Darwin
 import Foundation
 import LimitlessSystem
 
-/// Only lifecycle identifiers are decoded. Prompts and transcripts are never used or saved.
 struct AgentEvent: Equatable {
     enum Action: String { case begin, end, endSession }
     let action: Action
@@ -69,8 +68,6 @@ struct AgentEvent: Equatable {
     }
 }
 
-/// A private empty marker is the lifetime of one real task, not a persistent awake preference.
-/// Descriptor identity prevents an old watcher from following a replacement task.
 final class AgentActivity {
     struct Context: Codable {
         let name: String
@@ -111,7 +108,6 @@ final class AgentActivity {
         let fd = try openDirectory(directory)
         defer { close(fd) }
         guard host.isAlive else { throw WorkError.processUnavailable }
-        // ponytail: at most 256 concurrent markers; normal end hooks remove them.
         guard try FileManager.default.contentsOfDirectory(atPath: directory.path).count < 256 else {
             throw CLIError.usage(
                 "Too many unfinished agent tasks. End the previous sessions first.")
@@ -176,8 +172,6 @@ final class AgentActivity {
             && original.st_dev == current.st_dev && original.st_ino == current.st_ino
     }
 
-    /// Called only after the actual task/host ends. Losing protection does not erase the marker:
-    /// repeated start hooks must not revive a stopped, expired or manually superseded task.
     func finish() { if sameMarker { _ = unlinkat(directoryFD, context.name, 0) } }
 
     deinit {
@@ -197,7 +191,6 @@ final class AgentActivity {
 
 @MainActor enum AgentHook {
     static func run(provider: String) async {
-        // Hook failures never block the agent or leak input back to its transcript.
         do {
             let data = try readInput(maximum: 1_048_576)
             let event = try AgentEvent.decode(data, provider: provider)

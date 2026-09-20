@@ -22,7 +22,6 @@ final class ProbeServer: NSObject, NSXPCListenerDelegate, LimitlessXPC {
     }
 
     func request(_ data: Data, reply: @escaping @Sendable (Data) -> Void) {
-        // Fixed probe only: no runtime, process execution, session or power backend.
         guard data == Data("signed-xpc-probe".utf8) else { return }
         reply(Data("probe:\(getpid()):\(geteuid())".utf8))
     }
@@ -112,7 +111,6 @@ enum ProbeResult: Sendable {
             }
             let identity: SignedIdentity
             if identifier == LimitlessIdentity.helper {
-                // Preserve the embedded NSRunLoop service's synchronous bootstrap.
                 identity = try SignedIdentity(expectedIdentifier: identifier)
             } else {
                 identity = try await SignedIdentity.current(expectedIdentifier: identifier)
@@ -133,7 +131,6 @@ enum ProbeResult: Sendable {
                 let server = ProbeServer(requirement: requirement)
                 let listener = NSXPCListener.service()
                 listener.delegate = server
-                // Bound even a rejected connection; no service remains running after this probe.
                 DispatchQueue.global().asyncAfter(deadline: .now() + 8) { exit(0) }
                 withExtendedLifetime(server) { listener.resume() }
                 return

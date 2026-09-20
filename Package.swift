@@ -3,7 +3,6 @@
 import Foundation
 import PackageDescription
 
-// Set only by the community bundle recipe; no privileged service is installed by a build.
 let helperLinkerSettings: [LinkerSetting] =
     ProcessInfo.processInfo.environment["LIMITLESS_HELPER_METADATA"].map { directory in
         [

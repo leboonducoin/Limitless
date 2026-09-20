@@ -11,8 +11,6 @@ public enum MacSleepError: Error, Equatable, Sendable {
     case commandStillRunning, invalidTimeout
 }
 
-/// The only adapter aware of the undocumented global flag and registry property.
-/// Mutating operations belong exclusively to the authenticated privileged helper.
 public struct MacSleepBackend: SleepBackend, Sendable {
     private var caffeinate = CaffeinateAssertion()
     private var command = BoundedSystemCommand()
@@ -45,11 +43,8 @@ public struct MacSleepBackend: SleepBackend, Sendable {
 
     public mutating func setSleepDisabled(_ disabled: Bool) throws {
         guard geteuid() == 0 else { throw MacSleepError.administratorRequired }
-        // No source mask: this setting is global, regardless of -b/-c/-a policy.
         try command.run(
             executable: "/usr/bin/pmset", arguments: ["disablesleep", disabled ? "1" : "0"])
-        // powerd applies the preference asynchronously. Wait at most one second;
-        // neither a successful exit nor an unreadable property proves success.
         let expected: SleepObservation = disabled ? .disabled : .allowed
         for _ in 0..<20 {
             if observe() == expected { return }
@@ -59,8 +54,6 @@ public struct MacSleepBackend: SleepBackend, Sendable {
     }
 }
 
-/// One owned Apple process, tied to the helper's lifetime even if it crashes.
-/// A running PID alone is insufficient: the watchdog verifies its actual assertion.
 struct CaffeinateAssertion: Sendable {
     var process: Process?
 
@@ -89,8 +82,6 @@ struct CaffeinateAssertion: Sendable {
         try stop()
         let child = Process()
         child.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
-        // -i covers idle system sleep on either source; pmset covers the global hold.
-        // Do not keep the display awake or manufacture user activity.
         child.arguments = ["-i", "-w", String(getpid())]
         child.currentDirectoryURL = URL(fileURLWithPath: "/")
         child.environment = ["PATH": "/usr/bin:/bin", "LC_ALL": "C"]
@@ -104,7 +95,6 @@ struct CaffeinateAssertion: Sendable {
             if !child.isRunning { break }
             Thread.sleep(forTimeInterval: 0.05)
         }
-        // Retain an unconfirmed child so controller rollback can still terminate it.
         throw MacSleepError.verificationFailed
     }
 
@@ -118,14 +108,10 @@ struct CaffeinateAssertion: Sendable {
             }
             Thread.sleep(forTimeInterval: 0.025)
         }
-        // Never mistake an unreadable assertion for a successfully terminated child.
-        // Keep ownership and report failed restoration; do not launch a second child.
         throw MacSleepError.commandStillRunning
     }
 }
 
-/// Internal subprocess boundary; executable/arguments are never XPC request fields.
-/// A timed-out child remains tracked until termination, preventing overlapping writes.
 struct BoundedSystemCommand: Sendable {
     private var process: Process?
     var isRunning: Bool { process?.isRunning == true }

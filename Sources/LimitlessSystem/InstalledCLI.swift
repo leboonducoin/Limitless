@@ -1,7 +1,6 @@
 import Darwin
 import Foundation
 
-/// One fixed link, requested only by the authenticated app. Never overwrites another command.
 public enum InstalledCLI {
     public static let target = "/Applications/Limitless.app/Contents/MacOS/limitless"
 
@@ -28,7 +27,6 @@ public enum InstalledCLI {
         try change(root: URL(fileURLWithPath: "/"), user: user, install: false)
     }
 
-    // Tests use only a temporary directory; no arbitrary path is accepted over XPC.
     static func change(root: URL, user: uid_t, install: Bool) throws {
         var descriptors: [Int32] = []
         defer { for descriptor in descriptors.reversed() { close(descriptor) } }
@@ -80,7 +78,6 @@ public enum InstalledCLI {
                 info.st_mode & S_IFMT == S_IFLNK && info.st_uid == geteuid()
                 && count > 0
                 && String(decoding: bytes.prefix(max(0, count)), as: UTF8.self) == target
-            // A foreign entry is left alone, including during uninstall.
             guard owned else {
                 if install { throw JournalError.unexpectedContents }
                 return

@@ -1,6 +1,5 @@
 import Foundation
 
-/// Connection identity is assigned by the helper. Liveness never changes a session's deadline.
 public struct ServiceSessions: Sendable {
     public static let leaseSeconds: TimeInterval = 30
     public static let heartbeatSeconds: TimeInterval = 5
@@ -18,7 +17,6 @@ public struct ServiceSessions: Sendable {
 
     public init() throws { registry = SessionRegistry(policy: try UserPolicy()) }
 
-    /// Also called by the watchdog. A user switch revokes all prior authorization.
     @discardableResult
     public mutating func expire(now: ClockSnapshot, consoleUser: UInt32?) throws -> Set<UUID> {
         let changedUser = self.consoleUser != consoleUser
@@ -48,8 +46,6 @@ public struct ServiceSessions: Sendable {
         registry.releaseOwner(owner)
     }
 
-    /// One running demand per connection; parallel commands use independent connections.
-    /// Controller-only actions are authorized here and executed by the helper afterwards.
     public mutating func apply(
         _ operation: ServiceOperation, owner: UUID, now: ClockSnapshot
     ) throws -> UUID? {
@@ -91,13 +87,11 @@ public struct ServiceSessions: Sendable {
                 kind = client.role == .application ? .manual : .task
             } else {
                 guard client.role == .task else { throw ServiceError.unauthorized }
-                // Both sources and 20%, constrained by any stricter user limits.
                 request = SessionRequest(
                     mode: registry.policy.mode,
                     batteryFloor: max(20, registry.policy.batteryFloor))
                 kind = .agent
             }
-            // An agent ignored during manual work cannot retry on this connection later.
             if kind == .agent {
                 client.hasStarted = true
                 clients[owner] = client
@@ -110,8 +104,6 @@ public struct ServiceSessions: Sendable {
             guard registry.stop(id, owner: owner) else { throw ServiceError.unauthorized }
         case .stopAll: registry.stopAll()
         case .prepareRemoval, .prepareUpdate:
-            // The check and admission closure share the helper's serial worker.
-            // Automatic updates cannot interrupt work that started during a download.
             if operation == .prepareUpdate, !registry.sessions.isEmpty {
                 throw ServiceError.sessionRejected
             }

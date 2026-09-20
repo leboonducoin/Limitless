@@ -125,8 +125,7 @@ login registration and the fixed CLI link, but never active sessions.
 
 ## Sources examined
 
-Independent implementation, inspired by [Sleepless](https://github.com/Aboudjem/Sleepless);
-no imported code or assets. Apple references:
+Apple references:
 [caffeinate](https://github.com/apple-oss-distributions/PowerManagement/blob/main/caffeinate/caffeinate.c),
 [code requirements](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html),
 [SMJobBless](https://developer.apple.com/documentation/servicemanagement/smjobbless(_:_:_:_:)).

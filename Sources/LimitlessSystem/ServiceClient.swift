@@ -2,7 +2,6 @@ import Foundation
 import LimitlessCore
 import os
 
-/// One authenticated connection per owner. An interruption is terminal; no automatic reacquisition.
 public actor ServiceClient {
     private let lifetime: ConnectionLifetime
     private var connection: NSXPCConnection { lifetime.connection }
@@ -20,7 +19,6 @@ public actor ServiceClient {
         connection.setCodeSigningRequirement(
             try identity.requirement(for: LimitlessIdentity.helper))
         connection.remoteObjectInterface = NSXPCInterface(with: LimitlessXPC.self)
-        // Do not let Foundation silently reconnect a lost owner and renew old work.
         connection.interruptionHandler = { [weak connection] in connection?.invalidate() }
         lifetime = ConnectionLifetime(connection)
         connection.activate()
@@ -47,7 +45,6 @@ public actor ServiceClient {
                     }
                     continuation?.resume(with: result)
                 }
-                // The timeout also releases the server-side owner when the caller closes below.
                 DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
                     finish(.failure(ServiceError.unavailable))
                 }
@@ -66,7 +63,6 @@ public actor ServiceClient {
             if let error = reply.error { throw error }
             return reply
         } catch {
-            // Semantic refusal keeps the authenticated channel usable; transport failure does not.
             if error as? ServiceError == .unavailable || !(error is ServiceError) {
                 close()
             }
@@ -75,8 +71,6 @@ public actor ServiceClient {
     }
 }
 
-// Keep cleanup synchronous without exporting an isolated actor deinit, which
-// triggers a cross-module Release compiler cycle in Swift 6.2.
 final class ConnectionLifetime {
     let connection: NSXPCConnection
 

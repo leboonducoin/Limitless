@@ -9,13 +9,10 @@ public enum JournalError: Error, Equatable, Sendable {
     case system(Int32)
 }
 
-/// Root-only durable intent. No client-supplied path or session/task contents.
-/// Keep one instance on the helper's serial worker; the lock also excludes other processes.
 public final class SecureOwnershipJournal: OwnershipJournal {
     private let directoryFD: Int32
     private let parentFD: Int32
     private let directoryName: String
-    // Internal for tests that retain a descriptor as a concurrent spawn can.
     let lockFD: Int32
     private let owner: uid_t
     private static let filename = "ownership.json"
@@ -60,7 +57,6 @@ public final class SecureOwnershipJournal: OwnershipJournal {
             directoryName: "Limitless", owner: 0)
     }
 
-    // Test-only construction stays module-internal. Production has a fixed root-owned path.
     convenience init(testDirectory: URL) throws {
         let parent = open(
             testDirectory.deletingLastPathComponent().path,
@@ -104,8 +100,6 @@ public final class SecureOwnershipJournal: OwnershipJournal {
     }
 
     deinit {
-        // A concurrent spawn can briefly retain the open file description before exec.
-        // Release our ownership explicitly instead of waiting for every copy to close.
         flock(lockFD, LOCK_UN)
         close(lockFD)
         close(directoryFD)
@@ -131,7 +125,6 @@ public final class SecureOwnershipJournal: OwnershipJournal {
     }
 
     public func storeOwned(_ owned: Bool) throws {
-        // A corrupt/foreign object is never silently replaced or followed.
         _ = try loadOwned()
         if !owned {
             if unlinkat(directoryFD, Self.filename, 0) != 0, errno != ENOENT {
@@ -157,8 +150,6 @@ public final class SecureOwnershipJournal: OwnershipJournal {
         try synchronizeDirectory()
     }
 
-    /// The caller must first stop every demand and confirm restoration. This instance
-    /// permanently rejects future ownership writes once removal starts. No recursive delete.
     public func removeUnownedDirectory() throws {
         if retirement == .removed { return }
         if retirement != .unlinked {
@@ -225,7 +216,6 @@ public final class SecureOwnershipJournal: OwnershipJournal {
 
     private func synchronizeDirectory() throws {
         guard fsync(directoryFD) == 0 else { throw JournalError.system(errno) }
-        // Flush the volume after its metadata barrier, before acknowledging ownership.
         guard fcntl(lockFD, F_FULLFSYNC) == 0 else { throw JournalError.system(errno) }
     }
 
@@ -250,13 +240,11 @@ public final class SecureOwnershipJournal: OwnershipJournal {
 
     public static func rejectExtendedAccess(_ file: Int32) throws {
         guard let acl = acl_get_fd_np(file, ACL_TYPE_EXTENDED) else {
-            // On macOS, a valid descriptor with no extended ACL reports ENOENT.
             if errno == ENOENT { return }
             throw JournalError.system(errno)
         }
         defer { acl_free(UnsafeMutableRawPointer(acl)) }
         var entry: acl_entry_t?
-        // macOS returns 0 for an entry, -1/EINVAL for the end of this valid ACL.
         guard acl_get_entry(acl, Int32(ACL_FIRST_ENTRY.rawValue), &entry) != 0 else {
             throw JournalError.extendedAccess
         }

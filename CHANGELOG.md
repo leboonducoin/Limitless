@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — build 11 refinements
+
+- Use the standard menu-bar width with a compact mark and a small orange corner dot.
+- Refresh the menu preview and public project presentation.
+
 ## Unreleased — build 10 refinements
 
 - Restore a separate orange dot below/right of the menu-bar mark.

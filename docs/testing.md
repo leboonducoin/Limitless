@@ -42,6 +42,11 @@ the query remains enabled.
 
 ## Current evidence
 
+Build 11 passes the same 119 local tests. The active native preview was inspected
+and captured in `images/menu-preview.png`; Tab reaches the source control.
+The menu-bar item now uses AppKit's standard square length and an 18-point image.
+Actual spacing alongside other menu extras remains a physical visual check.
+
 Build 10 local checks pass: 119 tests reported (51 core, 50 system, 5 CLI, 13 app),
 including the disabled hardware opt-in. Coverage includes manual priority over
 agent sessions, independent tasks, Stop without losing CLI consent, consent

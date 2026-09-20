@@ -1,4 +1,3 @@
-// Explicit manual integration observer. It never signals a process or writes power state.
 import Foundation
 import IOKit
 
@@ -49,7 +48,6 @@ func helperPID() throws -> Int32? {
     return pid
 }
 
-// Independent read only: do not trigger the product's reconciliation while waiting for restoration.
 func sleepDisabled() throws -> Bool {
     let service = IOServiceGetMatchingService(
         kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
@@ -127,7 +125,6 @@ func main() throws {
         }
         Thread.sleep(forTimeInterval: 0.25)
     } while true
-    // Query XPC only after independent observation proves restoration and ten seconds without a hold.
     let final = try status()
     guard let sleep = final["sleep"] as? [String: Any],
         (final["sessions"] as? [Any])?.isEmpty == true,

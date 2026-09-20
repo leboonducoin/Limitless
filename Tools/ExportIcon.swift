@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 
-/// Compile together with Sources/LimitlessApp/BrandArt.swift; no duplicated artwork geometry.
 @main
 struct ExportIcon {
     @MainActor static func main() throws {

@@ -5,7 +5,6 @@ public enum WorkError: Error, Equatable, Sendable {
     case invalidProcess, processUnavailable, differentUser, administratorNotAllowed, alreadyStarted
 }
 
-/// The start timestamp protects against PID reuse. Command arguments are never collected.
 public struct ProcessIdentity: Codable, Equatable, Sendable {
     public let pid: Int32
     private let user: UInt32
@@ -27,14 +26,11 @@ public struct ProcessIdentity: Codable, Equatable, Sendable {
         startedMicroseconds = info.pbi_start_tvusec
     }
 
-    /// Failed observation ends protection, instead of assuming the original task still exists.
     public var isAlive: Bool {
         user == geteuid() && getuid() == geteuid() && geteuid() != 0
             && pid > 1 && pid != getpid() && (Self.read(pid).map(matches) ?? false)
     }
 
-    /// Hook commands may be launched through a shell. The first non-shell ancestor
-    /// is only a crash guard; explicit task events still control start and finish.
     public static func hookHost() throws -> Self {
         var pid = getppid()
         for _ in 0..<8 {
@@ -62,8 +58,6 @@ public struct ProcessIdentity: Codable, Equatable, Sendable {
     }
 }
 
-/// A local picker snapshot. Only readable processes owned by the current user qualify.
-/// Names are displayed in memory, never sent to the privileged helper or persisted.
 public struct RunningProcess: Identifiable, Sendable {
     public let identity: ProcessIdentity
     public let name: String
@@ -73,7 +67,6 @@ public struct RunningProcess: Identifiable, Sendable {
         guard geteuid() != 0, geteuid() == getuid() else { throw WorkError.administratorNotAllowed }
         let needed = proc_listpids(UInt32(PROC_UID_ONLY), geteuid(), nil, 0)
         guard needed > 0 else { throw WorkError.processUnavailable }
-        // Leave room for processes created between the sizing and snapshot calls.
         var pids = [Int32](repeating: 0, count: Int(needed) / MemoryLayout<Int32>.stride + 256)
         let bytes = pids.withUnsafeMutableBytes {
             proc_listpids(UInt32(PROC_UID_ONLY), geteuid(), $0.baseAddress, Int32($0.count))
@@ -94,8 +87,6 @@ public struct RunningProcess: Identifiable, Sendable {
     }
 }
 
-/// Runs an explicit command under the caller's identity, preserving stdin/stdout/stderr.
-/// Foundation reports actual termination; no CPU/idle heuristic or shell interpolation.
 @MainActor public final class TrackedCommand {
     private let process = Process()
     private let results: AsyncStream<Int32>

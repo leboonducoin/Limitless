@@ -40,7 +40,6 @@ public enum PowerMode: String, CaseIterable, Codable, Sendable {
     }
 }
 
-/// Set by the native app. Clients may request stricter values, never weaker ones.
 public struct UserPolicy: Codable, Equatable, Sendable {
     public let mode: PowerMode
     public let batteryFloor: Int
@@ -76,7 +75,6 @@ public struct UserPolicy: Codable, Equatable, Sendable {
     }
 }
 
-/// Absence of a battery is different from failure to read one.
 public enum BatteryReading: Codable, Equatable, Sendable {
     case notPresent
     case available(percent: Int, isDischarging: Bool)

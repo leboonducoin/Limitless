@@ -15,11 +15,9 @@ public struct SessionEvaluation: Equatable, Sendable {
     public var wantsAwake: Bool { !eligible.isEmpty }
 }
 
-/// A bounded collection of explicit demands. The service serializes access.
 public struct SessionRegistry: Sendable {
     public private(set) var policy: UserPolicy
     public private(set) var sessions: [UUID: Session] = [:]
-    /// Resource bound, not a time limit. Prevents a local client exhausting the helper.
     public static let capacity = 256
 
     public init(policy: UserPolicy) { self.policy = policy }
@@ -37,7 +35,6 @@ public struct SessionRegistry: Sendable {
         if kind == .agent, sessions.values.contains(where: { $0.kind == .manual }) {
             throw ServiceError.sessionRejected
         }
-        // A manual session takes over; an interrupted agent cannot reacquire on its connection.
         if kind == .manual { sessions = sessions.filter { $0.value.kind != .agent } }
         sessions[id] = Session(
             id: id, owner: owner, kind: kind, request: request,
@@ -46,7 +43,6 @@ public struct SessionRegistry: Sendable {
         return id
     }
 
-    /// A client can release only its own session. Duplicate releases are harmless.
     @discardableResult
     public mutating func stop(_ id: UUID, owner: UUID) -> Bool {
         guard sessions[id]?.owner == owner else { return false }
@@ -58,7 +54,6 @@ public struct SessionRegistry: Sendable {
         sessions = sessions.filter { $0.value.owner != owner }
     }
 
-    /// Stop existing work without changing the user's CLI preference.
     public mutating func stopAll() {
         sessions.removeAll()
     }
@@ -86,7 +81,6 @@ public struct SessionRegistry: Sendable {
                 continue
             }
             let mode = session.request.mode ?? policy.mode
-            // A user changing the global mode can invalidate a previously narrower request.
             if mode != .all, policy.mode != .all, mode != policy.mode {
                 stopped[session.id] = .policyChanged
                 continue

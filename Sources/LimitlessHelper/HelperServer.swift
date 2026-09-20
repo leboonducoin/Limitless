@@ -6,8 +6,6 @@ import LimitlessSystem
 import notify
 import os
 
-// All mutable runtime/connection state is confined to queue. Only immutable configuration
-// and the locked ingress counter are used by Foundation's listener/connection callbacks.
 final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private let queue = DispatchQueue(label: "io.github.leboonducoin.Limitless.helper")
     private let pending = OSAllocatedUnfairLock(initialState: 0)
@@ -28,7 +26,6 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     }
 
     func start() throws {
-        // Reject foreign peers before the delegate can reconcile state or allocate an owner.
         control.setConnectionCodeSigningRequirement(
             try identity.requirement(for: LimitlessIdentity.application))
         tasks.setConnectionCodeSigningRequirement(

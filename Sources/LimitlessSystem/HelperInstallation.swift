@@ -27,7 +27,6 @@ public enum HelperInstallationError: Error, Sendable {
     case invalidBundle, conflictingInstallation, unconfirmedRemoval
 }
 
-/// Two native installation mechanisms; the legacy API's deprecation stays at this boundary.
 public protocol HelperInstallation: Sendable {
     var status: SMAppService.Status { get }
     func register() async throws
@@ -44,7 +43,6 @@ extension HelperInstallation {
     }
 }
 
-// notFound alone is ambiguous; the fixed system job must independently be absent.
 func removalStatusesAreAbsent(
     service: SMAppService.Status, systemJob: SMAppService.Status
 ) -> Bool {
@@ -111,7 +109,6 @@ private struct BlessedHelperInstallation: HelperInstallation {
         if SMJobCopyDictionary(kSMDomainSystemLaunchd, LimitlessIdentity.helper as CFString)?
             .takeRetainedValue() != nil
         {
-            // Presence is not proof of readiness: the app still requires authenticated XPC.
             return .enabled
         }
         return (try? InstalledHelperFiles.areAbsent()) == true ? .notRegistered : .notFound
@@ -137,7 +134,6 @@ private struct BlessedHelperInstallation: HelperInstallation {
                     == [try identity.requirement(for: LimitlessIdentity.application)]
             else { throw HelperInstallationError.invalidBundle }
             try requireUnregisteredJob()
-            // Never replace an installed binary belonging to another certificate.
             if try !SecureOwnershipJournal.directoryIsAbsent(
                 at: InstalledHelperFiles.executablePath)
             {
@@ -168,7 +164,6 @@ private struct BlessedHelperInstallation: HelperInstallation {
             try requireRemovedFiles()
             if removalIsConfirmed { return }
             try withAuthorization(right: kSMRightModifySystemDaemons) { authorization in
-                // Recheck after a possibly long native authorization dialogue.
                 try requireRemovedFiles()
                 var error: Unmanaged<CFError>?
                 guard
@@ -185,7 +180,6 @@ private struct BlessedHelperInstallation: HelperInstallation {
     }
 }
 
-/// The password belongs to macOS. The short-lived AuthorizationRef never crosses XPC or an await.
 private func withAuthorization(right: String, operation: (AuthorizationRef) throws -> Void) throws {
     var reference: AuthorizationRef?
     let created = AuthorizationCreate(nil, nil, [], &reference)

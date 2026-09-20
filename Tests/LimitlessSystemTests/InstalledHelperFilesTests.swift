@@ -36,7 +36,6 @@ private func withInstalledFiles(
     try body(root, helper, daemon)
 }
 
-// A filesystem fixture, not a substitute for the outstanding real signed-helper gate.
 private func verifyTestHelper(_ url: URL) throws {
     guard try Data(contentsOf: url) == Data("test helper".utf8) else {
         throw SignatureError.untrustedIdentity
@@ -75,7 +74,6 @@ func restartedRemovalAcceptsOnlyProvenAbsentEntries(_ missing: String) throws {
         if missing != "helper" { try FileManager.default.removeItem(at: daemon) }
         if missing != "daemon" { try FileManager.default.removeItem(at: helper) }
         let files = try InstalledHelperFiles(testRoot: root, verifyHelper: verifyTestHelper)
-        // A dangling link is an existing entry, even when open() would find no target.
         let absent = missing == "helper" ? helper : daemon
         try FileManager.default.createSymbolicLink(
             at: absent, withDestinationURL: root.appendingPathComponent("missing"))
@@ -154,7 +152,6 @@ func interruptedInstalledFileRemovalRetriesWithoutDeletingReplacements() throws 
         #expect(throws: JournalError.system(EACCES)) { try files.remove() }
         #expect(!FileManager.default.fileExists(atPath: daemon.path))
         #expect(FileManager.default.fileExists(atPath: helper.path))
-        // Another file appearing under the removed name must block this retry.
         try Data("replacement".utf8).write(to: daemon)
         #expect(throws: JournalError.unexpectedContents) { try files.remove() }
         try FileManager.default.removeItem(at: daemon)

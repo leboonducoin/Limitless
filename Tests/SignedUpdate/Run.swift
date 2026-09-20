@@ -1,4 +1,3 @@
-// Explicit signing authorization required. Synthetic bundles stay in NEW_OUTPUT_DIRECTORY.
 import Foundation
 
 func run(_ executable: String, _ arguments: [String]) throws {
@@ -93,7 +92,6 @@ func main() throws {
     try files.copyItem(at: probe, to: current.appendingPathComponent("Contents/MacOS/LimitlessApp"))
     try setVersion(current, "0.1.0")
     try setVersion(candidate, "0.2.0")
-    // Deliberately synthetic fixture provenance, never exported as a release.
     let record: [String: Any] = [
         "configuration": "release", "sourceClean": true,
         "sourceRevision": String(repeating: "0", count: 40),
