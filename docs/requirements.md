@@ -11,6 +11,7 @@ is needed to use it. Developer ID/notarization can be added later.
 - Independent launch at login, immediate settings and complete uninstall.
 - CLI and whole-task AI tracking, manual priority, no weakening user limits.
 - Updates at most every eight hours; persistent throttling and idle installation.
+- Optional Touch ID for sudo, explicit consent, password fallback and owned cleanup.
 - Swift executables only; no Node/Python runtime, password storage or security bypass.
 
 ## Invariants
@@ -28,6 +29,7 @@ outcome; successful trials on one machine do not promise all hardware behaves al
 - Lid open/closed; no display; AC attach/detach; battery cutoff and long runtime.
 - Timers, PID completion, Stop, app/CLI/helper exit, restart and login.
 - Administrator refusal, setup, fresh download/opening, upgrade and full uninstall.
+- Touch ID sudo success/cancel/password fallback; preserve a pre-existing setup.
 - Real agent completion/cancel/error, concurrent tasks and manual-session priority.
 - Native light/dark UI, keyboard, VoiceOver, contrast and reduced motion.
 - Final commit’s local checks, hosted CI/security, exported archive and signatures.

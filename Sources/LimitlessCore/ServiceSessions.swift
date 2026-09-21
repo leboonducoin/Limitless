@@ -62,7 +62,7 @@ public struct ServiceSessions: Sendable {
         }
         if isRemoving {
             switch operation {
-            case .configure, .start, .startAgent, .rearm, .installCLI:
+            case .configure, .start, .startAgent, .rearm, .installCLI, .setSudoTouchID:
                 throw ServiceError.removalInProgress
             case .status, .stop, .stopAll, .heartbeat, .retryRestoration, .prepareRemoval,
                 .prepareUpdate, .finishRemoval:
@@ -111,7 +111,7 @@ public struct ServiceSessions: Sendable {
             isRemoving = true
         case .finishRemoval:
             guard isRemoving else { throw ServiceError.restorationRequired }
-        case .status, .heartbeat, .rearm, .retryRestoration, .installCLI: break
+        case .status, .heartbeat, .rearm, .retryRestoration, .installCLI, .setSudoTouchID: break
         }
         return nil
     }

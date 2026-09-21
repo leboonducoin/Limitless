@@ -165,6 +165,7 @@ private func status(
     @Test @MainActor func powerControlsMatchHardwareAndSelectedSource() {
         let desktop = AppModel.preview("desktop")
         #expect(!desktop.showsPowerSource && !desktop.showsBatteryLimit)
+        #expect(!desktop.showsSudoTouchID)
         let external = AppModel.preview("external")
         #expect(external.showsPowerSource && !external.showsBatteryLimit)
         external.draft.mode = .all
@@ -178,9 +179,11 @@ private func status(
         for state in ["setup", "removed"] {
             let model = AppModel.preview(state)
             #expect(!model.showsPowerControls && !model.canControl)
+            #expect(!model.showsSudoTouchID)
             #expect(model.trustedBuild)
         }
         #expect(AppModel.preview("inactive").showsPowerControls)
+        #expect(AppModel.preview("inactive").showsSudoTouchID)
     }
 
     @Test @MainActor func emptyTaskCountOnlyAppearsForProcessCompletion() {

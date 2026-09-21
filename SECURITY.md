@@ -8,6 +8,9 @@ Limitless asks macOS for administrator approval to manage sleep. It never stores
 your password. Terminal commands and AI tasks run with your normal permissions.
 Tasks cannot override your limits or take over a manual session.
 
+Touch ID for sudo is a separate, optional Mac-wide setting. It keeps password
+fallback and never grants sudo rights to users who do not already have them.
+
 There is no analytics or task-content collection. Update requests go to GitHub;
 downloaded apps must pass integrity and publisher-signature checks. macOS opening
 approvals remain in place, including for non-notarized builds.

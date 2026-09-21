@@ -21,5 +21,8 @@ CLI opt-in is remembered without restarting a session. Updates are opt-in and
 install only while idle; background check failures do not add text to the menu.
 Uninstall shows progress and keeps a retryable error if cleanup fails.
 
+Touch ID for sudo appears on supported Macs after helper approval. Confirm its
+Mac-wide scope before enabling. A setting managed elsewhere remains read-only.
+
 Native previews are inert. Check light/dark appearance, keyboard, VoiceOver,
 contrast and reduced motion before release. [Testing](testing.md).

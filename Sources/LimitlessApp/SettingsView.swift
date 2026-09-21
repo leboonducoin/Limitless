@@ -71,6 +71,41 @@ struct SettingsView: View {
                     .help("Set up CLI and AI integration")
                 }
             }
+            if model.showsSudoTouchID {
+                Toggle(
+                    "Touch ID for sudo",
+                    isOn: Binding(
+                        get: {
+                            model.status?.sudoTouchID == .enabled
+                                || model.status?.sudoTouchID == .external
+                        },
+                        set: { enabled in
+                            if enabled {
+                                model.confirmsSudoTouchID = true
+                            } else {
+                                Task { await model.setSudoTouchID(false) }
+                            }
+                        })
+                )
+                .disabled(
+                    (!model.canControl && !model.isPreview) || model.busy
+                        || model.status?.sudoTouchID == .external
+                        || model.status?.sudoTouchID == .unavailable
+                )
+                .help(
+                    model.status?.sudoTouchID == .external
+                        ? "Already configured outside Limitless."
+                        : "Use Touch ID for sudo commands on this Mac."
+                )
+                .alert("Enable Touch ID for sudo?", isPresented: $model.confirmsSudoTouchID) {
+                    Button("Enable") { Task { await model.setSudoTouchID(true) } }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text(
+                        "Applies to all sudo commands on this Mac, not Limitless’s administrator prompt. Your password remains available. Uninstalling Limitless removes only its own setting."
+                    )
+                }
+            }
             Toggle(
                 "Launch at login",
                 isOn: Binding(

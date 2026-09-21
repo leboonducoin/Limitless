@@ -40,6 +40,11 @@ and certificate. Requests are bounded to 128 KiB, with 64 clients and 256 sessio
 The helper accepts no arbitrary command or path. It alone installs the fixed CLI
 link. Root files use ownership, permissions, no-follow, locking and atomic writes.
 
+The app-only Touch ID operation edits the fixed `sudo_local` file, never `sudo`.
+It requires the standard macOS PAM stack, preserves password fallback and rejects
+custom active rules. Owned metadata allows exact removal without undoing another
+tool’s configuration. Updates keep it; uninstall removes only the owned block.
+
 AI hooks read lifecycle IDs only. Private markers bind a task to its original
 process and file identity. Setup merges only Limitless hooks, backs up existing
 settings and refuses linked or invalid files. Removal preserves other integrations.

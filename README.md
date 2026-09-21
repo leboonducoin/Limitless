@@ -37,6 +37,7 @@ Choose a duration and click **Keep awake**. The orange dot means it is active.
 - Keep awake with the lid closed, without an external display on compatible Macs.
 - Let Codex, Claude, Cursor or Gemini keep your Mac awake during their tasks.
 - Enable launch at login and automatic updates if you want them.
+- Optionally use Touch ID for sudo, with password fallback.
 
 Right-click the icon to **Quit** or **Uninstall**.
 

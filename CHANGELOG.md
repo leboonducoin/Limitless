@@ -12,3 +12,4 @@
 - Quieter update handling, with longer waits after failures.
 - Retina menu preview and shorter user guides.
 - Independent launch at login and complete app removal.
+- Optional Touch ID for sudo, preserving password fallback and existing setups.

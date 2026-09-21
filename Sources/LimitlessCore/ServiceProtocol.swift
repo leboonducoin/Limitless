@@ -18,11 +18,12 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
     case prepareUpdate
     case finishRemoval
     case installCLI
+    case setSudoTouchID(Bool)
 
     public var requiresApplication: Bool {
         switch self {
         case .configure, .stopAll, .rearm, .retryRestoration, .prepareRemoval, .prepareUpdate,
-            .finishRemoval, .installCLI:
+            .finishRemoval, .installCLI, .setSudoTouchID:
             true
         case .status, .start, .startAgent, .stop, .heartbeat: false
         }
@@ -36,6 +37,10 @@ public enum ServiceError: String, Error, Codable, Sendable {
 
 public enum RemovalState: String, Codable, Equatable, Sendable {
     case none, preparing, ready
+}
+
+public enum SudoTouchIDState: String, Codable, Equatable, Sendable {
+    case unavailable, disabled, enabled, external
 }
 
 public struct ServiceRequest: Codable, Sendable {
@@ -77,6 +82,7 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
     public let sessions: [SessionSummary]
     public let sampledAt: Date
     public let removal: RemovalState
+    public let sudoTouchID: SudoTouchIDState
 
     public var canRemoveService: Bool {
         removal != .none && sessions.isEmpty && !sleep.ownsGlobalHold
@@ -98,7 +104,8 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
 
     public init(
         policy: UserPolicy, power: PowerSnapshot, sleep: SleepReport,
-        sessions: [SessionSummary], sampledAt: Date, removal: RemovalState = .none
+        sessions: [SessionSummary], sampledAt: Date, removal: RemovalState = .none,
+        sudoTouchID: SudoTouchIDState = .unavailable
     ) {
         self.policy = policy
         self.power = power
@@ -106,6 +113,7 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
         self.sessions = sessions
         self.sampledAt = sampledAt
         self.removal = removal
+        self.sudoTouchID = sudoTouchID
     }
 }
 
@@ -126,7 +134,7 @@ public struct ServiceReply: Codable, Sendable {
 }
 
 public enum ServiceWire {
-    public static let version = 4
+    public static let version = 5
     public static let maximumMessageBytes = 131_072
 
     public static func decodeRequest(_ data: Data) throws -> ServiceRequest {

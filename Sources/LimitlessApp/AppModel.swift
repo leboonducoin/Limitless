@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import LimitlessCore
 import LimitlessSystem
+import LocalAuthentication
 import Observation
 import ServiceManagement
 
@@ -20,6 +21,7 @@ import ServiceManagement
     private(set) var availableUpdate: GitHubUpdate.Release?
     private(set) var updating = false
     private(set) var updateMessage: String?
+    private(set) var hasTouchID = false
     var automaticUpdates: Bool {
         didSet {
             guard !isPreview else { return }
@@ -27,6 +29,7 @@ import ServiceManagement
         }
     }
     var message: String?
+    var confirmsSudoTouchID = false
     var draft = PolicyDraft()
     var stopChoice: StopChoice = .preset(60)
     var customDuration: Double = 90
@@ -71,6 +74,10 @@ import ServiceManagement
 
     init(preferences: UserDefaults = .standard) {
         self.preferences = preferences
+        let authentication = LAContext()
+        hasTouchID =
+            authentication.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+            && authentication.biometryType == .touchID
         updateSchedule =
             preferences.data(forKey: "updateSchedule").flatMap {
                 try? JSONDecoder().decode(UpdateSchedule.self, from: $0)
@@ -104,6 +111,10 @@ import ServiceManagement
     }
     var showsPowerSource: Bool { showsPowerControls && status?.power.battery != .notPresent }
     var showsBatteryLimit: Bool { showsPowerSource && draft.mode != .external }
+    var showsSudoTouchID: Bool {
+        showsPowerControls
+            && (hasTouchID || status?.sudoTouchID == .enabled || status?.sudoTouchID == .external)
+    }
     var removalInProgress: Bool { status.map { $0.removal != .none } ?? false }
     var ownSession: SessionSummary? {
         status?.sessions.first(where: { $0.belongsToClient && $0.kind == .manual })
@@ -476,6 +487,16 @@ import ServiceManagement
         } catch { message = "The automation limits could not be validated." }
     }
 
+    func setSudoTouchID(_ enabled: Bool) async {
+        guard canControl, !busy, status?.sudoTouchID != .external,
+            !enabled || hasTouchID
+        else { return }
+        if !(await perform(.setSudoTouchID(enabled))) {
+            message =
+                "Touch ID could not be changed. Check the current sudo setting before retrying."
+        }
+    }
+
     func registerHelper() async {
         guard trustedBuild, !isPreview, !busy, !removalComplete, let helper else { return }
         busy = true
@@ -648,6 +669,7 @@ import ServiceManagement
             model.isPreview = true
             model.buildTrust = .untrusted
             model.helperStatus = .enabled
+            model.hasTouchID = state != "desktop"
             let active = state == "active" || state == "process"
             let waiting = state == "suspended"
             let failed = state == "restoration"
@@ -671,7 +693,8 @@ import ServiceManagement
                     phase: active ? .active : (failed ? .restoring : .inactive),
                     observed: unknown ? .unknown : (active || failed ? .disabled : .allowed),
                     ownsGlobalHold: active || failed, fault: failed ? .restorationFailed : nil),
-                sessions: active || waiting ? [session] : [], sampledAt: Date())
+                sessions: active || waiting ? [session] : [], sampledAt: Date(),
+                sudoTouchID: .disabled)
             model.draft = PolicyDraft(policy)
             model.baseline = model.draft
             model.watchedProcesses = watchedProcesses

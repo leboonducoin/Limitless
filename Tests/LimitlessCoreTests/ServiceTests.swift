@@ -50,7 +50,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
         .stopAll, .rearm, .retryRestoration, .prepareRemoval, .prepareUpdate, .finishRemoval,
-        .installCLI,
+        .installCLI, .setSudoTouchID(true), .setSudoTouchID(false),
     ] {
         #expect(throws: ServiceError.unauthorized) {
             try value.apply(operation, owner: task, now: now)
@@ -225,7 +225,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     for operation in [
         ServiceOperation.status, .heartbeat, .stop(UUID()), .rearm, .retryRestoration,
         .stopAll, .prepareRemoval, .prepareUpdate, .finishRemoval, .configure(try UserPolicy()),
-        .start(SessionRequest(end: .after(seconds: 60))),
+        .start(SessionRequest(end: .after(seconds: 60))), .setSudoTouchID(true),
     ] {
         #expect(
             try ServiceWire.decodeRequest(ServiceWire.encode(ServiceRequest(operation))).operation
@@ -248,7 +248,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     #expect(!value.registry.policy.allowsAutomation)
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
-        .start(SessionRequest()), .rearm,
+        .start(SessionRequest()), .rearm, .setSudoTouchID(true), .setSudoTouchID(false),
     ] {
         #expect(throws: ServiceError.removalInProgress) {
             try value.apply(operation, owner: app, now: now)

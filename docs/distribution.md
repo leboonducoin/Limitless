@@ -17,6 +17,14 @@ Right-click the menu-bar icon to uninstall. This restores sleep, removes the hel
 CLI shortcut, login item, preferences and owned AI integrations, then moves the app
 to Trash. Configuration backups remain available for recovery.
 
+## Touch ID for sudo
+
+Enable **Touch ID for sudo** in the menu to use your fingerprint for terminal
+sudo prompts on this Mac. Password fallback stays available; this does not change
+Limitless’s administrator prompt. Remote sessions may still require a password.
+An existing setup is left alone. Disable the option or uninstall to undo only
+Limitless’s setting. [Apple’s supported configuration](https://support.apple.com/en-us/109030).
+
 ## Signing
 
 The community channel uses a stable publisher certificate and native SMJobBless

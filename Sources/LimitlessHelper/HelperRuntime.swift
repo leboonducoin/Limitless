@@ -41,7 +41,8 @@ final class HelperRuntime {
             policy: sessions.registry.policy, power: power, sleep: report,
             sessions: sessions.summaries(for: owner, evaluation: evaluation, now: now),
             sampledAt: now.wall,
-            removal: sessions.isRemoving ? (removalReady ? .ready : .preparing) : .none)
+            removal: sessions.isRemoving ? (removalReady ? .ready : .preparing) : .none,
+            sudoTouchID: SudoTouchID.status())
     }
 
     func takeExpiredOwners() -> Set<UUID> {
@@ -62,6 +63,8 @@ final class HelperRuntime {
             let started = try sessions.apply(
                 request.operation, owner: owner, now: SystemClock.now())
             switch request.operation {
+            case .setSudoTouchID(let enabled):
+                try SudoTouchID.setEnabled(enabled)
             case .installCLI:
                 guard let user = sessions.consoleUser else { throw ServiceError.unauthorized }
                 try InstalledCLI.install(identity: identity, user: user)
@@ -75,6 +78,7 @@ final class HelperRuntime {
                 guard status.canRemoveService, !backend.hasIdleAssertion
                 else { throw ServiceError.restorationRequired }
                 if request.operation == .prepareRemoval, let user = sessions.consoleUser {
+                    try SudoTouchID.setEnabled(false)
                     try InstalledCLI.remove(user: user)
                 }
                 if installedFiles == nil {

@@ -7,7 +7,9 @@ swift Tools/ProjectTool.swift tsan
 ```
 
 `check` validates formatting, release inputs, integration-probe compilation,
-Release build and tests. It never installs a helper or changes power settings.
+Release build and tests. It never installs a helper or changes power or sudo settings.
+Touch ID tests use temporary PAM fixtures, including existing settings, unsafe
+files, unsupported policies and removal. Real fingerprint/password trials are manual.
 For a synced Desktop, prefix the command with
 `env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build`. Use separate paths for
 simultaneous builds. Full Xcode is used in CI; Command Line Tools may emit missing
