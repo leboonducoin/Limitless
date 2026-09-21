@@ -1,30 +1,23 @@
 # Contributing
 
-Limitless is native Swift for macOS 26+ on Apple Silicon. Contributions use the
-[MIT license](LICENSE). Read [AGENTS.md](AGENTS.md), the
-[requirements](docs/requirements.md), and the document for the area you change.
+Bug reports, small fixes and ideas are welcome. For a larger change, open an issue first.
 
-Keep changes focused. Reuse the shared core for policy; keep platform code in
-LimitlessSystem and privileged operations in the helper. Prefer Apple APIs and
-the standard library. No Node/Python product runtime or dependency without a need.
-
-Start with `git status`, preserve unrelated edits, and use a `feature/` branch.
-Commit only intended paths with Conventional Commits and the existing Git identity.
+Use macOS 26+, Apple Silicon and Xcode 26.2 or later. Fork the repo, make a branch,
+then run:
 
 ```sh
-env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
-env LIMITLESS_BUILD_PATH=/private/tmp/limitless-asan swift Tools/ProjectTool.swift asan
-env LIMITLESS_BUILD_PATH=/private/tmp/limitless-tsan swift Tools/ProjectTool.swift tsan
+swift Tools/ProjectTool.swift check
 ```
 
-Add meaningful regression tests and update the nearest document. Include what
-changed, what you tested and any gaps in the PR. UI changes need native inspection
-and accessibility checks; simulations do not establish lid-closed compatibility.
-See [testing](docs/testing.md) for security gates and optional Mac probes.
+Keep the change focused. Add a test for changed behavior, update the relevant
+doc and explain the result in your pull request. For UI changes, include a native
+screenshot and check keyboard access.
 
-Never commit secrets or private task contents. Keep certificate checks, native
-administrator consent and user limits intact. Signing, installation, power tests
-and publication each require authorization. A passing build is not a release.
+Use Swift and Apple APIs. Preserve administrator consent, signature checks and
+user limits. Never include credentials or private task contents.
 
-[Report vulnerabilities privately](https://github.com/leboonducoin/Limitless/security/advisories/new).
-Please follow the [code of conduct](CODE_OF_CONDUCT.md).
+[Architecture](docs/architecture.md) · [Testing](docs/testing.md) ·
+[Distribution](docs/distribution.md) · [Code of conduct](CODE_OF_CONDUCT.md)
+
+Contributions use the [MIT license](LICENSE).
+[Report security issues privately](https://github.com/leboonducoin/Limitless/security/advisories/new).

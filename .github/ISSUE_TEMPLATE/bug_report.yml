@@ -6,7 +6,6 @@ body:
       value: |
         For a security vulnerability, use [private reporting](https://github.com/leboonducoin/Limitless/security/advisories/new).
         Do not include passwords, signing keys, serial numbers or private command arguments.
-        Limitless is in development; ad-hoc builds intentionally refuse privileged controls.
   - type: textarea
     id: environment
     attributes:

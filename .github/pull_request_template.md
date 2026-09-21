@@ -1,20 +1,10 @@
 ## Change
 
-Describe the concrete problem and resulting behavior. Link the issue or requirement
-when applicable, and explain any meaningful tradeoff.
+What changed, and why?
 
-## Validation
+## Checks
 
-List the checks actually run and their results. Distinguish simulated tests,
-read-only Mac checks, native UI inspection and authorized privileged/hardware tests.
-State unavailable or unperformed gates; include relevant visual/accessibility
-evidence for UI changes. For documentation-only changes, describe the checks on
-commands, links and claims.
+Tests run and results. For UI changes, include a native screenshot and keyboard check.
+Mention any effect on permissions, user limits, restoration or installation.
 
-## Security and compatibility
-
-Describe any change to privileges, authentication, power restoration, user limits,
-tracked work or installation. State "unchanged" when none apply. Note remaining
-release gates and update the closest canonical documentation.
-
-Do not include private commands, credentials, signing material or unredacted system logs.
+Do not include credentials or private task contents.

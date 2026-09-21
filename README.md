@@ -1,80 +1,64 @@
 # Limitless
 
-**Keep your Mac awake for the time or task you choose.**
+**Keep your Mac awake. Close the lid. Let the work finish.**
 
 [![CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml)
 [![Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml)
 [![MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![macOS 26+](https://img.shields.io/badge/macOS-26%2B-111111.svg)](docs/requirements.md)
+[![macOS 26+](https://img.shields.io/badge/macOS-26%2B-111111.svg)](docs/distribution.md)
 
-I made Limitless as a small, native menu-bar utility. Choose a duration, follow a
-process, or let your AI agent keep the Mac awake while it works. Everything lives
-in one compact menu.
+I made Limitless to keep my Mac awake while it works. A small, native macOS
+menu-bar app, written in Swift. Free, open source, no account needed.
 
 <p align="center">
-  <img src="docs/images/menu-preview.png" width="340" alt="Limitless menu-bar panel">
+  <img src="docs/images/menu-preview.png" width="340" alt="Limitless on macOS: active keep-awake session, timer, power source and battery protection">
 </p>
-
-*Current development preview with sample values.*
-
-## What it does
-
-- Keeps the Mac awake, including with the lid closed where the Mac and macOS allow it.
-- Stops after a timer, at a date, when selected processes finish, or when you press Stop.
-- Supports battery, power adapter, or both. Battery protection defaults to 20%.
-- Follows CLI commands and entire agent tasks. Your manual session takes priority over AI.
-- Checks the applied power state every two seconds and reports problems.
-- Offers independent launch at login and optional GitHub updates.
-
-The app, CLI and helper are written in Swift. No Node or Python runtime is needed.
 
 ## Install
 
-**A public download is not available yet.** Local test builds exist; release
-qualification is still in progress. Downloads will be on
-[GitHub Releases](https://github.com/leboonducoin/Limitless/releases).
+**Apple Silicon · macOS 26 or later**
 
-Unzip `Limitless.app`, move it to **Applications**, then open it. The icon appears
-in the menu bar. Enable the helper through the app's macOS administrator prompt.
-Your password is never stored. Users do not need an Apple Developer account.
+[GitHub Releases](https://github.com/leboonducoin/Limitless/releases) is the only
+download location. The first public archive has not been published yet.
 
-The initial release targets **Apple Silicon, macOS 26+**. Non-notarized builds may
-need a manual macOS opening decision; managed Macs can block them. See
-[installation and signing](docs/distribution.md).
+Once available: unzip **Limitless.app**, drag it to **Applications**, then open it.
+The icon appears in your menu bar. Click **Enable Limitless** and approve the
+macOS administrator prompt. Your password is never stored.
+
+On first opening, macOS may ask you to allow the app in **System Settings →
+Privacy & Security → Open Anyway**. [Apple’s instructions](https://support.apple.com/en-gb/102445).
 
 ## Use it
 
-Choose when to stop, then click **Keep awake**. An orange dot means protection is
-active. Click outside to close the panel. Right-click the icon to quit or uninstall.
-Uninstall removes the helper, preferences, cache and app-owned CLI shortcut.
+Choose a duration and click **Keep awake**. The orange dot means it is active.
 
-Enable **Allow CLI & AI tasks** to use the bundled command directly:
+- Stop after a timer, at a date, or when all selected processes finish.
+- Choose battery, power adapter, or both. Reserve 20% battery by default.
+- Keep awake with the lid closed, without an external display on compatible Macs.
+- Let Codex, Claude, Cursor or Gemini keep your Mac awake during their tasks.
+- Enable launch at login and automatic updates if you want them.
+
+Right-click the icon to **Quit** or **Uninstall**.
+
+For the terminal and AI integrations, enable **Allow CLI & AI tasks** in the app:
 
 ```sh
-limitless run -- swift test
-limitless watch --pid 12345
+limitless --help
 limitless status
 ```
 
-[CLI options and AI setup →](docs/cli.md)
+[CLI and one-command AI setup →](docs/cli.md)
 
-## Limits
+## Good to know
 
-Closed-lid behavior relies on the undocumented global `pmset disablesleep` setting,
-alongside Apple's `caffeinate`. Compatibility needs a real-Mac test. Limitless
-does not stop battery drain or override user limits. Ordinary restart requests can
-be deferred during a session; forced or managed restarts cannot be guaranteed.
+Keeping your Mac awake uses battery. Limitless stops at your battery limit;
+setting it to 0 disables that protection. Keep the Mac ventilated, especially
+with the lid closed.
 
-## Development
+Closed-lid behavior depends on macOS and your Mac. Forced restarts and company
+management policies can interrupt a session. Launch at login never resumes one.
 
-```sh
-swift Tools/ProjectTool.swift check
-```
-
-See [contributing](CONTRIBUTING.md), [architecture](docs/architecture.md),
-[tests](docs/testing.md), [design](docs/design.md), and
-[release acceptance](docs/requirements.md). Report vulnerabilities
-[privately](https://github.com/leboonducoin/Limitless/security/advisories/new).
+---
 
 By [Arthur Barreau](https://www.linkedin.com/in/arthurbarreau/).
-[MIT](LICENSE) · Copyright © 2026 Arthur Barreau.
+[MIT](LICENSE) · © 2026 Arthur Barreau · [Contribute](CONTRIBUTING.md) · [Security](SECURITY.md)
