@@ -22,8 +22,8 @@ to Trash. Configuration backups remain available for recovery.
 Enable **Touch ID for sudo** in the menu to use your fingerprint for terminal
 sudo prompts on this Mac. Password fallback stays available; this does not change
 Limitless’s administrator prompt. Remote sessions may still require a password.
-An existing setup is left alone. Disable the option or uninstall to undo only
-Limitless’s setting. [Apple’s supported configuration](https://support.apple.com/en-us/109030).
+You can also disable an existing setup after confirmation. Uninstall removes only
+Limitless’s own setting. [Apple’s supported configuration](https://support.apple.com/en-us/109030).
 
 ## Signing
 

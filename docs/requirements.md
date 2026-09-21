@@ -29,7 +29,7 @@ outcome; successful trials on one machine do not promise all hardware behaves al
 - Lid open/closed; no display; AC attach/detach; battery cutoff and long runtime.
 - Timers, PID completion, Stop, app/CLI/helper exit, restart and login.
 - Administrator refusal, setup, fresh download/opening, upgrade and full uninstall.
-- Touch ID sudo success/cancel/password fallback; preserve a pre-existing setup.
+- Touch ID sudo success/cancel/password fallback; external changes only on request.
 - Real agent completion/cancel/error, concurrent tasks and manual-session priority.
 - Native light/dark UI, keyboard, VoiceOver, contrast and reduced motion.
 - Final commit’s local checks, hosted CI/security, exported archive and signatures.

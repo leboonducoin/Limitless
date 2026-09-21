@@ -35,7 +35,7 @@ swift Tools/ProjectTool.swift preview
 
 Creates an inert app and a full-resolution PNG in a new temporary directory.
 `bundle` with `LIMITLESS_PREVIEW_STATE` supports active, inactive, process, setup,
-desktop, external and battery-unknown fixtures. See [distribution](distribution.md).
+desktop, external, battery-unknown and touch-id-external fixtures. See [distribution](distribution.md).
 Inspect native controls, keyboard focus, VoiceOver, contrast, motion and logs.
 A screenshot does not validate power behavior.
 

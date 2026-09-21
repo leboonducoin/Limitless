@@ -14,10 +14,17 @@ public enum SudoTouchID {
 
     public static func setEnabled(_ enabled: Bool) throws {
         guard geteuid() == 0 else { throw JournalError.administratorRequired }
-        _ = try access(change: enabled)
+        _ = try access(change: enabled, removeExternal: true)
     }
 
-    static func transform(sudo: String, local: String?, enabled: Bool?) throws
+    public static func removeOwnedSetting() throws {
+        guard geteuid() == 0 else { throw JournalError.administratorRequired }
+        _ = try access(change: false)
+    }
+
+    static func transform(
+        sudo: String, local: String?, enabled: Bool?, removeExternal: Bool = false
+    ) throws
         -> (state: SudoTouchIDState, contents: String?)
     {
         let text = local ?? ""
@@ -30,7 +37,7 @@ public enum SudoTouchID {
             }
         }
         guard prefix != nil || !text.contains(marker) else { throw JournalError.unexpectedContents }
-        if enabled == false { return (.disabled, local) }
+        if enabled == false && !removeExternal { return (.disabled, local) }
         func entries(_ value: String) -> [[String]] {
             value.split(separator: "\n").compactMap { line in
                 let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(
@@ -55,6 +62,11 @@ public enum SudoTouchID {
             return (.enabled, local)
         }
         if localEntries == [["auth", "sufficient", "pam_tid.so"]] {
+            if enabled == false {
+                let remaining = text.split(separator: "\n", omittingEmptySubsequences: false)
+                    .filter { entries(String($0)).isEmpty }.joined(separator: "\n")
+                return (.disabled, remaining)
+            }
             return (.external, local)
         }
         guard localEntries.isEmpty else { throw JournalError.unexpectedContents }
@@ -62,7 +74,10 @@ public enum SudoTouchID {
         return (.enabled, (local == nil ? createdPrefix : existingPrefix) + text)
     }
 
-    static func access(change: Bool?, root: URL = URL(fileURLWithPath: "/"), owner: uid_t = 0)
+    static func access(
+        change: Bool?, removeExternal: Bool = false,
+        root: URL = URL(fileURLWithPath: "/"), owner: uid_t = 0
+    )
         throws -> SudoTouchIDState
     {
         let rootFD = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
@@ -113,7 +128,9 @@ public enum SudoTouchID {
         }
         let sudo = try read("sudo")
         let local = try read("sudo_local")
-        let result = try transform(sudo: sudo?.text ?? "", local: local?.text, enabled: change)
+        let result = try transform(
+            sudo: sudo?.text ?? "", local: local?.text, enabled: change,
+            removeExternal: removeExternal)
         guard change != nil, result.contents != local?.text else { return result.state }
         guard (result.contents?.utf8.count ?? 0) <= 16_384 else {
             throw JournalError.unexpectedContents

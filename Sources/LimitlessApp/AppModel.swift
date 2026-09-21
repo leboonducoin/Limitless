@@ -29,7 +29,7 @@ import ServiceManagement
         }
     }
     var message: String?
-    var confirmsSudoTouchID = false
+    var pendingSudoTouchID: Bool?
     var draft = PolicyDraft()
     var stopChoice: StopChoice = .preset(60)
     var customDuration: Double = 90
@@ -488,10 +488,13 @@ import ServiceManagement
     }
 
     func setSudoTouchID(_ enabled: Bool) async {
-        guard canControl, !busy, status?.sudoTouchID != .external,
-            !enabled || hasTouchID
+        guard canControl, !busy, !enabled || hasTouchID
         else { return }
-        if !(await perform(.setSudoTouchID(enabled))) {
+        if !(await perform(.setSudoTouchID(enabled)))
+            || (enabled
+                ? status?.sudoTouchID != .enabled && status?.sudoTouchID != .external
+                : status?.sudoTouchID != .disabled)
+        {
             message =
                 "Touch ID could not be changed. Check the current sudo setting before retrying."
         }
@@ -694,7 +697,7 @@ import ServiceManagement
                     observed: unknown ? .unknown : (active || failed ? .disabled : .allowed),
                     ownsGlobalHold: active || failed, fault: failed ? .restorationFailed : nil),
                 sessions: active || waiting ? [session] : [], sampledAt: Date(),
-                sudoTouchID: .disabled)
+                sudoTouchID: state == "touch-id-external" ? .external : .disabled)
             model.draft = PolicyDraft(policy)
             model.baseline = model.draft
             model.watchedProcesses = watchedProcesses

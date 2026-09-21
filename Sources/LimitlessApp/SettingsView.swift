@@ -80,8 +80,8 @@ struct SettingsView: View {
                                 || model.status?.sudoTouchID == .external
                         },
                         set: { enabled in
-                            if enabled {
-                                model.confirmsSudoTouchID = true
+                            if enabled || model.status?.sudoTouchID == .external {
+                                model.pendingSudoTouchID = enabled
                             } else {
                                 Task { await model.setSudoTouchID(false) }
                             }
@@ -89,20 +89,26 @@ struct SettingsView: View {
                 )
                 .disabled(
                     (!model.canControl && !model.isPreview) || model.busy
-                        || model.status?.sudoTouchID == .external
                         || model.status?.sudoTouchID == .unavailable
                 )
-                .help(
-                    model.status?.sudoTouchID == .external
-                        ? "Already configured outside Limitless."
-                        : "Use Touch ID for sudo commands on this Mac."
-                )
-                .alert("Enable Touch ID for sudo?", isPresented: $model.confirmsSudoTouchID) {
-                    Button("Enable") { Task { await model.setSudoTouchID(true) } }
+                .help("Use Touch ID for sudo commands on this Mac.")
+                .alert(
+                    model.pendingSudoTouchID == false
+                        ? "Disable Touch ID for sudo?" : "Enable Touch ID for sudo?",
+                    isPresented: Binding(
+                        get: { model.pendingSudoTouchID != nil },
+                        set: { if !$0 { model.pendingSudoTouchID = nil } }),
+                    presenting: model.pendingSudoTouchID
+                ) { enabled in
+                    Button(enabled ? "Enable" : "Disable", role: enabled ? nil : .destructive) {
+                        Task { await model.setSudoTouchID(enabled) }
+                    }
                     Button("Cancel", role: .cancel) {}
-                } message: {
+                } message: { enabled in
                     Text(
-                        "Applies to all sudo commands on this Mac, not Limitless’s administrator prompt. Your password remains available. Uninstalling Limitless removes only its own setting."
+                        enabled
+                            ? "Applies to sudo commands across this Mac. Your password remains available. Limitless’s administrator prompt is unchanged."
+                            : "This setting was enabled outside Limitless. Sudo commands across this Mac will require your password instead."
                     )
                 }
             }

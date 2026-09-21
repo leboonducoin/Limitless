@@ -78,7 +78,7 @@ final class HelperRuntime {
                 guard status.canRemoveService, !backend.hasIdleAssertion
                 else { throw ServiceError.restorationRequired }
                 if request.operation == .prepareRemoval, let user = sessions.consoleUser {
-                    try SudoTouchID.setEnabled(false)
+                    try SudoTouchID.removeOwnedSetting()
                     try InstalledCLI.remove(user: user)
                 }
                 if installedFiles == nil {

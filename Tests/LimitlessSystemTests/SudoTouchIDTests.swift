@@ -110,3 +110,51 @@ private let sudoPolicy = """
     #expect(chmod(directory.path, 0o777) == 0)
     #expect(throws: JournalError.insecureDirectory) { try change(true) }
 }
+
+@Test func sudoTouchIDExternalSettingNeedsExplicitRemoval() throws {
+    let comments = "# Set up elsewhere\n\n# Keep this header\n"
+    let external = "# Set up elsewhere\n\nauth\tsufficient\tpam_tid.so\n# Keep this header\n"
+    for original in [external, "auth sufficient pam_tid.so", "auth sufficient pam_tid.so\n"] {
+        let removed = try SudoTouchID.transform(
+            sudo: sudoPolicy, local: original, enabled: false, removeExternal: true)
+        #expect(removed.state == .disabled)
+        #expect(removed.contents == (original == external ? comments : ""))
+        #expect(
+            try SudoTouchID.transform(
+                sudo: sudoPolicy, local: original, enabled: true, removeExternal: true
+            ).contents == original)
+    }
+    for (policy, local) in [
+        ("changed policy", external),
+        (sudoPolicy, external + "auth required another.so\n"),
+        (sudoPolicy, external + "auth sufficient pam_tid.so\n"),
+    ] {
+        #expect(throws: JournalError.unexpectedContents) {
+            try SudoTouchID.transform(
+                sudo: policy, local: local, enabled: false, removeExternal: true)
+        }
+    }
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let directory = root.appendingPathComponent("private/etc/pam.d")
+    try FileManager.default.createDirectory(
+        at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let sudo = directory.appendingPathComponent("sudo")
+    let local = directory.appendingPathComponent("sudo_local")
+    try Data(sudoPolicy.utf8).write(to: sudo)
+    try Data(external.utf8).write(to: local)
+    #expect(chmod(local.path, 0o640) == 0)
+    _ = try SudoTouchID.access(change: false, root: root, owner: getuid())
+    #expect(try String(contentsOf: local, encoding: .utf8) == external)
+    #expect(
+        try SudoTouchID.access(
+            change: false, removeExternal: true, root: root, owner: getuid()) == .disabled)
+    #expect(try SudoTouchID.access(change: nil, root: root, owner: getuid()) == .disabled)
+    #expect(try String(contentsOf: local, encoding: .utf8) == comments)
+    _ = try SudoTouchID.access(change: true, root: root, owner: getuid())
+    _ = try SudoTouchID.access(change: false, root: root, owner: getuid())
+    #expect(try String(contentsOf: local, encoding: .utf8) == comments)
+    #expect(try String(contentsOf: sudo, encoding: .utf8) == sudoPolicy)
+    var info = stat()
+    #expect(lstat(local.path, &info) == 0 && info.st_mode & 0o777 == 0o640)
+}

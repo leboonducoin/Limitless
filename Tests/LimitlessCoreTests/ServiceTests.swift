@@ -222,6 +222,10 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     #expect(throws: ServiceError.incompatibleVersion) {
         try ServiceWire.decodeRequest(Data(#"{"version":1,"operation":{"status":{}}}"#.utf8))
     }
+    #expect(throws: ServiceError.incompatibleVersion) {
+        try ServiceWire.decodeRequest(
+            Data(#"{"version":5,"operation":{"setSudoTouchID":{"_0":false}}}"#.utf8))
+    }
     for operation in [
         ServiceOperation.status, .heartbeat, .stop(UUID()), .rearm, .retryRestoration,
         .stopAll, .prepareRemoval, .prepareUpdate, .finishRemoval, .configure(try UserPolicy()),
