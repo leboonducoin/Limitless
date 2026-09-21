@@ -12,8 +12,6 @@ struct SettingsView: View {
         formatter.numberStyle = .decimal
         formatter.allowsFloats = false
         formatter.usesGroupingSeparator = false
-        formatter.minimum = NSNumber(value: UserPolicy.batteryFloorRange.lowerBound)
-        formatter.maximum = NSNumber(value: UserPolicy.batteryFloorRange.upperBound)
         return formatter
     }()
 
@@ -180,11 +178,18 @@ struct SettingsView: View {
     }
 
     private func applyBatteryInput() {
-        if let number = Self.batteryFormatter.number(from: batteryInput.wrappedValue) {
-            model.draft.batteryFloor = number.intValue
+        if let value = Self.batteryFloor(from: batteryInput.wrappedValue) {
+            model.draft.batteryFloor = value
         }
         batteryInput.wrappedValue =
             Self.batteryFormatter.string(
                 from: NSNumber(value: model.draft.batteryFloor)) ?? ""
+    }
+
+    static func batteryFloor(from text: String) -> Int? {
+        guard let number = batteryFormatter.number(from: text),
+            let value = Int(exactly: number), UserPolicy.batteryFloorRange.contains(value)
+        else { return nil }
+        return value
     }
 }

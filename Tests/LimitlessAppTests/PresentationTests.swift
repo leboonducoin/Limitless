@@ -164,6 +164,15 @@ private func status(
     #expect(throws: PolicyError.invalidBatteryFloor) { try draft.policy(allowsAutomation: false) }
 }
 
+@Test @MainActor func batteryInputRejectsNonIntegersAndNonfiniteValues() {
+    for value in 0...80 {
+        #expect(SettingsView.batteryFloor(from: String(value)) == value)
+    }
+    for value in ["", "-1", "81", "20.5", "20,5", "20x", "NaN", "∞", "-∞", "1e100"] {
+        #expect(SettingsView.batteryFloor(from: value) == nil)
+    }
+}
+
 #if DEBUG
     @Test @MainActor func powerControlsMatchHardwareAndSelectedSource() {
         let desktop = AppModel.preview("desktop")
