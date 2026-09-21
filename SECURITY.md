@@ -20,3 +20,6 @@ the helper. If restoration fails, the app keeps the information needed to retry.
 
 Technical details: [architecture](docs/architecture.md),
 [distribution](docs/distribution.md) and [automated checks](docs/testing.md).
+
+CI checks Swift and workflows with CodeQL, scans the full Git history for secrets
+and reviews dependency changes. New CodeQL security alerts require review before merging.

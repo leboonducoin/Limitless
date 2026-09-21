@@ -32,7 +32,7 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Validate Swift code without changing host power settings
@@ -54,7 +54,7 @@ jobs:
       - name: Archive the universal CLI for compatibility tests
         if: matrix.check == 'check'
         run: ditto -c -k --keepParent "$RUNNER_TEMP/limitless-community-bundle/Limitless.app/Contents/MacOS/limitless" "$RUNNER_TEMP/limitless-cli.zip"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: matrix.check == 'check'
         with:
           name: compatibility-cli
@@ -74,10 +74,10 @@ jobs:
       matrix:
         os: [macos-14, macos-15-intel]
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: compatibility-cli
           path: ${{ runner.temp }}/compatibility
@@ -85,10 +85,22 @@ jobs:
         working-directory: ${{ runner.temp }}/compatibility
         run: |
           ditto -x -k limitless-cli.zip .
-          ./limitless --version
-          ./limitless --help
+          ./MacOS/limitless --version
+          ./MacOS/limitless --help
       - name: Run the full checks on Intel
         if: matrix.os == 'macos-15-intel'
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
         run: swift Tools/ProjectTool.swift check
+
+  gate:
+    name: CI gate
+    if: always()
+    needs: [swift, compatibility]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Require all builds, tests and compatibility checks
+        env:
+          PASSED: ${{ needs.swift.result == 'success' && needs.compatibility.result == 'success' }}
+        run: test "$PASSED" = true
