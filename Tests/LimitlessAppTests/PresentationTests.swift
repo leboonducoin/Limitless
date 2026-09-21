@@ -158,8 +158,19 @@ private func status(
     draft.maximumMinutes = .infinity
     #expect(throws: PolicyError.invalidDuration) { try draft.policy(allowsAutomation: false) }
     draft.limitsDuration = false
-    draft.batteryFloor = 51
+    draft.batteryFloor = 80
+    #expect(try draft.policy(allowsAutomation: false).batteryFloor == 80)
+    draft.batteryFloor = 81
     #expect(throws: PolicyError.invalidBatteryFloor) { try draft.policy(allowsAutomation: false) }
+}
+
+@Test @MainActor func batteryInputRejectsNonIntegersAndNonfiniteValues() {
+    for value in 0...80 {
+        #expect(SettingsView.batteryFloor(from: String(value)) == value)
+    }
+    for value in ["", "-1", "81", "20.5", "20,5", "20x", "NaN", "∞", "-∞", "1e100"] {
+        #expect(SettingsView.batteryFloor(from: value) == nil)
+    }
 }
 
 #if DEBUG

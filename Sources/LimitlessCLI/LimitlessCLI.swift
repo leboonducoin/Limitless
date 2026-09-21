@@ -240,7 +240,7 @@ struct LimitlessCLI {
 
         Options:
           -b | -c | -a          Battery only, AC only, or both (mutually exclusive).
-          --battery-floor N    Integer 0–50; 0 disables custom protection with warning.
+          --battery-floor N    Integer 0–80; 0 disables custom protection with warning.
           --for DURATION       Positive duration: 30s, 90m, 2h, 1.5d.
           --until ISO8601      Stop at a date/time with an explicit timezone.
           --unlimited          No task duration limit (the default).

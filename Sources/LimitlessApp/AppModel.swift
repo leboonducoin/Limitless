@@ -452,7 +452,7 @@ import ServiceManagement
                 preferences.set(try JSONEncoder().encode(saved), forKey: "userPolicy")
                 message = nil
             }
-        } catch { message = "Use a battery floor from 0 to 50% and a positive, finite duration." }
+        } catch { message = "Use a battery floor from 0 to 80% and a positive, finite duration." }
     }
 
     func policyEdited() {

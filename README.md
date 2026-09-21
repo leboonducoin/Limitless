@@ -9,7 +9,7 @@
 
 I made Limitless to keep my Mac awake while it works. A small, native macOS
 menu-bar app, written in Swift. Free and open source.
-I also added **Touch ID for sudo** because I was tired of typing my long password.
+I also added Touch ID for sudo because I was tired of typing my long password.
 
 <p align="center">
   <img src="docs/images/menu-preview.png" width="340" alt="Limitless on macOS: active keep-awake session, timer, power source and battery protection">
@@ -60,6 +60,8 @@ with the lid closed.
 
 Closed-lid behavior depends on macOS and your Mac. Forced restarts and company
 management policies can interrupt a session. Launch at login never resumes one.
+
+*No NZT. Just an app. Hopefully, my impact won't be limited to the sidewalk.*
 
 ---
 
