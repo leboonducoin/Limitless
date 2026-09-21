@@ -122,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                 window.contentView = NSHostingView(rootView: MenuPanel(model: model))
                 window.center()
                 window.makeKeyAndOrderFront(nil)
+                window.makeFirstResponder(nil)
                 NSApp.activate()
                 previewWindow = window
             }
@@ -194,6 +195,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     }
 
     func popoverDidShow(_ notification: Notification) {
+        let window = popover.contentViewController?.view.window
+        window?.makeKey()
+        window?.makeFirstResponder(nil)
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [
             .leftMouseDown, .rightMouseDown,
         ]) { [weak self] _ in
@@ -222,7 +226,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                 && NSApp.currentEvent?.type == .leftMouseUp
             NSApp.activate()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
         }
     }
 

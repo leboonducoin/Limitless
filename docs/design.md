@@ -10,6 +10,7 @@ separate preferences window. Content sets the height; long lists scroll.
 - Right-click Quit/Uninstall; red destructive confirmation.
 - Timer and remaining PIDs refresh each second without animation.
 - Native opening motion; immediate keyboard and Reduce Motion opening.
+- No selected control on opening; Tab keeps its native focus indicator.
 - Opaque backgrounds for Reduce Transparency/increased contrast.
 - Text and symbols accompany color. Controls have accessibility labels.
 
