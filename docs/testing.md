@@ -65,4 +65,6 @@ Both [CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml) an
 [Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml)
 must pass for the final commit. They cover tests, sanitizers, CodeQL, workflow
 linting and secret scanning. Pull requests also check dependencies.
+The CLI runs on macOS 14; Intel also runs the full checks. **CI gate** and
+**Security gate** fail if a required job fails, is cancelled or is unexpectedly skipped.
 Automated results do not replace the installed-app checks above.

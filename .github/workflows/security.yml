@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
       - name: actionlint 1.7.12 (immutable source revision)
         run: go run github.com/rhysd/actionlint/cmd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca -color
-      - uses: zizmorcore/zizmor-action@e639db99335bc9038abc0e066dfcd72e23d26fb4 # v0.3.0
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
           version: v1.30.1
           persona: pedantic
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: low
           comment-summary-in-pr: never
@@ -101,11 +101,37 @@ jobs:
         run: |
           swiftc Tools/ProjectTool.swift -o "$RUNNER_TEMP/limitless-project-tool"
           swiftc Sources/LimitlessApp/BrandArt.swift Tools/ExportIcon.swift -o "$RUNNER_TEMP/limitless-export-icon"
+          swiftc -DDEBUG -swift-version 6 -parse-as-library -whole-module-optimization -I "$(swift build --show-bin-path)/Modules" -c Sources/LimitlessApp/AppModel.swift Sources/LimitlessApp/BrandArt.swift Sources/LimitlessApp/MenuPanel.swift Sources/LimitlessApp/Presentation.swift Sources/LimitlessApp/SettingsView.swift Tools/ExportPreview.swift -o "$RUNNER_TEMP/limitless-export-preview.o"
           swiftc -swift-version 6 -parse-as-library Sources/LimitlessSystem/SignedConnection.swift Tests/SignedXPC/Probe.swift -o "$RUNNER_TEMP/limitless-xpc-probe"
           swiftc -swift-version 6 Tests/SignedXPC/Run.swift -o "$RUNNER_TEMP/limitless-xpc-test-runner"
           swiftc -swift-version 6 Tests/SignedUpdate/Run.swift -o "$RUNNER_TEMP/limitless-update-test-runner"
           swiftc -swift-version 6 -parse-as-library -I "$(swift build --show-bin-path)/Modules" -c Tests/SignedUpdate/Probe.swift -o "$RUNNER_TEMP/limitless-update-probe.o"
           swiftc -swift-version 6 Tests/NativeMac/ObserveHelperRestart.swift -o "$RUNNER_TEMP/limitless-helper-restart-observer"
       - uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        id: analyze
         with:
           category: /language:${{ matrix.language }}
+      - name: Keep analysis reports for diagnosis
+        if: always() && steps.analyze.outputs.sarif-output != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codeql-${{ matrix.language }}
+          path: ${{ steps.analyze.outputs.sarif-output }}
+          retention-days: 14
+          if-no-files-found: error
+
+  gate:
+    name: Security gate
+    if: always()
+    needs: [workflows, secrets, dependencies, codeql]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Require every security check
+        env:
+          PASSED: >-
+            ${{ needs.workflows.result == 'success' && needs.secrets.result == 'success'
+            && needs.codeql.result == 'success'
+            && ((github.event_name == 'pull_request' && needs.dependencies.result == 'success')
+            || (github.event_name != 'pull_request' && needs.dependencies.result == 'skipped')) }}
+        run: test "$PASSED" = true
