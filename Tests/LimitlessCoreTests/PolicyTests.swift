@@ -3,12 +3,12 @@ import Testing
 
 @testable import LimitlessCore
 
-@Test(arguments: Array(0...50))
+@Test(arguments: Array(0...80))
 func batteryFloorAllowsEveryInteger(_ floor: Int) throws {
     #expect(try UserPolicy(batteryFloor: floor).batteryFloor == floor)
 }
 
-@Test(arguments: [-1, 51, Int.max, Int.min])
+@Test(arguments: [-1, 81, Int.max, Int.min])
 func invalidFloorCannotEnterPolicy(_ floor: Int) {
     #expect(throws: PolicyError.invalidBatteryFloor) { try UserPolicy(batteryFloor: floor) }
 }
@@ -23,7 +23,7 @@ func invalidDurationsAreRejected(_ seconds: Double) {
     #expect(throws: PolicyError.invalidBatteryFloor) {
         try JSONDecoder().decode(UserPolicy.self, from: json)
     }
-    let original = try UserPolicy(mode: .battery, batteryFloor: 0, maximumDuration: 900)
+    let original = try UserPolicy(mode: .battery, batteryFloor: 80, maximumDuration: 900)
     let restored = try JSONDecoder().decode(UserPolicy.self, from: JSONEncoder().encode(original))
     #expect(restored == original)
 }

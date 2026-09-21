@@ -68,7 +68,7 @@ func batteryFloorPermanentlyStopsEvenWhenAdapterCannotKeepUp(_ source: PowerSour
         try registry.start(.init(batteryFloor: 0), owner: UUID(), kind: .task, now: clock())
     }
     #expect(throws: PolicyError.invalidBatteryFloor) {
-        try registry.start(.init(batteryFloor: 51), owner: UUID(), kind: .task, now: clock())
+        try registry.start(.init(batteryFloor: 81), owner: UUID(), kind: .task, now: clock())
     }
     #expect(registry.sessions.isEmpty)
 }
@@ -78,6 +78,20 @@ func batteryFloorPermanentlyStopsEvenWhenAdapterCannotKeepUp(_ source: PowerSour
     #expect(throws: PolicyError.automationNotAuthorized) {
         try registry.start(.init(), owner: UUID(), kind: .task, now: clock())
     }
+}
+
+@Test func eightyPercentLimitStopsTasksAndCannotBeWeakened() throws {
+    var registry = SessionRegistry(policy: try UserPolicy(batteryFloor: 80, allowsAutomation: true))
+    let id = try registry.start(
+        .init(batteryFloor: 80), owner: UUID(), kind: .task, now: clock())
+    #expect(throws: PolicyError.batteryFloorNotAuthorized) {
+        try registry.start(.init(batteryFloor: 79), owner: UUID(), kind: .task, now: clock())
+    }
+    let aboveLimit = PowerSnapshot(
+        source: .battery, battery: .available(percent: 81, isDischarging: true))
+    #expect(registry.evaluate(power: aboveLimit, now: try clock()).eligible.contains(id))
+    #expect(registry.evaluate(power: battery, now: try clock()).stopped[id] == .batteryFloor)
+    #expect(!registry.evaluate(power: aboveLimit, now: try clock(101)).wantsAwake)
 }
 
 @Test func allTasksMustFinishAndManualDemandIsIndependent() throws {

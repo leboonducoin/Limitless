@@ -50,9 +50,10 @@ enum CommandOptions: Equatable {
                 guard mode == nil else { throw CLIError.usage("Choose exactly one of -a, -b, -c.") }
                 mode = flag == "-a" ? .all : (flag == "-b" ? .battery : .external)
             case "--battery-floor":
-                guard floor == nil, let value = Int(try nextValue()), (0...50).contains(value)
+                guard floor == nil, let value = Int(try nextValue()),
+                    UserPolicy.batteryFloorRange.contains(value)
                 else {
-                    throw CLIError.usage("Battery floor must be one integer from 0 through 50.")
+                    throw CLIError.usage("Battery floor must be one integer from 0 through 80.")
                 }
                 floor = value
             case "--for":

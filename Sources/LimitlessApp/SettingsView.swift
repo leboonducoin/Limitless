@@ -4,6 +4,18 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var model: AppModel
+    private var batteryInput = SwiftUI.State<String>(wrappedValue: "")
+    @FocusState private var batteryFocused: Bool
+
+    private static let batteryFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.allowsFloats = false
+        formatter.usesGroupingSeparator = false
+        formatter.minimum = NSNumber(value: UserPolicy.batteryFloorRange.lowerBound)
+        formatter.maximum = NSNumber(value: UserPolicy.batteryFloorRange.upperBound)
+        return formatter
+    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -19,14 +31,34 @@ struct SettingsView: View {
                         .accessibilityLabel("Power source")
                     }
                     if model.showsBatteryLimit {
-                        Stepper(value: $model.draft.batteryFloor, in: 0...50, step: 1) {
-                            LabeledContent(
-                                "Battery reserved limit", value: "\(model.draft.batteryFloor)%"
+                        HStack {
+                            Text("Battery reserved limit")
+                            Spacer()
+                            TextField("Percent", text: batteryInput.projectedValue)
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 44)
+                                .accessibilityLabel("Battery reserved limit, percent")
+                                .focused($batteryFocused)
+                                .onSubmit { applyBatteryInput() }
+                                .onChange(of: batteryFocused) {
+                                    if !batteryFocused { applyBatteryInput() }
+                                }
+                                .onChange(of: model.draft.batteryFloor, initial: true) {
+                                    batteryInput.wrappedValue =
+                                        Self.batteryFormatter.string(
+                                            from: NSNumber(value: model.draft.batteryFloor)) ?? ""
+                                }
+                                .onDisappear { applyBatteryInput() }
+                            Text("%")
+                            Stepper(
+                                "Battery reserved limit", value: $model.draft.batteryFloor,
+                                in: UserPolicy.batteryFloorRange, step: 1
                             )
-                            .monospacedDigit()
+                            .labelsHidden().fixedSize()
+                            .accessibilityValue("\(model.draft.batteryFloor)%")
                         }
-                        .accessibilityLabel("Battery reserved limit")
-                        .accessibilityValue("\(model.draft.batteryFloor)%")
+                        .monospacedDigit()
                         if model.draft.batteryFloor == 0 {
                             Label(
                                 "Battery protection is off", systemImage: "exclamationmark.triangle"
@@ -141,5 +173,14 @@ struct SettingsView: View {
         }
         .font(.callout).toggleStyle(.switch).controlSize(.small)
         .onChange(of: model.draft) { model.policyEdited() }
+    }
+
+    private func applyBatteryInput() {
+        if let number = Self.batteryFormatter.number(from: batteryInput.wrappedValue) {
+            model.draft.batteryFloor = number.intValue
+        }
+        batteryInput.wrappedValue =
+            Self.batteryFormatter.string(
+                from: NSNumber(value: model.draft.batteryFloor)) ?? ""
     }
 }

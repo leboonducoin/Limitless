@@ -18,7 +18,7 @@ session when the work ends. Your command keeps its output and exit code.
 | Option | Meaning |
 | --- | --- |
 | `-b`, `-c`, `-a` | Battery, power adapter, both |
-| `--battery-floor 20` | Reserve 0–50% battery; 0 disables protection |
+| `--battery-floor 20` | Reserve 0–80% battery; 0 disables protection |
 | `--for 2h` | Duration: seconds, minutes, hours or days |
 | `--until 2026-10-01T18:00:00+02:00` | Date with timezone |
 | `--unlimited` | No duration limit; still ends with the task |

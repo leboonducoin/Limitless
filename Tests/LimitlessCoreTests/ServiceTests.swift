@@ -214,7 +214,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     for data in [
         Data(), Data("{}".utf8), Data(repeating: 32, count: ServiceWire.maximumMessageBytes + 1),
         Data(
-            #"{"version":2,"operation":{"configure":{"_0":{"mode":"all","batteryFloor":51,"allowsAutomation":true}}}}"#
+            #"{"version":7,"operation":{"configure":{"_0":{"mode":"all","batteryFloor":81,"allowsAutomation":true}}}}"#
                 .utf8),
     ] {
         #expect(throws: ServiceError.invalidMessage) { try ServiceWire.decodeRequest(data) }
@@ -226,9 +226,13 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
         try ServiceWire.decodeRequest(
             Data(#"{"version":5,"operation":{"setSudoTouchID":{"_0":false}}}"#.utf8))
     }
+    #expect(throws: ServiceError.incompatibleVersion) {
+        try ServiceWire.decodeRequest(Data(#"{"version":6,"operation":{"status":{}}}"#.utf8))
+    }
     for operation in [
         ServiceOperation.status, .heartbeat, .stop(UUID()), .rearm, .retryRestoration,
-        .stopAll, .prepareRemoval, .prepareUpdate, .finishRemoval, .configure(try UserPolicy()),
+        .stopAll, .prepareRemoval, .prepareUpdate, .finishRemoval,
+        .configure(try UserPolicy(batteryFloor: 80)),
         .start(SessionRequest(end: .after(seconds: 60))), .setSudoTouchID(true),
     ] {
         #expect(

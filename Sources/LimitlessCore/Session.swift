@@ -54,7 +54,9 @@ public struct SessionRequest: Codable, Equatable, Sendable {
         if kind != .manual, !policy.allowsAutomation { throw PolicyError.automationNotAuthorized }
         if let mode, !mode.isWithin(policy.mode) { throw PolicyError.powerModeNotAuthorized }
         if let batteryFloor {
-            guard (0...50).contains(batteryFloor) else { throw PolicyError.invalidBatteryFloor }
+            guard UserPolicy.batteryFloorRange.contains(batteryFloor) else {
+                throw PolicyError.invalidBatteryFloor
+            }
             guard batteryFloor >= policy.batteryFloor else {
                 throw PolicyError.batteryFloorNotAuthorized
             }

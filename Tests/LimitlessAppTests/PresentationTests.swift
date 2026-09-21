@@ -158,7 +158,9 @@ private func status(
     draft.maximumMinutes = .infinity
     #expect(throws: PolicyError.invalidDuration) { try draft.policy(allowsAutomation: false) }
     draft.limitsDuration = false
-    draft.batteryFloor = 51
+    draft.batteryFloor = 80
+    #expect(try draft.policy(allowsAutomation: false).batteryFloor == 80)
+    draft.batteryFloor = 81
     #expect(throws: PolicyError.invalidBatteryFloor) { try draft.policy(allowsAutomation: false) }
 }
 

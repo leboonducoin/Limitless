@@ -41,6 +41,8 @@ public enum PowerMode: String, CaseIterable, Codable, Sendable {
 }
 
 public struct UserPolicy: Codable, Equatable, Sendable {
+    public static let batteryFloorRange = 0...80
+
     public let mode: PowerMode
     public let batteryFloor: Int
     public let maximumDuration: TimeInterval?
@@ -52,7 +54,9 @@ public struct UserPolicy: Codable, Equatable, Sendable {
         maximumDuration: TimeInterval? = nil,
         allowsAutomation: Bool = false
     ) throws {
-        guard (0...50).contains(batteryFloor) else { throw PolicyError.invalidBatteryFloor }
+        guard Self.batteryFloorRange.contains(batteryFloor) else {
+            throw PolicyError.invalidBatteryFloor
+        }
         if let maximumDuration { try Self.validateDuration(maximumDuration) }
         self.mode = mode
         self.batteryFloor = batteryFloor

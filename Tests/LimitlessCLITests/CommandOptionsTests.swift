@@ -39,7 +39,8 @@ import Testing
     ["run", "-b", "-c", "--", "true"], ["run", "-a", "-a", "--", "true"],
     ["run", "--for", "1h", "--unlimited", "--", "true"], ["watch", "--pid", "1"],
     ["watch", "--pid", "2147483648"], ["watch", "--pid", "12", "--pid", "13"],
-    ["run", "--battery-floor", "51", "--", "true"],
+    ["run", "--battery-floor", "81", "--", "true"],
+    ["run", "--battery-floor", "-1", "--", "true"],
     ["run", "--battery-floor", "2.5", "--", "true"],
     ["run", "--"], ["run", "true"], ["watch", "--", "true"],
     ["run", "--until", "2026-10-01", "--", "true"], ["run", "--for"], ["status", "--for", "1h"],
@@ -47,6 +48,13 @@ import Testing
 ])
 func invalidCLIOptionsFailBeforeWorkIsLaunched(_ arguments: [String]) {
     #expect(throws: CLIError.self) { try CommandOptions.parse(arguments) }
+}
+
+@Test(arguments: [0, 50, 51, 79, 80])
+func cliAcceptsBatteryLimitsThroughEighty(_ floor: Int) throws {
+    #expect(
+        try CommandOptions.parse(["run", "--battery-floor", String(floor), "--", "true"])
+            == .run(command: ["true"], request: SessionRequest(batteryFloor: floor)))
 }
 
 @Test func durationsHaveNoArbitraryMaximumAndDatesRequireTimezones() throws {
