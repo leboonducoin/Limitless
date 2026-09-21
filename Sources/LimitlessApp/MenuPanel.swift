@@ -1,5 +1,6 @@
 import AppKit
 import LimitlessCore
+import LimitlessSystem
 import SwiftUI
 
 struct MenuPanel: View {
@@ -28,7 +29,7 @@ struct MenuPanel: View {
             HStack(spacing: 8) {
                 HStack(spacing: 0) {
                     Text(
-                        "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · © 2026 "
+                        "\(LimitlessIdentity.version) · © 2026 "
                     )
                     Link(
                         "Arthur Barreau",
@@ -66,9 +67,6 @@ struct MenuPanel: View {
                     .frame(width: 32, height: 32).accessibilityHidden(true)
                 Text("Limitless").font(.system(size: 21, weight: .semibold))
                 Spacer()
-                if model.isPreview {
-                    Text("PREVIEW").font(.caption2).foregroundStyle(.secondary)
-                }
             }
             statusOverview
             if model.removalInProgress {
@@ -145,7 +143,8 @@ struct MenuPanel: View {
             } else {
                 StopEditor(model: model)
                 startButton.disabled(
-                    !model.canControl || model.busy || model.status?.sleep.fault != nil)
+                    (!model.canControl && !model.isPreview) || model.busy
+                        || model.status?.sleep.fault != nil)
             }
             if (model.status?.sessions.count ?? 0) > 0 {
                 Button {
@@ -156,7 +155,7 @@ struct MenuPanel: View {
                 }
                 .help("End all Limitless sessions; running commands continue.")
                 .controlSize(.large).buttonStyle(.bordered)
-                .disabled(!model.canControl || model.busy)
+                .disabled((!model.canControl && !model.isPreview) || model.busy)
             }
             if model.showsTaskCount {
                 Label(

@@ -16,6 +16,13 @@ struct LimitlessCLI {
             case .help: print(help)
             case .version: print("Limitless \(LimitlessIdentity.version)")
             case .hook(let provider): await AgentHook.run(provider: provider)
+            case .setup(let provider, let remove):
+                try AgentSetup.configure(provider, remove: remove)
+                print(
+                    remove
+                        ? "Limitless integration removed from \(provider)."
+                        : "Limitless is ready for \(provider). Restart your agent and approve its hooks if asked."
+                )
             case .status(let json):
                 let client = try await ServiceClient(role: .task)
                 do {
@@ -227,6 +234,7 @@ struct LimitlessCLI {
           limitless status [--json]
           limitless run [options] -- command [arguments...]
           limitless watch [options] --pid ID
+          limitless setup codex|claude|cursor|gemini [--remove]
           limitless hook codex|claude|cursor|gemini|other   (lifecycle JSON on stdin)
           limitless --version
 

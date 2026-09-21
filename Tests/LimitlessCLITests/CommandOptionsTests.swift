@@ -4,6 +4,20 @@ import Testing
 
 @testable import LimitlessCLI
 
+@Test func setupParsesOnlySupportedProvidersAndRemoval() throws {
+    for provider in ["codex", "claude", "cursor", "gemini"] {
+        #expect(
+            try CommandOptions.parse(["setup", provider])
+                == .setup(provider: provider, remove: false))
+        #expect(
+            try CommandOptions.parse(["setup", provider, "--remove"])
+                == .setup(provider: provider, remove: true))
+    }
+    for arguments in [["setup"], ["setup", "unknown"], ["setup", "codex", "--force"]] {
+        #expect(throws: CLIError.self) { try CommandOptions.parse(arguments) }
+    }
+}
+
 @Test func parsingPreservesCommandArgumentsAndExclusivePowerModes() throws {
     #expect(
         try CommandOptions.parse([

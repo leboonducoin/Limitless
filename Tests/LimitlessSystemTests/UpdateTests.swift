@@ -33,15 +33,56 @@ import Testing
             response(429, headers: ["Retry-After": "120"]), limit: 100, now: now)
     }
     for invalid in ["NaN", "1e300", "-60", "unreadable"] {
-        #expect(throws: UpdateError.rateLimited(until: now.addingTimeInterval(900))) {
+        #expect(
+            throws: UpdateError.rateLimited(until: now.addingTimeInterval(UpdateSchedule.interval))
+        ) {
             try GitHubUpdate.validateResponse(
                 response(429, headers: ["Retry-After": invalid]), limit: 100, now: now)
         }
+    }
+    #expect(throws: UpdateError.rateLimited(until: now.addingTimeInterval(172_800))) {
+        try GitHubUpdate.validateResponse(
+            response(429, headers: ["Retry-After": "172800"]), limit: 100, now: now)
+    }
+    #expect(throws: UpdateError.rateLimited(until: now.addingTimeInterval(600))) {
+        try GitHubUpdate.validateResponse(
+            response(429, headers: ["Retry-After": "Tue, 14 Nov 2023 22:23:20 GMT"]), limit: 100,
+            now: now)
     }
     #expect(throws: UpdateError.invalidRelease) {
         try GitHubUpdate.validateResponse(
             response(200, headers: ["Content-Length": "101"]), limit: 100)
     }
+}
+
+@Test func updateRequestsStaySpacedAcrossRestartsAndRepeatedFailures() throws {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let interval = UpdateSchedule.interval
+    #expect(interval == 28_800)
+    var schedule = UpdateSchedule()
+    func check(_ date: Date) -> Bool { schedule.beginCheck(at: date) }
+    func download(_ date: Date) -> Bool { schedule.beginDownload(at: date) }
+    #expect(check(now))
+    #expect(download(now))
+    schedule = try JSONDecoder().decode(UpdateSchedule.self, from: JSONEncoder().encode(schedule))
+    #expect(!check(now.addingTimeInterval(interval - 1)))
+    #expect(!download(now.addingTimeInterval(interval - 1)))
+    #expect(!check(now.addingTimeInterval(-interval)))
+    schedule.failed(download: false, at: now)
+    schedule.failed(download: true, at: now)
+    #expect(check(now.addingTimeInterval(interval)))
+    #expect(download(now.addingTimeInterval(interval)))
+    schedule.failed(download: false, at: now.addingTimeInterval(interval))
+    schedule.failed(download: true, at: now.addingTimeInterval(interval))
+    #expect(schedule.nextCheck == now.addingTimeInterval(3 * interval))
+    #expect(schedule.nextDownload == now.addingTimeInterval(3 * interval))
+    let reset = now.addingTimeInterval(10 * interval)
+    schedule.failed(download: false, retryAfter: reset, at: now)
+    schedule.checked()
+    #expect(!check(reset.addingTimeInterval(-1)))
+    #expect(!download(reset.addingTimeInterval(-1)))
+    #expect(check(reset))
+    #expect(download(reset))
 }
 
 private func releaseData(

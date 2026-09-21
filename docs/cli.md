@@ -1,88 +1,74 @@
-# CLI and AI
+# CLI & AI
 
-Move Limitless to **Applications**, enable its helper, then turn on **Allow CLI & AI
-tasks**. The app installs `/usr/local/bin/limitless` automatically. No shell setup
-is needed with the standard macOS PATH. An existing different command is left alone.
-For a custom PATH, use `/Applications/Limitless.app/Contents/MacOS/limitless`.
+Move Limitless to Applications and enable **Allow CLI & AI tasks** in its menu.
+The `limitless` command is installed automatically.
 
-## Commands
+## Terminal
 
 ```sh
 limitless run -- swift test
-limitless run -a --battery-floor 20 --for 2h -- make
 limitless watch --pid 12345
-limitless status --json
+limitless status
+limitless --help
 ```
+
+`run` follows a command; `watch` follows an existing process. Both release their
+session when the work ends. Your command keeps its output and exit code.
 
 | Option | Meaning |
 | --- | --- |
-| `-b`, `-c`, `-a` | Battery, adapter, or both; choose one |
-| `--battery-floor 20` | 0–50%; zero disables custom protection |
-| `--for 90m` | Duration in seconds, minutes, hours or days (`s`, `m`, `h`, `d`) |
-| `--until 2026-10-01T18:00:00+02:00` | Date and time, including timezone |
-| `--unlimited` | No command duration limit; the default |
+| `-b`, `-c`, `-a` | Battery, power adapter, both |
+| `--battery-floor 20` | Reserve 0–50% battery; 0 disables protection |
+| `--for 2h` | Duration: seconds, minutes, hours or days |
+| `--until 2026-10-01T18:00:00+02:00` | Date with timezone |
+| `--unlimited` | No duration limit; still ends with the task |
 
-Omitted limits inherit the app's policy. Requests cannot weaken it. `run` preserves
-the command's output and exit code; Ctrl-C interrupts it. `watch` observes a PID and
-its start time, without signalling it. Each completion releases only its own hold.
-A battery cutoff, timer or lost connection ends protection without killing the
-work or automatically restarting protection.
+Choose one power mode and one stop condition. App limits always apply.
+Reaching a limit ends protection, not your command. `status --json` is available.
 
 ## AI agent setup
 
-The integration follows **the whole task**, including thinking between commands.
-It requests both sources and a 20% floor, subject to stricter app limits. Concurrent
-tasks release their holds independently. A manual Keep awake session takes priority:
-the AI neither changes it nor adds time after it ends.
+Close your agent, then run its command once:
 
-There are two parts: the skill tells the agent how to behave; **lifecycle hooks**
-tell Limitless exactly when work starts and ends. Copying only the skill is not
-enough. The app bundles both in `Contents/Resources/limitless-skill`.
+| Agent | Install |
+| --- | --- |
+| **Codex** | `limitless setup codex` |
+| **Claude Code** | `limitless setup claude` |
+| **Cursor** | `limitless setup cursor` |
+| **Gemini CLI** | `limitless setup gemini` |
+| **Other** | [Manual connection below](#other) |
 
-Copy that folder to the skill location below. Merge the supplied hook entries into
-your existing configuration—do not overwrite other settings. Restart the agent
-and approve hooks through its normal trust flow. Limitless does not edit these
-files for you.
+Restart the agent and accept its normal hook approval if asked. Setup installs
+the skill and task hooks together. Existing settings are kept, with a private
+`.limitless-backup-*` copy beside the settings file. Invalid or linked files are
+left untouched. Custom configuration locations need manual setup.
 
-| Agent | Personal skill folder | Hook configuration |
-| --- | --- | --- |
-| **Codex** | `~/.agents/skills/limitless` | Merge [codex.json](../skills/limitless/hooks/codex.json) into `~/.codex/hooks.json` |
-| **Claude Code** | `~/.claude/skills/limitless` | Merge [claude.json](../skills/limitless/hooks/claude.json) into `~/.claude/settings.json` |
-| **Cursor** | `~/.cursor/skills/limitless` | Merge [cursor.json](../skills/limitless/hooks/cursor.json) into `~/.cursor/hooks.json` |
-| **Gemini CLI** | `~/.gemini/skills/limitless` | Merge [gemini.json](../skills/limitless/hooks/gemini.json) into `~/.gemini/settings.json` |
-| **Other** | Your agent's documented skill folder | Connect its task events as described below |
+During a task, Limitless uses **both power sources and a 20% battery reserve**,
+including while the agent thinks. Stricter app limits still apply. The last task
+to finish releases the hold. A manual **Keep awake** session always takes priority.
 
-Try a short task, then check that the task count rises and returns to zero. Repeat
-with cancellation and two concurrent tasks before relying on unattended use.
-These integrations run locally on the Mac; cloud agents cannot control it.
+To remove an integration: `limitless setup codex --remove` (replace the agent name).
+App uninstall also removes integrations installed this way. Backups are retained
+for recovery; other settings and hooks are preserved.
 
-Codex provides turn completion and interruption events. Claude and Gemini's
-documented end events do not cover every cancellation path: if a version omits an
-end event while remaining open, use **Stop** in Limitless. Exiting the host also
-ends its holds. Hooks follow conversation turns; delegated work is covered while
-the parent waits for it. Work detached beyond a turn needs its own lifecycle.
-Never treat an open agent window as ongoing work.
+These integrations need a local agent with lifecycle hooks. If your agent misses
+a cancellation event, click **Stop** in Limitless; exiting the agent also releases
+its holds. Work detached beyond a turn needs its own task tracking.
 
-Hook formats: [Codex](https://developers.openai.com/codex/hooks),
-[Claude](https://code.claude.com/docs/en/hooks),
-[Cursor](https://cursor.com/docs/hooks),
-[Gemini](https://geminicli.com/docs/hooks/reference/).
+### Other
 
-### Other AI tools (manual installation)
-
-Copy [the skill](../skills/limitless/SKILL.md) into your local agent's skill folder,
-then connect its real start, completion **and cancellation** events to
-`limitless hook other`. Send JSON on stdin:
+Copy [SKILL.md](../skills/limitless/SKILL.md) into your agent’s skill folder.
+Connect its real task start, finish and cancellation events to `limitless hook other`.
+Pass this JSON on standard input:
 
 ```json
 {"hook_event_name":"Begin","session_id":"conversation-123","turn_id":"task-456"}
 ```
 
-Use `End` with the same IDs when that task finishes or is cancelled. Use `SessionEnd`
-with its `session_id` when closing the conversation. IDs must be unique to the real
-task; do not create new ones to evade Stop or a battery/time limit. If the tool has
-no lifecycle events, use `limitless run -- actual-command` for command-only coverage.
+Send `End` with the same IDs on completion or cancellation; `SessionEnd` with the
+session ID when closing the conversation. Without task events, use `limitless run`
+for individual commands. An open agent window is not an active task.
 
-Hooks read only lifecycle IDs, keep hashed temporary markers in the app's cache,
-and never read transcripts or save prompts. Uninstall removes that cache. To
-remove the integration, remove its hook entries and the copied skill folder.
+Hook references: [Codex](https://developers.openai.com/codex/hooks),
+[Claude](https://code.claude.com/docs/en/hooks), [Cursor](https://cursor.com/docs/hooks),
+[Gemini](https://geminicli.com/docs/hooks/reference/).

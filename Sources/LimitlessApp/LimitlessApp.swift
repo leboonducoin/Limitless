@@ -140,12 +140,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         if let button = item.button {
             activeDot.frame = NSRect(
                 x: button.bounds.midX + 6,
-                y: button.isFlipped ? button.bounds.maxY - 6 : 3, width: 3, height: 3)
+                y: button.isFlipped ? button.bounds.maxY - 8 : 3, width: 5, height: 5)
             activeDot.isHidden = true
             activeDot.wantsLayer = true
             activeDot.layer?.backgroundColor =
                 NSColor(srgbRed: 0.85, green: 0.36, blue: 0.04, alpha: 1).cgColor
-            activeDot.layer?.cornerRadius = 1.5
+            activeDot.layer?.cornerRadius = 2.5
             activeDot.setAccessibilityElement(false)
             button.addSubview(activeDot)
         }

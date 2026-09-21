@@ -36,10 +36,10 @@ import AppKit
     }()
 
     private static func menuImage() -> NSImage {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+        let image = NSImage(size: NSSize(width: 23, height: 18), flipped: false) { _ in
             NSColor.black.setStroke()
-            let path = loop(in: NSRect(x: 0.5, y: 3, width: 17, height: 14))
-            path.lineWidth = 1.6
+            let path = loop(in: NSRect(x: 1, y: 1, width: 21, height: 16))
+            path.lineWidth = 1.8
             path.stroke()
             return true
         }

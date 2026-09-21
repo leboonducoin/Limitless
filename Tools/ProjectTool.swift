@@ -571,10 +571,11 @@ do {
     let sanitizer = ["asan": "address", "tsan": "thread"][arguments.first ?? ""]
     let community = ["community-bundle", "community-sign"].contains(arguments.first ?? "")
     let signing = arguments == ["sign"] || arguments == ["community-sign"]
-    let bundle = arguments == ["bundle"] || arguments == ["community-bundle"] || signing
+    let preview = arguments == ["preview"]
+    let bundle = arguments == ["bundle"] || arguments == ["community-bundle"] || signing || preview
     try require(
         arguments.count == 1 && (arguments == ["check"] || sanitizer != nil || bundle),
-        "Usage: swift Tools/ProjectTool.swift check | asan | tsan | bundle | sign | community-bundle | community-sign | self-test [APP] | verify APP TEAM | notarize APP TEAM KEYCHAIN_PROFILE | package APP TEAM NEW_OUTPUT_DIR | community-verify APP CERT_SHA1 | community-package APP CERT_SHA1 NEW_OUTPUT_DIR"
+        "Usage: swift Tools/ProjectTool.swift check | asan | tsan | bundle | preview | sign | community-bundle | community-sign | self-test [APP] | verify APP TEAM | notarize APP TEAM KEYCHAIN_PROFILE | package APP TEAM NEW_OUTPUT_DIR | community-verify APP CERT_SHA1 | community-package APP CERT_SHA1 NEW_OUTPUT_DIR"
     )
     _ = try run("/usr/bin/git", ["diff", "--check"])
     _ = try run(
@@ -616,7 +617,10 @@ do {
     if bundle {
         let configuration =
             signing
-            ? "release" : ProcessInfo.processInfo.environment["LIMITLESS_CONFIGURATION"] ?? "debug"
+            ? "release"
+            : (preview
+                ? "debug"
+                : ProcessInfo.processInfo.environment["LIMITLESS_CONFIGURATION"] ?? "debug")
         try require(
             ["debug", "release"].contains(configuration),
             "LIMITLESS_CONFIGURATION must be debug or release.")
@@ -632,6 +636,7 @@ do {
         }
         try manager.createDirectory(at: output, withIntermediateDirectories: false)
         var info = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
+        if preview { info["LimitlessPreviewState"] = "active" }
         if let preview = ProcessInfo.processInfo.environment["LIMITLESS_PREVIEW_STATE"] {
             try require(
                 !signing && configuration == "debug",
@@ -662,6 +667,29 @@ do {
             ["swift", "build", "-c", configuration, "--show-bin-path"] + buildPath + compilerFlags,
             capture: true, environment: buildEnvironment)
         let version = info["CFBundleShortVersionString"] as? String ?? ""
+        if preview {
+            let modules =
+                manager.fileExists(atPath: binaryPath + "/Modules")
+                ? binaryPath + "/Modules" : binaryPath
+            let objects = try ["LimitlessCore", "LimitlessSystem"].flatMap { name -> [String] in
+                let archive = binaryPath + "/lib" + name + ".a"
+                if manager.fileExists(atPath: archive) { return [archive] }
+                let directory = binaryPath + "/" + name + ".build"
+                return try manager.contentsOfDirectory(atPath: directory)
+                    .filter { $0.hasSuffix(".swift.o") }.map { directory + "/" + $0 }
+            }
+            let executable = output.appendingPathComponent("ExportPreview").path
+            _ = try run(
+                "/usr/bin/xcrun",
+                [
+                    "swiftc", "-DDEBUG", "-swift-version", "6", "-I", modules,
+                    "Sources/LimitlessApp/AppModel.swift", "Sources/LimitlessApp/BrandArt.swift",
+                    "Sources/LimitlessApp/MenuPanel.swift",
+                    "Sources/LimitlessApp/Presentation.swift",
+                    "Sources/LimitlessApp/SettingsView.swift", "Tools/ExportPreview.swift",
+                ] + objects + ["-o", executable])
+            _ = try run(executable, [output.appendingPathComponent("menu-preview.png").path])
+        }
         try require(
             try run(binaryPath + "/limitless", ["--version"], capture: true)
                 == "Limitless \(version)",

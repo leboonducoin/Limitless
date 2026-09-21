@@ -1,134 +1,74 @@
 # Testing
 
-## Local commands
-
 ```sh
 swift Tools/ProjectTool.swift check
 swift Tools/ProjectTool.swift asan
 swift Tools/ProjectTool.swift tsan
 ```
 
-`check` validates formatting, release inputs and graphical entry points, typechecks
-optional integration probes, builds Release and runs the tests. It does not install
-a helper or change power settings. Sanitizers run separately and are blocking in CI.
+`check` validates formatting, release inputs, integration-probe compilation,
+Release build and tests. It never installs a helper or changes power settings.
+For a synced Desktop, prefix the command with
+`env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build`. Use separate paths for
+simultaneous builds. Full Xcode is used in CI; Command Line Tools may emit missing
+Xcode search-path warnings.
 
-On a synced Desktop, keep generated bundles outside the sync provider:
+## CI
+
+Pushes to main and pull requests run tests, ASan, TSan, Swift/Actions CodeQL,
+actionlint, zizmor and Gitleaks. PRs also run dependency review. Actions are pinned;
+signing secrets stay outside PR jobs. Baseline/CodeQL use Xcode 26.2, sanitizers
+26.6 on macos-26. The [certificate-selector exception](architecture.md#apple-certificate-selector)
+does not disable its CodeQL query.
+
+See the exact commit’s [CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml)
+and [Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml) results.
+Simulated tests and actual Mac trials are separate evidence.
+
+## Native previews
 
 ```sh
-env LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build swift Tools/ProjectTool.swift check
+swift Tools/ProjectTool.swift preview
 ```
 
-Use separate paths for simultaneous sanitizer runs. The tool loads the installed
-Swift Testing macro when needed by Command Line Tools. Full Xcode is used in CI;
-CLT's absent Xcode search-path warnings are recorded environment limitations.
+Creates an inert app and a full-resolution PNG in a new temporary directory.
+`bundle` with `LIMITLESS_PREVIEW_STATE` supports active, inactive, process, setup,
+desktop, external and battery-unknown fixtures. See [distribution](distribution.md).
+Inspect native controls, keyboard focus, VoiceOver, contrast, motion and logs.
+A screenshot does not validate power behavior.
 
-Opt-in read-only hardware observation:
+### Settings keyboard qualification
 
-```sh
-env LIMITLESS_READ_ONLY_INTEGRATION=1 LIMITLESS_BUILD_PATH=/private/tmp/limitless-swift-build swift Tools/ProjectTool.swift check
-```
+Use the current keyboard layout and number locale, not US keycodes. Read applied
+limits back through authenticated helper status. Keep observation separate from
+operator-authorized UI mutations.
 
-## CI and security
+## Signed probes
 
-GitHub Actions runs on pushes to main and pull requests. Baseline and CodeQL use
-Xcode 26.2; ASan/TSan use Xcode 26.6 on macos-26. Gates include Swift/Actions CodeQL,
-actionlint, zizmor, Gitleaks and dependency review on PRs. Actions are pinned;
-no signing secrets are exposed to PR builds. Scan intended staged changes and
-history before publishing. Do not report skipped or unavailable checks as passed.
-
-The SHA-1 certificate-selector finding is a documented
-[Apple compatibility exception](../SECURITY.md#reviewed-compatibility-exception);
-the query remains enabled.
-
-## Current evidence
-
-Build 11 passes the same 119 local tests. The active native preview was inspected
-and captured in `images/menu-preview.png`; Tab reaches the source control.
-The menu-bar item now uses AppKit's standard square length and an 18-point image.
-Actual spacing alongside other menu extras remains a physical visual check.
-
-Build 10 local checks pass: 119 tests reported (51 core, 50 system, 5 CLI, 13 app),
-including the disabled hardware opt-in. Coverage includes manual priority over
-agent sessions, independent tasks, Stop without losing CLI consent, consent
-restoration without weaker limits, source/battery visibility, fixed CLI-link
-ownership, lifecycle parsing and marker replacement/refusal.
-
-Native active and desktop previews were inspected. Adapter selection hides the
-battery control; the desktop fixture hides both controls without a blank section.
-Tab reaches source selection and the help link. Real menu-bar dot placement,
-popover timing, the enabled red confirmation and full VoiceOver remain manual.
-The existing AppIntents/BaseBoard and accessibility-time negative-geometry
-diagnostics recur; no crash occurred. They are not a clean runtime-log claim.
-
-Source review retained native popover motion, immediate keyboard/Reduce Motion
-opening and nonanimated polling/countdown. Ponytail review removed separate
-subagent holds: a parent turn covers work it awaits, while detached work needs its
-own lifecycle. Security review checked XPC roles, fixed-link cleanup, marker
-identity/permissions/ACLs, host identity, limits and absence of reacquisition.
-Actual agent versions, CLI-link installation and signed privileged cleanup still
-need the separate manual integration trials. Read hosted results for the exact
-commit in [CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml) and
-[Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml).
-
-The preceding build 9 passed local checks and hosted
-[CI](https://github.com/leboonducoin/Limitless/actions/runs/35513006899) and
-[Security](https://github.com/leboonducoin/Limitless/actions/runs/35513006880):
-110 tests, including one disabled hardware opt-in. Those results do not qualify
-the current changes. [Earlier test records](testing-history.md) retain exact
-commands, results, artifacts and limitations.
-
-## Signed community and XPC tests
-
-Only with explicit signature authorization and an existing certificate:
+With an existing, authorized certificate and a new output directory:
 
 ```sh
 swift Tests/SignedXPC/Run.swift CERT_SHA1 NEW_OUTPUT_DIRECTORY
 swift Tests/SignedUpdate/Run.swift CERT_SHA1 NEW_OUTPUT_DIRECTORY
 ```
 
-The XPC fixture covers valid and rejected peers in both directions and listener
-admission. The update fixture uses temporary signed apps. Neither installs a
-privileged service or changes sleep. Ordinary checks only typecheck these runners.
-See [historical signed evidence](testing-history.md#signed-community-and-xpc-tests).
-
-## Native interface inspection
-
-Build an inert Debug fixture using [the preview recipe](distribution.md#local-app-bundle).
-Inspect active, inactive, setup, process, desktop, external and unreadable-battery
-states. Check mouse/keyboard opening, outside-click dismissal, destructive alert
-color, focus order, text sizing and reduced motion. Review runtime logs.
-A fixture never proves physical sleep prevention.
-
-### Settings keyboard qualification
-
-Use the active keyboard layout and locale. Logical key names may still map to US
-key positions; resolve actual characters before entering values. Read applied
-limits back through authenticated helper status. Keep inspection probes read-only;
-separate any explicitly authorized mutation. The
-[recorded keyboard trial](testing-history.md#settings-keyboard-qualification)
-explains the previously observed layout problems.
+These use temporary signed fixtures, without privileged installation or power
+changes. Ordinary checks only compile them. Read-only hardware observation is
+opt-in through `LIMITLESS_READ_ONLY_INTEGRATION=1`.
 
 ## Manual helper restart observer
 
-Read the [operator protocol](testing-history.md#manual-helper-restart-observer)
-before use. It needs a separately authorized, bounded active session and a
-coordinated helper interruption. Only the operator sends the signal.
+Use a verified test installation and keep its matching app open.
 
-```sh
-swift Tests/NativeMac/ObserveHelperRestart.swift --observe-armed-restart
-```
+1. Start an operator-authorized session of at least five minutes. Confirm active,
+   disabled, owned status.
+2. Run `swift Tests/NativeMac/ObserveHelperRestart.swift --observe-armed-restart`.
+3. After `READY`, the operator interrupts the named helper within 60 seconds,
+   using `sudo /bin/launchctl kill SIGKILL system/io.github.leboonducoin.Limitless.helper`.
+4. Do not rearm. Wait for the new helper PID, ten seconds of allowed sleep, zero
+   sessions and the authenticated `interrupted` fault. Then use normal cleanup.
 
-The observer waits for a new helper PID, restored sleep and authenticated status
-with no sessions and the interrupted fault. It is typechecked, never executed by CI.
-
-## Required validation layers
-
-Automated tests cover policy, timing, parsing, file boundaries and simulated
-backend faults. Separately verify signed installation/XPC, actual power behavior,
-and the exported archive's signatures, SHA-256 and source manifest.
-
-Real-Mac gates remain in the [acceptance matrix](requirements.md): lid closed,
-power transitions, battery cutoff, helper crash/reboot, clean download/opening,
-upgrade/removal and full accessibility. For AI integrations, exercise completion,
-cancel/error, host exit, concurrency and manual-session priority in each actual
-agent version. Synthetic hook fixtures do not prove provider event delivery.
+The observer never sends signals or starts a session. Unknown readings/timeouts
+fail. If restoration is unconfirmed, preserve the app and journal and retry
+through the app. CI never runs this trial. Other Mac checks are in the
+[acceptance checklist](requirements.md).

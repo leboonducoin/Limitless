@@ -3,6 +3,50 @@ import Darwin
 import Foundation
 import Security
 
+public struct UpdateSchedule: Codable, Sendable {
+    public static let interval: TimeInterval = 8 * 3_600
+    public private(set) var nextCheck = Date.distantPast
+    public private(set) var nextDownload = Date.distantPast
+    private var checkFailures = 0
+    private var downloadFailures = 0
+
+    public init() {}
+
+    public mutating func beginCheck(at now: Date = Date()) -> Bool {
+        guard now >= nextCheck else { return false }
+        nextCheck = now.addingTimeInterval(Self.interval)
+        return true
+    }
+
+    public mutating func beginDownload(at now: Date = Date()) -> Bool {
+        guard now >= nextDownload else { return false }
+        nextDownload = now.addingTimeInterval(Self.interval)
+        return true
+    }
+
+    public mutating func checked() { checkFailures = 0 }
+
+    public mutating func failed(download: Bool, retryAfter: Date? = nil, at now: Date = Date()) {
+        if download {
+            downloadFailures = min(downloadFailures + 1, 6)
+        } else {
+            checkFailures = min(checkFailures + 1, 6)
+        }
+        let failures = download ? downloadFailures : checkFailures
+        let delay = min(Self.interval * pow(2, Double(failures - 1)), 7 * 86_400)
+        let next = max(now.addingTimeInterval(delay), retryAfter ?? .distantPast)
+        if download {
+            nextDownload = max(nextDownload, next)
+        } else {
+            nextCheck = max(nextCheck, next)
+        }
+        if let retryAfter {
+            nextCheck = max(nextCheck, retryAfter)
+            nextDownload = max(nextDownload, retryAfter)
+        }
+    }
+}
+
 public enum UpdateError: Error, LocalizedError, Equatable, Sendable {
     case invalidRelease, invalidArchive, untrustedBuild, unsafeLocation, busy, failed
     case rateLimited(until: Date)
@@ -138,10 +182,17 @@ public enum GitHubUpdate {
         {
             let reset = response.value(forHTTPHeaderField: "X-RateLimit-Reset")
                 .flatMap(TimeInterval.init).map { $0 - now.timeIntervalSince1970 }
-            let retry = response.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+            let retry = response.value(forHTTPHeaderField: "Retry-After").flatMap {
+                TimeInterval($0) ?? formatter.date(from: $0)?.timeIntervalSince(now)
+            }
             let delay =
-                [reset, retry].compactMap { $0 }.filter { $0.isFinite && $0 > 0 && $0 <= 86_400 }
-                .max() ?? 900
+                [reset, retry].compactMap { $0 }.filter {
+                    $0.isFinite && $0 > 0 && $0 <= Date.distantFuture.timeIntervalSince(now)
+                }.max() ?? UpdateSchedule.interval
             throw UpdateError.rateLimited(until: now.addingTimeInterval(max(60, delay)))
         }
         guard response.statusCode == 200 else { throw UpdateError.httpStatus(response.statusCode) }

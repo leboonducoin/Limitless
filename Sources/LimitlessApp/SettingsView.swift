@@ -58,7 +58,7 @@ struct SettingsView: View {
                             get: { model.status?.policy.allowsAutomation ?? false },
                             set: { enabled in Task { await model.setAutomation(enabled) } })
                     )
-                    .disabled(!model.canControl || model.busy)
+                    .disabled((!model.canControl && !model.isPreview) || model.busy)
                     Link(
                         destination: URL(
                             string:
@@ -77,7 +77,8 @@ struct SettingsView: View {
                     get: { model.loginStatus == .enabled },
                     set: { enabled in Task { await model.setLaunchAtLogin(enabled) } })
             )
-            .disabled(!model.trustedBuild || model.isPreview || model.busy || model.removalComplete)
+            .disabled(
+                (!model.trustedBuild && !model.isPreview) || model.busy || model.removalComplete)
             if model.loginStatus == .requiresApproval {
                 Button("Approve in System Settings") { model.openLoginSettings() }.disabled(
                     model.isPreview)
@@ -85,7 +86,7 @@ struct SettingsView: View {
             if model.showsPowerControls {
                 HStack {
                     Toggle("Automatic updates", isOn: $model.automaticUpdates)
-                        .disabled(!model.trustedBuild || model.isPreview || model.updating)
+                        .disabled((!model.trustedBuild && !model.isPreview) || model.updating)
                     if let update = model.availableUpdate, !model.automaticUpdates {
                         Button("Update") { model.requestUpdate() }
                             .help("Install Limitless \(update.version)")

@@ -1,87 +1,37 @@
-# Requirements and release acceptance
+# Product contract
 
-Limitless is an independent Swift macOS utility by Arthur Barreau, MIT licensed,
-copyright © 2026. GitHub Releases is the only installation route; Homebrew was
-removed by the maintainer's decision. Developer ID is optional later.
+Limitless is Arthur Barreau’s MIT-licensed native Swift macOS utility. One GitHub
+app download includes the menu, helper, CLI and AI skill. No paid Apple membership
+is needed to use it. Developer ID/notarization can be added later.
 
-Source pushes to main and GitHub Actions are authorized. Physical trials belong
-to the maintainer. Acceptance of earlier builds does not automatically qualify a
-new binary. No public binary release is authorized by this document.
-
-## Product contract
-
-| ID | Required behavior | Acceptance evidence |
-| --- | --- | --- |
-| R01 | Native SwiftUI/AppKit menu-bar app | Build, native inspection, keyboard and VoiceOver |
-| R02 | Awake with lid closed, no external display when supported | Real MacBook trials on each qualified OS/hardware |
-| R03 | Exclusive battery, adapter and both modes | Policy tests and physical source transitions |
-| R04 | Observe actual state; bounded recovery | Failure simulations and live fault/restoration trial |
-| R05 | Battery limit 0–50%, step 1; zero warns | Boundary tests and real discharge cutoff |
-| R06 | Presets, custom duration/date, process completion, unlimited | Clock/process tests and native timing trials |
-| R07 | Launch at login independent of activation | Registration, fresh login and no resumed session |
-| R08 | Compact native material UI, original icon, discreet motion | Native appearance/accessibility inspection |
-| R09 | CLI and whole-task AI lifecycle, independent owners, manual priority | Policy/parser/process tests and actual agent lifecycle trials |
-| R10 | One graphical GitHub download, complete uninstall | Clean download/open, upgrade and active/inactive removal |
-| R11 | Initial native administrator consent, no password storage | Signed approval/refusal and reciprocal XPC tests |
-| R12 | Public MIT repository, concise docs, CI and security gates | Actual final-commit checks and release evidence |
-| R13 | All executable product/maintenance code Swift; no Node/Python runtime | Source and exported-artifact inventory |
-| R14 | Public Apple APIs; isolated undocumented lid mechanism | Source/API and privilege review |
-| R15 | Scoped commits, current contributor instructions | Reviewed history and CONTRIBUTING.md |
-| R16 | Distribution without paid Apple membership | Stable certificate and clean-Mac native installation |
-
-Implemented code and automated checks are recorded in [testing](testing.md).
-Earlier signed installation, task and removal trials are retained in
-[test history](testing-history.md). Open hardware/publication gates are not implied
-passed by those results.
-
-## Current interface and automation decisions
-
-- Presets: 15/30/45 minutes, 1/2/4/8/12/24 hours and No limit in the timing picker.
-- All preferences in the main panel, automatic application, one Stop button.
-- Remaining PID list and task count; hide zero count outside process mode.
-- Monochrome mark with a separate dark orange dot below/right, clear of the logo.
-- Hide source/battery controls on confirmed desktops; hide battery limit in adapter mode.
-- Right-click Quit/Uninstall, red confirmation, all app preferences removed.
-- Enable CLI to install the plain `limitless` command automatically.
-- Remember CLI opt-in, but never resume an awake session. Faults revoke consent.
-- AI covers whole active turns including thinking, uses both sources and a 20%
-  floor within user limits, and stands down for manual Keep awake sessions.
-- Optional idle-only GitHub updates. No system-update setting changes; ordinary
-  restarts may be deferred while the app observes an active session.
+- Keep awake, including closed-lid use without an external display where supported.
+- Exclusive battery/adapter/both modes; battery reserve 0–50% in steps of 1.
+- Presets: 15/30/45 min, 1/2/4/8/12/24 h; custom duration/date, processes, unlimited.
+- Wait for all selected processes. Show remaining PIDs and per-second timing.
+- Independent launch at login, immediate settings and complete uninstall.
+- CLI and whole-task AI tracking, manual priority, no weakening user limits.
+- Updates at most every eight hours; persistent throttling and idle installation.
+- Swift executables only; no Node/Python runtime, password storage or security bypass.
 
 ## Invariants
 
-The lid flag is global: power modes are policies, not independent pmset settings.
-Unknown readings stay unknown. Stop, battery cutoff, deadline and owner loss
-outrank recovery. Restoring sleep changes only state owned by Limitless.
+The lid flag is global. Missing telemetry stays unknown. Stop, battery cutoff,
+deadlines and owner loss outrank recovery. Restore only Limitless-owned state.
+No session may resume at login/reboot or after a cutoff. The helper accepts no
+arbitrary command/path. Commands run without elevation.
 
-Each task releases only its own demand. The helper enforces user ceilings and
-accepts no arbitrary command/path. User commands never run elevated. No stored
-password, sudoers grant, security bypass or task-content logging.
+## Acceptance checklist
 
-Login/reboot cannot resurrect work. A running agent window is not proof of a task:
-real lifecycle events are required. Provider cancellation gaps must be visible.
+The maintainer performs physical tests. Record the tested Mac/macOS, build and
+outcome; successful trials on one machine do not promise all hardware behaves alike.
 
-## Physical release matrix
+- Lid open/closed; no display; AC attach/detach; battery cutoff and long runtime.
+- Timers, PID completion, Stop, app/CLI/helper exit, restart and login.
+- Administrator refusal, setup, fresh download/opening, upgrade and full uninstall.
+- Real agent completion/cancel/error, concurrent tasks and manual-session priority.
+- Native light/dark UI, keyboard, VoiceOver, contrast and reduced motion.
+- Final commit’s local checks, hosted CI/security, exported archive and signatures.
 
-Record model, architecture, macOS/build, source commit/version, source of power,
-expected behavior, observation and restoration for each case:
-
-- Lid open/closed without an external display; all three source policies.
-- AC attach/detach, unknown telemetry, discharge while connected.
-- Battery threshold/zero warning, timer, manual stop and long runtime.
-- App/CLI/helper crash, owner loss, helper restart, reboot and login.
-- Approval refused/revoked, invalid clients, service/channel upgrade.
-- Fresh GitHub download/opening, reinstall and active/inactive full removal.
-- Actual AI completion/cancel/error/host exit, concurrent tasks and manual priority.
-- Keyboard, VoiceOver, contrast, light/dark and reduced motion/transparency.
-- Idle CPU/wakeups. A reported flag is not a thermal-safety guarantee.
-
-## External prerequisites
-
-Apple build tools, a stable signing identity and a qualified clean-Mac installation
-path are needed for community publication. Developer ID/notarization additionally
-need active Apple membership, Team ID, certificate and notarization credentials.
-Users need none of these developer credentials.
-
-See [distribution](distribution.md) for exact build, signing and publication gates.
+Publishing additionally needs a stable signing identity and verified release files.
+Apple notarization needs membership, Team ID and credentials; users need none of
+these. [Build and release commands](distribution.md).

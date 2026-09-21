@@ -24,7 +24,6 @@ import ServiceManagement
         didSet {
             guard !isPreview else { return }
             preferences.set(automaticUpdates, forKey: "automaticUpdates")
-            automaticAttempt = nil
         }
     }
     var message: String?
@@ -57,8 +56,12 @@ import ServiceManagement
     private var policyApplication: Task<Void, Never>?
     private var updateMonitoring: Task<Void, Never>?
     private var updateInstallation: Task<Void, Never>?
-    private var automaticAttempt: String?
-    private var updateCheckDelay: TimeInterval = 21_600
+    private var updateSchedule: UpdateSchedule {
+        didSet {
+            guard !isPreview, let data = try? JSONEncoder().encode(updateSchedule) else { return }
+            preferences.set(data, forKey: "updateSchedule")
+        }
+    }
     private var statusReceivedAt = ContinuousClock.now
     private var refreshing = false
     private var revision = 0
@@ -68,6 +71,10 @@ import ServiceManagement
 
     init(preferences: UserDefaults = .standard) {
         self.preferences = preferences
+        updateSchedule =
+            preferences.data(forKey: "updateSchedule").flatMap {
+                try? JSONDecoder().decode(UpdateSchedule.self, from: $0)
+            } ?? UpdateSchedule()
         automaticUpdates = preferences.bool(forKey: "automaticUpdates")
         if let data = preferences.data(forKey: "userPolicy"),
             let policy = try? JSONDecoder().decode(UserPolicy.self, from: data)
@@ -163,7 +170,10 @@ import ServiceManagement
             updateMonitoring = Task { [weak self] in
                 while !Task.isCancelled {
                     await self?.checkForUpdates()
-                    let delay = self?.updateCheckDelay ?? 21_600
+                    let delay = max(
+                        60,
+                        self?.updateSchedule.nextCheck.timeIntervalSinceNow
+                            ?? UpdateSchedule.interval)
                     do { try await Task.sleep(for: .seconds(delay)) } catch { return }
                 }
             }
@@ -177,8 +187,8 @@ import ServiceManagement
                         await stopManual()
                     }
                     if tick % 5 == 0 { await refresh() }
-                    if automaticUpdates, let update = availableUpdate,
-                        update.version != automaticAttempt, !busy, !updating,
+                    if automaticUpdates, availableUpdate != nil,
+                        Date() >= updateSchedule.nextDownload, !busy, !updating,
                         readyToUpdate
                     {
                         requestUpdate()
@@ -191,19 +201,17 @@ import ServiceManagement
     }
 
     func checkForUpdates() async {
-        guard trustedBuild, !isPreview, !quitting, !updating else { return }
+        guard trustedBuild, !isPreview, !quitting, !updating,
+            updateSchedule.beginCheck()
+        else { return }
         do {
             availableUpdate = try await GitHubUpdate.latest(
                 currentVersion: LimitlessIdentity.version)
-            updateMessage = nil
-            updateCheckDelay = 21_600
+            updateSchedule.checked()
         } catch UpdateError.rateLimited(let until) {
-            updateCheckDelay = max(60, until.timeIntervalSinceNow)
-            updateMessage =
-                "GitHub's update limit was reached. Retrying at \(until.formatted(date: .omitted, time: .shortened))."
+            updateSchedule.failed(download: false, retryAfter: until)
         } catch {
-            updateCheckDelay = 900
-            updateMessage = "Update check: \(error.localizedDescription) Retrying in 15 min."
+            updateSchedule.failed(download: false)
         }
     }
 
@@ -215,8 +223,11 @@ import ServiceManagement
             updateMessage = "Stop the current sessions before updating."
             return
         }
+        guard updateSchedule.beginDownload() else {
+            updateMessage = "Update postponed. Please try again later."
+            return
+        }
         updating = true
-        automaticAttempt = availableUpdate.version
         updateMessage = "Downloading update…"
         var staged: GitHubUpdate.Staged?
         var launched = false
@@ -240,13 +251,19 @@ import ServiceManagement
             launched = true
             NSApp.terminate(nil)
         } catch {
+            if case UpdateError.rateLimited(let until) = error {
+                updateSchedule.failed(download: true, retryAfter: until)
+                updateMessage = "Update postponed. Please try again later."
+            } else {
+                updateSchedule.failed(download: true)
+                updateMessage = error.localizedDescription
+            }
             if removalComplete {
                 quitting = false
                 removalComplete = false
                 monitoring = nil
                 beginMonitoring()
             }
-            updateMessage = error.localizedDescription
         }
     }
 
@@ -546,6 +563,12 @@ import ServiceManagement
             else { throw ServiceError.restorationRequired }
             if !forUpdate {
                 removalStep = "Removing preferences…"
+                for provider in AgentSetup.providers {
+                    try AgentSetup.configure(
+                        provider, remove: true,
+                        resources: Bundle.main.bundleURL.appendingPathComponent(
+                            "Contents/Resources/limitless-skill"))
+                }
                 try Self.erasePreferences(
                     preferences, domain: LimitlessIdentity.application,
                     library: FileManager.default.url(
@@ -571,7 +594,6 @@ import ServiceManagement
                 } else {
                     connectionError = "Reconnect before retrying the update."
                 }
-                automaticAttempt = nil
                 message = "Update postponed until current sessions end."
                 return false
             }
