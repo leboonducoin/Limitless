@@ -17,6 +17,10 @@ struct SettingsView: View {
         return formatter
     }()
 
+    init(model: AppModel) {
+        self.model = model
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if model.showsPowerControls {
