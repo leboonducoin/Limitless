@@ -187,8 +187,10 @@ struct MenuPanel: View {
         }.controlSize(.large)
         if reduceTransparency || contrast == .increased {
             button.buttonStyle(.borderedProminent)
-        } else {
+        } else if #available(macOS 26, *) {
             button.buttonStyle(.glassProminent)
+        } else {
+            button.buttonStyle(.borderedProminent)
         }
     }
 

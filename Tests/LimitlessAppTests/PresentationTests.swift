@@ -3,6 +3,7 @@ import Carbon
 import Foundation
 import LimitlessCore
 import LimitlessSystem
+import ServiceManagement
 import Testing
 
 @testable import LimitlessApp
@@ -203,6 +204,32 @@ private func status(
         #expect(model.buildTrust == .untrusted)
         #expect(!model.trustedBuild && !model.canControl)
         #expect(model.status == nil && !model.removalComplete)
+    }
+
+    @Test @MainActor func helperApprovalEnablesLoginOnceWithoutOverridingLaterChoices() throws {
+        let suite = "Limitless-login-test-\(UUID().uuidString)"
+        let preferences = try #require(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        preferences.set(true, forKey: "enableLoginAfterHelperApproval")
+        let model = AppModel(preferences: preferences)
+        var registrations = 0
+        for status: SMAppService.Status in [.notRegistered, .requiresApproval, .notFound] {
+            try model.completeLoginSetup(helperStatus: status) { registrations += 1 }
+        }
+        #expect(registrations == 0)
+        let reopened = AppModel(preferences: preferences)
+        try reopened.completeLoginSetup(helperStatus: .enabled) { registrations += 1 }
+        try reopened.completeLoginSetup(helperStatus: .enabled) { registrations += 1 }
+        #expect(registrations == 1)
+        #expect(reopened.status == nil)
+        preferences.set(true, forKey: "enableLoginAfterHelperApproval")
+        #expect(throws: CocoaError.self) {
+            try reopened.completeLoginSetup(helperStatus: .enabled) {
+                throw CocoaError(.userCancelled)
+            }
+        }
+        try reopened.completeLoginSetup(helperStatus: .enabled) { registrations += 1 }
+        #expect(registrations == 1)
     }
 
     @Test @MainActor func previewCannotControlPowerOrAuthorizeAutomation() async {

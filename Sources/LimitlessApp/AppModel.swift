@@ -300,6 +300,16 @@ import ServiceManagement
             watchedProcesses = nil
             return
         }
+        do {
+            try completeLoginSetup(helperStatus: helperStatus) {
+                if loginStatus != .enabled && loginStatus != .requiresApproval {
+                    try SMAppService.mainApp.register()
+                }
+            }
+        } catch {
+            message = "Launch at login could not be enabled. Check Login Items & Extensions."
+        }
+        loginStatus = SMAppService.mainApp.status
         refreshing = true
         defer { refreshing = false }
         let currentRevision = revision
@@ -503,7 +513,10 @@ import ServiceManagement
     func registerHelper() async {
         guard trustedBuild, !isPreview, !busy, !removalComplete, let helper else { return }
         busy = true
-        do { try await helper.register() } catch {
+        do {
+            try await helper.register()
+            preferences.set(true, forKey: "enableLoginAfterHelperApproval")
+        } catch {
             message =
                 "The helper could not be enabled. Complete the macOS approval before retrying."
         }
@@ -514,6 +527,7 @@ import ServiceManagement
 
     func setLaunchAtLogin(_ enabled: Bool) async {
         guard trustedBuild, !isPreview, !busy, !removalComplete else { return }
+        preferences.removeObject(forKey: "enableLoginAfterHelperApproval")
         busy = true
         do {
             if enabled {
@@ -526,6 +540,16 @@ import ServiceManagement
         }
         loginStatus = SMAppService.mainApp.status
         busy = false
+    }
+
+    func completeLoginSetup(
+        helperStatus: SMAppService.Status, register: () throws -> Void
+    ) throws {
+        guard helperStatus == .enabled,
+            preferences.bool(forKey: "enableLoginAfterHelperApproval")
+        else { return }
+        preferences.removeObject(forKey: "enableLoginAfterHelperApproval")
+        try register()
     }
 
     func openLoginSettings() {

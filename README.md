@@ -5,10 +5,11 @@
 [![CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml)
 [![Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml)
 [![MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![macOS 26+](https://img.shields.io/badge/macOS-26%2B-111111.svg)](docs/distribution.md)
+[![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111111.svg)](docs/distribution.md)
 
 I made Limitless to keep my Mac awake while it works. A small, native macOS
-menu-bar app, written in Swift. Free, open source, no account needed.
+menu-bar app, written in Swift. Free and open source.
+I also added **Touch ID for sudo** because I was tired of typing my long password.
 
 <p align="center">
   <img src="docs/images/menu-preview.png" width="340" alt="Limitless on macOS: active keep-awake session, timer, power source and battery protection">
@@ -16,7 +17,7 @@ menu-bar app, written in Swift. Free, open source, no account needed.
 
 ## Install
 
-**Apple Silicon · macOS 26 or later**
+**Intel & Apple Silicon · macOS 14 or later**
 
 [GitHub Releases](https://github.com/leboonducoin/Limitless/releases) is the only
 download location. The first public archive has not been published yet.
@@ -24,6 +25,7 @@ download location. The first public archive has not been published yet.
 Once available: unzip **Limitless.app**, drag it to **Applications**, then open it.
 The icon appears in your menu bar. Click **Enable Limitless** and approve the
 macOS administrator prompt. Your password is never stored.
+Launch at login turns on with the helper; you can turn it off in the menu.
 
 On first opening, macOS may ask you to allow the app in **System Settings →
 Privacy & Security → Open Anyway**. [Apple’s instructions](https://support.apple.com/en-gb/102445).
@@ -36,7 +38,7 @@ Choose a duration and click **Keep awake**. The orange dot means it is active.
 - Choose battery, power adapter, or both. Reserve 20% battery by default.
 - Keep awake with the lid closed, without an external display on compatible Macs.
 - Let Codex, Claude, Cursor or Gemini keep your Mac awake during their tasks.
-- Enable launch at login and automatic updates if you want them.
+- Open automatically at login and enable automatic updates if you want them.
 - Optionally use Touch ID for sudo, with password fallback.
 
 Right-click the icon to **Quit** or **Uninstall**.

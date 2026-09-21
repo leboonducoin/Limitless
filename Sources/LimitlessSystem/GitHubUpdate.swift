@@ -120,7 +120,7 @@ public enum GitHubUpdate {
         guard try version(currentVersion).lexicographicallyPrecedes(version(candidate)) else {
             return nil
         }
-        let archive = "Limitless-\(candidate)-arm64.zip"
+        let archive = "Limitless-\(candidate)-universal.zip"
         let assets = response.assets.filter { $0.name == archive }
         guard assets.count == 1, let asset = assets.first,
             asset.size > 0, asset.size <= maximumArchiveSize,

@@ -14,7 +14,8 @@ separate preferences window. Content sets the height; long lists scroll.
 - Opaque backgrounds for Reduce Transparency/increased contrast.
 - Text and symbols accompany color. Controls have accessibility labels.
 
-Hide unavailable controls before helper approval. Keep launch at login independent.
+Hide unavailable controls before helper approval. Enable launch at login after helper
+activation, then respect the user's choice. Login never starts a keep-awake session.
 Hide power controls on desktops and the battery limit in adapter mode. Zero warns.
 Only process mode shows the session ceiling; wait for all selected PIDs.
 
@@ -27,3 +28,7 @@ Mac-wide scope before enabling or disabling a setting configured elsewhere.
 
 Native previews are inert. Check light/dark appearance, keyboard, VoiceOver,
 contrast and reduced motion before release. [Testing](testing.md).
+
+Keep the translucent native material on macOS 14 and later. Use Liquid Glass
+controls on macOS 26+, with standard controls on older versions. Accessibility
+settings take precedence over transparency.

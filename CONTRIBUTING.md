@@ -2,7 +2,7 @@
 
 Bug reports, small fixes and ideas are welcome. For a larger change, open an issue first.
 
-Use macOS 26+, Apple Silicon and Xcode 26.2 or later. Fork the repo, make a branch,
+Use a Mac with Xcode 26.2 or later. Fork the repo, make a branch,
 then run:
 
 ```sh
@@ -14,7 +14,8 @@ doc and explain the result in your pull request. For UI changes, include a nativ
 screenshot and check keyboard access.
 
 Use Swift and Apple APIs. Preserve administrator consent, signature checks and
-user limits. Never include credentials or private task contents.
+user limits. Support macOS 14+, Intel and Apple Silicon. Never include credentials
+or private task contents.
 
 [Architecture](docs/architecture.md) · [Testing](docs/testing.md) ·
 [Distribution](docs/distribution.md) · [Code of conduct](CODE_OF_CONDUCT.md)

@@ -13,7 +13,7 @@ fallback and never grants sudo rights to users who do not already have them.
 
 There is no analytics or task-content collection. Update requests go to GitHub;
 downloaded apps must pass integrity and publisher-signature checks. macOS opening
-approvals remain in place, including for non-notarized builds.
+approvals remain in place.
 
 Updates are installed only while idle. Uninstall restores sleep before removing
 the helper. If restoration fails, the app keeps the information needed to retry.

@@ -10,7 +10,7 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: App version or commit, macOS version/build, Mac model/chip, and installation source or signing channel.
+      description: App version, macOS version, Mac model/chip, and where you downloaded the app.
       placeholder: Include power source and external-display/lid state only when relevant. Do not include a serial number.
     validations:
       required: true

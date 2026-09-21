@@ -77,3 +77,4 @@ graphify-out/
 *.xcresult
 AGENTS.md
 CODEX_CHECKPOINT.md
+.private/

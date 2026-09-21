@@ -57,7 +57,7 @@ func main() throws {
                 "CFBundleIdentifier": identifier, "CFBundleExecutable": "Probe",
                 "CFBundlePackageType": package,
                 "CFBundleVersion": "1", "CFBundleShortVersionString": "0.1.0",
-                "LSMinimumSystemVersion": "26.0",
+                "LSMinimumSystemVersion": "14.0",
                 "LimitlessProbeCase": mode,
             ]
             if package == "XPC!" {

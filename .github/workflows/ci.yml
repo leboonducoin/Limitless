@@ -51,3 +51,44 @@ jobs:
           LIMITLESS_CONFIGURATION: release
           LIMITLESS_OUTPUT_DIR: ${{ runner.temp }}/limitless-community-bundle
         run: swift Tools/ProjectTool.swift community-bundle
+      - name: Archive the universal CLI for compatibility tests
+        if: matrix.check == 'check'
+        run: ditto -c -k --keepParent "$RUNNER_TEMP/limitless-community-bundle/Limitless.app/Contents/MacOS/limitless" "$RUNNER_TEMP/limitless-cli.zip"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: matrix.check == 'check'
+        with:
+          name: compatibility-cli
+          path: ${{ runner.temp }}/limitless-cli.zip
+          retention-days: 1
+          if-no-files-found: error
+
+  compatibility:
+    name: Compatibility / ${{ matrix.os }}
+    needs: swift
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15-intel]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: compatibility-cli
+          path: ${{ runner.temp }}/compatibility
+      - name: Run the shipped CLI on older macOS
+        working-directory: ${{ runner.temp }}/compatibility
+        run: |
+          ditto -x -k limitless-cli.zip .
+          ./limitless --version
+          ./limitless --help
+      - name: Run the full checks on Intel
+        if: matrix.os == 'macos-15-intel'
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+        run: swift Tools/ProjectTool.swift check

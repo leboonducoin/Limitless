@@ -162,7 +162,8 @@ func embeddedPropertyList(_ data: Data, section name: String) throws -> [String:
     let header = try read(0, as: mach_header_64.self)
     var offset = MemoryLayout<mach_header_64>.size
     try require(
-        header.magic == MH_MAGIC_64 && header.cputype == CPU_TYPE_ARM64
+        header.magic == MH_MAGIC_64
+            && [CPU_TYPE_ARM64, CPU_TYPE_X86_64].contains(header.cputype)
             && Int(header.sizeofcmds) <= data.count - offset
             && header.ncmds <= header.sizeofcmds / UInt32(MemoryLayout<load_command>.size),
         "Expected bounded load commands in an ARM64 Mach-O executable.")
@@ -214,14 +215,34 @@ func verifyCommunityMetadata(_ app: URL, certificate: String?) throws {
     let expected = try communityMetadata(info: info, certificate: certificate)
     let helper = contents.appendingPathComponent(
         "Library/LaunchServices/io.github.leboonducoin.Limitless.helper")
-    let data = try Data(contentsOf: helper, options: .mappedIfSafe)
     try require(
-        NSDictionary(dictionary: info).isEqual(to: expected.app)
-            && NSDictionary(dictionary: try embeddedPropertyList(data, section: "__info_plist"))
-                .isEqual(to: expected.helper)
-            && NSDictionary(dictionary: try embeddedPropertyList(data, section: "__launchd_plist"))
-                .isEqual(to: expected.daemon),
+        NSDictionary(dictionary: info).isEqual(to: expected.app),
         "App and embedded helper metadata disagree with the signing identity.")
+    let architectures = try run("/usr/bin/lipo", ["-archs", helper.path], capture: true)
+        .split(separator: " ").map(String.init)
+    try require(
+        !architectures.isEmpty && Set(architectures).isSubset(of: ["arm64", "x86_64"]),
+        "Unsupported helper architecture.")
+    let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: temporary) }
+    for architecture in architectures {
+        var executable = helper
+        if architectures.count > 1 {
+            executable = temporary.appendingPathComponent(architecture)
+            _ = try run(
+                "/usr/bin/lipo", [helper.path, "-thin", architecture, "-output", executable.path])
+        }
+        let data = try Data(contentsOf: executable, options: .mappedIfSafe)
+        try require(
+            NSDictionary(dictionary: try embeddedPropertyList(data, section: "__info_plist"))
+                .isEqual(to: expected.helper)
+                && NSDictionary(
+                    dictionary: try embeddedPropertyList(data, section: "__launchd_plist")
+                )
+                .isEqual(to: expected.daemon),
+            "Embedded helper metadata disagrees for \(architecture).")
+    }
     var code: SecStaticCode?
     var information: CFDictionary?
     try require(
@@ -320,16 +341,9 @@ func verifyRelease(_ app: URL, identity: ReleaseIdentity, notarized: Bool) throw
         matches(version, "(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)")
             && info["CFBundleIdentifier"] as? String == identifier
             && info["CFBundleExecutable"] as? String == "LimitlessApp"
-            && info["LSMinimumSystemVersion"] as? String == "26.0",
+            && info["LSMinimumSystemVersion"] as? String == "14.0",
         "Unexpected release bundle identity, version or macOS minimum.")
-    for relative in [
-        "MacOS/LimitlessApp", "MacOS/limitless", identity.helperPath,
-    ] {
-        let architectures = try run(
-            "/usr/bin/lipo", ["-archs", contents.appendingPathComponent(relative).path],
-            capture: true)
-        try require(architectures == "arm64", "This release recipe requires arm64-only binaries.")
-    }
+    try verifyCompatibility(contents, helperPath: identity.helperPath)
     try require(
         info["LimitlessHelperInstallation"] as? String == identity.installationKind,
         "Release channel and installation metadata disagree.")
@@ -349,6 +363,28 @@ func verifyRelease(_ app: URL, identity: ReleaseIdentity, notarized: Bool) throw
         _ = try run("/usr/sbin/spctl", ["--assess", "--type", "execute", "--verbose=2", app.path])
     }
     return (version, record)
+}
+
+func verifyCompatibility(_ contents: URL, helperPath: String) throws {
+    for relative in [
+        "MacOS/LimitlessApp", "MacOS/limitless", helperPath,
+    ] {
+        let executable = contents.appendingPathComponent(relative)
+        let architectures = try run(
+            "/usr/bin/lipo", ["-archs", executable.path],
+            capture: true)
+        try require(
+            Set(architectures.split(separator: " ")) == ["arm64", "x86_64"],
+            "Releases require both Apple Silicon and Intel binaries.")
+        let build = try run(
+            "/usr/bin/xcrun", ["vtool", "-show-build", executable.path], capture: true)
+        let minimumVersions = build.split(separator: "\n").map {
+            $0.split(whereSeparator: \.isWhitespace)
+        }.filter { $0.first == "minos" }
+        try require(
+            minimumVersions.count == 2 && minimumVersions.allSatisfy { $0 == ["minos", "14.0"] },
+            "Both architectures must target macOS 14.0.")
+    }
 }
 
 func archive(_ app: URL, to destination: URL) throws {
@@ -524,7 +560,7 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
             !FileManager.default.fileExists(atPath: output.path), "Output directory already exists."
         )
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
-        let zip = output.appendingPathComponent("Limitless-\(version)-arm64.zip")
+        let zip = output.appendingPathComponent("Limitless-\(version)-universal.zip")
         try archive(app, to: zip)
         let extracted = FileManager.default.temporaryDirectory.appendingPathComponent(
             "Limitless-verify-\(UUID().uuidString)")
@@ -659,12 +695,17 @@ do {
             }
             buildEnvironment["LIMITLESS_HELPER_METADATA"] = directory.path
         }
+        let architectures =
+            info["LimitlessPreviewState"] == nil
+            ? ["--arch", "arm64", "--arch", "x86_64"] : []
         _ = try run(
-            "/usr/bin/xcrun", ["swift", "build", "-c", configuration] + buildPath + compilerFlags,
+            "/usr/bin/xcrun",
+            ["swift", "build", "-c", configuration] + architectures + buildPath + compilerFlags,
             environment: buildEnvironment)
         let binaryPath = try run(
             "/usr/bin/xcrun",
-            ["swift", "build", "-c", configuration, "--show-bin-path"] + buildPath + compilerFlags,
+            ["swift", "build", "-c", configuration, "--show-bin-path"] + architectures + buildPath
+                + compilerFlags,
             capture: true, environment: buildEnvironment)
         let version = info["CFBundleShortVersionString"] as? String ?? ""
         if preview {
@@ -783,6 +824,9 @@ do {
                 + (community
                     ? []
                     : [contents.appendingPathComponent("Library/LaunchDaemons/" + daemon).path]))
+        if info["LimitlessPreviewState"] == nil {
+            try verifyCompatibility(contents, helperPath: identity.helperPath)
+        }
         if signing {
             _ = try verifyRelease(app, identity: identity, notarized: false)
             print(

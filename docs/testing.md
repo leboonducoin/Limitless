@@ -1,76 +1,68 @@
 # Testing
 
+## Check a code change
+
+On a Mac with Xcode 26.2 or later, run this from the repository:
+
 ```sh
 swift Tools/ProjectTool.swift check
+```
+
+It checks formatting, builds the app and runs the tests. Success ends with
+**All current local checks passed.** It installs nothing and does not change
+sleep, login or sudo settings.
+
+For memory and concurrency checks, also run:
+
+```sh
 swift Tools/ProjectTool.swift asan
 swift Tools/ProjectTool.swift tsan
 ```
 
-`check` validates formatting, release inputs, integration-probe compilation,
-Release build and tests. It never installs a helper or changes power or sudo settings.
-Touch ID tests use temporary PAM fixtures, including existing settings, unsafe
-files, unsupported policies and removal. Real fingerprint/password trials are manual.
-For a synced Desktop, prefix the command with
-`env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build`. Use separate paths for
-simultaneous builds. Full Xcode is used in CI; Command Line Tools may emit missing
-Xcode search-path warnings.
+If the repository is in an iCloud-synced folder, keep build files outside it:
 
-## CI
+```sh
+env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
+```
 
-Pushes to main and pull requests run tests, ASan, TSan, Swift/Actions CodeQL,
-actionlint, zizmor and Gitleaks. PRs also run dependency review. Actions are pinned;
-signing secrets stay outside PR jobs. Baseline/CodeQL use Xcode 26.2, sanitizers
-26.6 on macos-26. The [certificate-selector exception](architecture.md#apple-certificate-selector)
-does not disable its CodeQL query.
-
-See the exact commit’s [CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml)
-and [Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml) results.
-Simulated tests and actual Mac trials are separate evidence.
-
-## Native previews
+## Preview the interface
 
 ```sh
 swift Tools/ProjectTool.swift preview
 ```
 
-Creates an inert app and a full-resolution PNG in a new temporary directory.
-`bundle` with `LIMITLESS_PREVIEW_STATE` supports active, inactive, process, setup,
-desktop, external, battery-unknown and touch-id-external fixtures. See [distribution](distribution.md).
-Inspect native controls, keyboard focus, VoiceOver, contrast, motion and logs.
-A screenshot does not validate power behavior.
-
-### Settings keyboard qualification
-
-Use the current keyboard layout and number locale, not US keycodes. Read applied
-limits back through authenticated helper status. Keep observation separate from
-operator-authorized UI mutations.
-
-## Signed probes
-
-With an existing, authorized certificate and a new output directory:
+Open the **Limitless.app** path printed at the end. This is an inert preview,
+with a PNG beside it. It cannot keep the Mac awake or install the helper.
+For the setup screen instead:
 
 ```sh
-swift Tests/SignedXPC/Run.swift CERT_SHA1 NEW_OUTPUT_DIRECTORY
-swift Tests/SignedUpdate/Run.swift CERT_SHA1 NEW_OUTPUT_DIRECTORY
+env LIMITLESS_PREVIEW_STATE=setup swift Tools/ProjectTool.swift bundle
 ```
 
-These use temporary signed fixtures, without privileged installation or power
-changes. Ordinary checks only compile them. Read-only hardware observation is
-opt-in through `LIMITLESS_READ_ONLY_INTEGRATION=1`.
+Other previews: `inactive`, `process`, `desktop`, `external`, `battery-unknown`
+and `touch-id-external`. Check light/dark mode, Tab navigation, VoiceOver and
+Reduce Motion/Transparency. Keyboard input must follow the Mac's layout and locale.
 
-## Manual helper restart observer
+## Test the installed app
 
-Use a verified test installation and keep its matching app open.
+Use a real installation, not the preview. Record the app version, Mac model,
+macOS version and any steps that fail.
 
-1. Start an operator-authorized session of at least five minutes. Confirm active,
-   disabled, owned status.
-2. Run `swift Tests/NativeMac/ObserveHelperRestart.swift --observe-armed-restart`.
-3. After `READY`, the operator interrupts the named helper within 60 seconds,
-   using `sudo /bin/launchctl kill SIGKILL system/io.github.leboonducoin.Limitless.helper`.
-4. Do not rearm. Wait for the new helper PID, ten seconds of allowed sleep, zero
-   sessions and the authenticated `interrupted` fault. Then use normal cleanup.
+- Enable the helper; verify launch at login turns on. Turn it off and reopen the
+  app: it must stay off. Login must never start a session.
+- Start a short timer, then try Stop, a date and multiple PIDs.
+- On a laptop, test lid open/closed, switching power and the battery limit.
+- Run two AI tasks. The last one ending stops their hold; manual sessions stay yours.
+- Try Touch ID, Cancel and password fallback for sudo.
+- Check updates while idle, then uninstall. The app should close and its integrations disappear.
 
-The observer never sends signals or starts a session. Unknown readings/timeouts
-fail. If restoration is unconfirmed, preserve the app and journal and retry
-through the app. CI never runs this trial. Other Mac checks are in the
-[acceptance checklist](requirements.md).
+For long runs, keep the Mac ventilated and leave battery protection enabled.
+If stopping or uninstalling fails, keep the app and report the error before retrying.
+
+## Before merging
+
+Both [CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml) and
+[Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml)
+must pass for the final commit. They cover tests, sanitizers, CodeQL, workflow
+linting and secret scanning. Pull requests also check dependencies.
+Automated results do not replace the installed-app checks above.

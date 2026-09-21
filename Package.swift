@@ -17,7 +17,7 @@ let helperLinkerSettings: [LinkerSetting] =
 
 let package = Package(
     name: "Limitless",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "LimitlessCore", targets: ["LimitlessCore"]),
         .library(name: "LimitlessSystem", targets: ["LimitlessSystem"]),

@@ -90,9 +90,9 @@ private func releaseData(
     url: String? = nil, size: Int = 100, prerelease: Bool = false
 ) throws -> Data {
     var asset: [String: Any] = [
-        "name": "Limitless-0.2.0-arm64.zip", "size": size,
+        "name": "Limitless-0.2.0-universal.zip", "size": size,
         "browser_download_url": url
-            ?? "https://github.com/leboonducoin/Limitless/releases/download/v0.2.0/Limitless-0.2.0-arm64.zip",
+            ?? "https://github.com/leboonducoin/Limitless/releases/download/v0.2.0/Limitless-0.2.0-universal.zip",
     ]
     if let digest { asset["digest"] = digest }
     return try JSONSerialization.data(withJSONObject: [
