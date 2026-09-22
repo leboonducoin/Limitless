@@ -5,7 +5,8 @@ import Testing
 @testable import LimitlessSystem
 
 private func withInstalledFiles(
-    includesProgram: Bool = false, _ body: (URL, URL, URL) throws -> Void
+    includesProgram: Bool = false, kind: InstalledHelperKind = .power,
+    _ body: (URL, URL, URL) throws -> Void
 ) throws {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("LimitlessInstalledFilesTest-\(UUID().uuidString)")
@@ -16,20 +17,18 @@ private func withInstalledFiles(
             attributes: [.posixPermissions: 0o700])
     }
     let helper = root.appendingPathComponent("Library/PrivilegedHelperTools/")
-        .appendingPathComponent(LimitlessIdentity.helper)
+        .appendingPathComponent(kind.identifier)
     let daemon = root.appendingPathComponent("Library/LaunchDaemons/")
-        .appendingPathComponent(LimitlessIdentity.daemonPlist)
+        .appendingPathComponent(kind.identifier + ".plist")
     try Data("test helper".utf8).write(to: helper)
     #expect(chmod(helper.path, 0o755) == 0)
     var plist: [String: Any] = [
-        "Label": LimitlessIdentity.helper,
+        "Label": kind.identifier,
         "UserName": "root",
-        "ProgramArguments": [InstalledHelperFiles.executablePath],
-        "MachServices": [
-            LimitlessIdentity.controlService: true, LimitlessIdentity.taskService: true,
-        ],
+        "ProgramArguments": [kind.executablePath],
+        "MachServices": Dictionary(uniqueKeysWithValues: kind.services.map { ($0, true) }),
     ]
-    if includesProgram { plist["Program"] = InstalledHelperFiles.executablePath }
+    if includesProgram { plist["Program"] = kind.executablePath }
     try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         .write(to: daemon)
     #expect(chmod(daemon.path, 0o644) == 0)
@@ -42,12 +41,15 @@ private func verifyTestHelper(_ url: URL) throws {
     }
 }
 
-@Test(arguments: [false, true])
-func installedFileRemovalIsIdempotentAndPreservesUnrelatedFiles(_ includesProgram: Bool) throws {
-    try withInstalledFiles(includesProgram: includesProgram) { root, helper, daemon in
+@Test(arguments: [false, true], [InstalledHelperKind.power, .sudo])
+func installedFileRemovalIsIdempotentAndPreservesUnrelatedFiles(
+    _ includesProgram: Bool, kind: InstalledHelperKind
+) throws {
+    try withInstalledFiles(includesProgram: includesProgram, kind: kind) { root, helper, daemon in
         let unrelated = daemon.deletingLastPathComponent().appendingPathComponent("other.plist")
         try Data("preserve".utf8).write(to: unrelated)
-        let files = try InstalledHelperFiles(testRoot: root, verifyHelper: verifyTestHelper)
+        let files = try InstalledHelperFiles(
+            testRoot: root, kind: kind, verifyHelper: verifyTestHelper)
         try files.remove()
         try files.remove()
         #expect(!FileManager.default.fileExists(atPath: helper.path))

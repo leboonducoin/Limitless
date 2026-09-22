@@ -53,6 +53,7 @@ final class HelperRuntime {
     func request(_ data: Data, owner: UUID) -> ServiceReply {
         do {
             let request = try ServiceWire.decodeRequest(data)
+            if case .setSudoTouchID = request.operation { throw ServiceError.unauthorized }
             _ = try reconcile(owner: owner)
             if controller.fault != nil {
                 switch request.operation {
@@ -63,8 +64,6 @@ final class HelperRuntime {
             let started = try sessions.apply(
                 request.operation, owner: owner, now: SystemClock.now())
             switch request.operation {
-            case .setSudoTouchID(let enabled):
-                try SudoTouchID.setEnabled(enabled)
             case .installCLI:
                 guard let user = sessions.consoleUser else { throw ServiceError.unauthorized }
                 try InstalledCLI.install(identity: identity, user: user)
@@ -78,7 +77,6 @@ final class HelperRuntime {
                 guard status.canRemoveService, !backend.hasIdleAssertion
                 else { throw ServiceError.restorationRequired }
                 if request.operation == .prepareRemoval, let user = sessions.consoleUser {
-                    try SudoTouchID.removeOwnedSetting()
                     try InstalledCLI.remove(user: user)
                 }
                 if installedFiles == nil {

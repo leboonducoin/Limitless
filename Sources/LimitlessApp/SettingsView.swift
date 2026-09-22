@@ -135,7 +135,7 @@ struct SettingsView: View {
                         })
                 )
                 .disabled(
-                    (!model.canControl && !model.isPreview) || model.busy
+                    (!model.canControl && !model.isPreview) || model.busy || model.sudoTouchIDBusy
                         || model.status?.sudoTouchID == .unavailable
                 )
                 .help("Use Touch ID for sudo commands on this Mac.")
@@ -154,9 +154,25 @@ struct SettingsView: View {
                 } message: { enabled in
                     Text(
                         enabled
-                            ? "Applies to sudo commands across this Mac. Your password remains available. Limitless’s administrator prompt is unchanged."
+                            ? "Applies to sudo commands across this Mac. Your password remains available."
                             : "This setting was enabled outside Limitless. Sudo commands across this Mac will require your password instead."
                     )
+                }
+            }
+            if let message = model.sudoTouchIDMessage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label {
+                        Text(message).foregroundStyle(.secondary)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                    }
+                    .font(.caption).fixedSize(horizontal: false, vertical: true)
+                    if model.sudoTouchIDNeedsPermission {
+                        Button("Open Full Disk Access") { model.openPrivacySettings() }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color(red: 0.72, green: 0.32, blue: 0))
+                            .disabled(model.busy)
+                    }
                 }
             }
             Toggle(
@@ -178,7 +194,7 @@ struct SettingsView: View {
                     if let update = model.availableUpdate, !model.automaticUpdates {
                         Button("Update") { model.requestUpdate() }
                             .help("Install Limitless \(update.version)")
-                            .disabled(model.updating || model.busy)
+                            .disabled(model.updating || model.busy || model.sudoTouchIDBusy)
                     }
                 }
                 if let message = model.updateMessage {

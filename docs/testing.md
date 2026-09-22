@@ -33,6 +33,7 @@ swift Tools/ProjectTool.swift preview
 
 Open the **Limitless.app** path printed at the end. This is an inert preview,
 with a PNG beside it. It cannot keep the Mac awake or install the helper.
+Previews use a separate app identity so they do not replace Limitless in macOS settings.
 For the setup screen instead:
 
 ```sh
@@ -56,9 +57,16 @@ macOS version and any steps that fail.
   Letters are refused; 81 becomes 80. A blocked start or battery cutoff explains why.
 - Run two AI tasks. The last one ending stops their hold; manual sessions stay yours.
 - Try Touch ID, Cancel and password fallback for sudo.
-  Without Full Disk Access, a refused change must explain the missing permission
-  and keep the app responsive. Grant access manually and retry; no automatic retry.
+  Its setup component uses the Limitless icon and **Limitless — Touch ID for sudo**
+  name. Full Disk Access can list its helper as **io.github.leboonducoin.Limitless.sudo.helper**.
+  Keep access off for the main app and power helper.
+  A refused change must show a red warning and orange button below the sudo switch,
+  without interrupting an awake session. The button must open only System Settings.
+  Enable the sudo helper's entry and retry; no automatic retry. Revoke access and
+  verify that a later change fails.
 - Check updates while idle, then uninstall. The app should close and its integrations disappear.
+  Cancel the sudo component's administrator prompt, retry removal, and verify both
+  helpers disappear. An existing external sudo setting must remain unchanged.
 
 For long runs, keep the Mac ventilated and leave battery protection enabled.
 If stopping or uninstalling fails, keep the app and report the error before retrying.

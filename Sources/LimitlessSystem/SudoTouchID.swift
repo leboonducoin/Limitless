@@ -3,6 +3,13 @@ import Foundation
 import LimitlessCore
 
 public enum SudoTouchID {
+    public static func validateOperation(_ operation: ServiceOperation) throws {
+        switch operation {
+        case .status, .setSudoTouchID, .prepareRemoval, .prepareUpdate, .finishRemoval: break
+        default: throw ServiceError.unauthorized
+        }
+    }
+
     private static let rule = "auth       sufficient     pam_tid.so\n"
     private static let marker = "# Limitless Touch ID for sudo"
     private static let existingPrefix = marker + "\n" + rule + "# End Limitless\n"
@@ -10,6 +17,10 @@ public enum SudoTouchID {
 
     public static func status() -> SudoTouchIDState {
         (try? access(change: nil)) ?? .unavailable
+    }
+
+    public static func requiresCleanup() throws -> Bool {
+        try access(change: nil, checkingOwnership: true) == .enabled
     }
 
     public static func setEnabled(_ enabled: Bool) throws {
@@ -89,7 +100,7 @@ public enum SudoTouchID {
     }
 
     static func access(
-        change: Bool?, removeExternal: Bool = false,
+        change: Bool?, removeExternal: Bool = false, checkingOwnership: Bool = false,
         root: URL = URL(fileURLWithPath: "/"), owner: uid_t = 0
     )
         throws -> SudoTouchIDState
@@ -142,6 +153,10 @@ public enum SudoTouchID {
         }
         let sudo = try read("sudo")
         let local = try read("sudo_local")
+        if checkingOwnership {
+            let cleaned = try transform(sudo: sudo?.text ?? "", local: local?.text, enabled: false)
+            return cleaned.contents == local?.text ? .disabled : .enabled
+        }
         let result = try transform(
             sudo: sudo?.text ?? "", local: local?.text, enabled: change,
             removeExternal: removeExternal)

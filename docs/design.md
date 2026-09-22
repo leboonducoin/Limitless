@@ -19,7 +19,7 @@ activation, then respect the user's choice. Login never starts a keep-awake sess
 Hide power controls on desktops and the battery limit in adapter mode. Zero warns.
 Battery limit accepts digits only, with the one-percent arrows beside the field.
 Values above 80 become 80. Return or leaving the field applies it.
-Explain a blocked start or battery cutoff beside the session controls.
+Explain a blocked start or battery cutoff beside the session controls, with a red warning symbol.
 Only process mode shows the session ceiling; wait for all selected PIDs.
 
 CLI opt-in is remembered without restarting a session. Updates are opt-in and
@@ -28,7 +28,9 @@ Uninstall shows progress and keeps a retryable error if cleanup fails.
 
 Touch ID for sudo appears on supported Macs after helper approval. Confirm its
 Mac-wide scope before enabling or disabling a setting configured elsewhere.
-If macOS denies the write, show a short Full Disk Access hint and a settings button.
+Show Touch ID errors directly below its toggle, with a red warning symbol.
+Permission refusals name the sudo helper's entry and include an orange Full Disk
+Access button. It opens only System Settings.
 Keep the observed toggle state and the helper connection.
 
 Native previews are inert. Check light/dark appearance, keyboard, VoiceOver,

@@ -83,10 +83,6 @@ struct MenuPanel: View {
             if let message = model.message {
                 Text(message).font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if model.sudoTouchIDNeedsPermission {
-                    Button("Open Full Disk Access") { model.openPrivacySettings() }
-                        .disabled(model.busy)
-                }
             }
         }.padding(20)
     }
@@ -180,9 +176,12 @@ struct MenuPanel: View {
                 .scrollBounceBehavior(.basedOnSize)
             }
             if let notice = model.batteryNotice {
-                Label(notice, systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Label {
+                    Text(notice).foregroundStyle(.secondary)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                }
+                .font(.caption).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
