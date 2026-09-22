@@ -154,7 +154,7 @@ struct SettingsView: View {
                 } message: { enabled in
                     Text(
                         enabled
-                            ? "Applies to sudo commands across this Mac. Your password remains available. Limitless’s administrator prompt is unchanged."
+                            ? "Applies to sudo commands across this Mac. Your password remains available."
                             : "This setting was enabled outside Limitless. Sudo commands across this Mac will require your password instead."
                     )
                 }
