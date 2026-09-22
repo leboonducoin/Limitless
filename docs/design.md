@@ -7,7 +7,7 @@ separate preferences window. Content sets the height; long lists scroll.
 - Standard square menu-bar item: 21-point loop, 5-point orange dot below/right.
 - Small footer: version, blue author link, MIT and GitHub.
 - Immediate settings, one Stop button, outside-click dismissal.
-- Right-click Quit/Uninstall; red destructive confirmation.
+- Right-click Quit/Uninstall follows the app's light/dark appearance; red destructive confirmation.
 - Timer and remaining PIDs refresh each second without animation.
 - Native opening motion; immediate keyboard and Reduce Motion opening.
 - No selected control on opening; Tab keeps its native focus indicator.
