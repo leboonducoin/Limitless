@@ -428,7 +428,7 @@ import ServiceManagement
     var sudoTouchIDMessage: String? {
         switch sudoTouchIDError {
         case .sudoTouchIDPermissionDenied:
-            "Allow Limitless — Touch ID for sudo in Full Disk Access, then try again."
+            "In Full Disk Access, enable the entry ending in “Limitless.sudo.helper”, then try again."
         case .sudoTouchIDFailed:
             "Touch ID could not be changed. Check your sudo configuration before retrying."
         default: nil
@@ -605,9 +605,6 @@ import ServiceManagement
     func openPrivacySettings() {
         guard !isPreview else { return }
         let workspace = NSWorkspace.shared
-        workspace.activateFileViewerSelecting([
-            Bundle.main.bundleURL.appendingPathComponent(LimitlessIdentity.sudoBundlePath)
-        ])
         if workspace.open(
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
         ) {

@@ -57,11 +57,13 @@ macOS version and any steps that fail.
   Letters are refused; 81 becomes 80. A blocked start or battery cutoff explains why.
 - Run two AI tasks. The last one ending stops their hold; manual sessions stay yours.
 - Try Touch ID, Cancel and password fallback for sudo.
-  Its separate component must show the Limitless icon and **Limitless — Touch ID
-  for sudo** name. Keep Full Disk Access off for the main app and power helper.
+  Its setup component uses the Limitless icon and **Limitless — Touch ID for sudo**
+  name. Full Disk Access can list its helper as **io.github.leboonducoin.Limitless.sudo.helper**.
+  Keep access off for the main app and power helper.
   A refused change must show a red warning and orange button below the sudo switch,
-  without interrupting an awake session. Grant access only to **Limitless Sudo.app**
-  and retry; no automatic retry. Revoke access and verify that a later change fails.
+  without interrupting an awake session. The button must open only System Settings.
+  Enable the sudo helper's entry and retry; no automatic retry. Revoke access and
+  verify that a later change fails.
 - Check updates while idle, then uninstall. The app should close and its integrations disappear.
   Cancel the sudo component's administrator prompt, retry removal, and verify both
   helpers disappear. An existing external sudo setting must remain unchanged.

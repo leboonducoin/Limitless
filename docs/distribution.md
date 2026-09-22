@@ -23,12 +23,12 @@ prompt. Remote sessions may still need a password.
 
 The first change installs a separate **Limitless — Touch ID for sudo** component,
 with its own administrator approval. If macOS blocks the change, click **Open Full
-Disk Access**. It opens Settings and reveals **Limitless Sudo.app** in Finder:
-add that component to the list, enable it and retry the toggle.
+Disk Access**. In Settings, enable the entry ending in **Limitless.sudo.helper**,
+then return to Limitless and retry the toggle.
 
-The main app and sleep helper do not need Full Disk Access. You can revoke the
-sudo component's access afterward; changing Touch ID or removing its rule needs
-it again. This remains a broad macOS permission, held by the separate component.
+Keep the main app and sleep helper disabled in that list. You can revoke the sudo
+helper's access afterward; changing Touch ID or removing its rule needs it again.
+This remains a broad macOS permission, held by the separate sudo helper.
 
 ## Updates and removal
 

@@ -286,7 +286,8 @@ private func status(
         #expect(model.sudoTouchIDNeedsPermission)
         #expect(
             model.sudoTouchIDMessage
-                == "Allow Limitless — Touch ID for sudo in Full Disk Access, then try again.")
+                == "In Full Disk Access, enable the entry ending in “Limitless.sudo.helper”, then try again."
+        )
         #expect(model.message == nil)
         #expect(model.status == before && !model.busy && model.connectionError == nil)
         model.openPrivacySettings()

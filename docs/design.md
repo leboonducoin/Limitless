@@ -29,7 +29,8 @@ Uninstall shows progress and keeps a retryable error if cleanup fails.
 Touch ID for sudo appears on supported Macs after helper approval. Confirm its
 Mac-wide scope before enabling or disabling a setting configured elsewhere.
 Show Touch ID errors directly below its toggle, with a red warning symbol.
-Permission refusals include an orange Full Disk Access button.
+Permission refusals name the sudo helper's entry and include an orange Full Disk
+Access button. It opens only System Settings.
 Keep the observed toggle state and the helper connection.
 
 Native previews are inert. Check light/dark appearance, keyboard, VoiceOver,
