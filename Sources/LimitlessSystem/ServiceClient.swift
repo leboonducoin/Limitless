@@ -7,17 +7,21 @@ public actor ServiceClient {
     private var connection: NSXPCConnection { lifetime.connection }
     private var closed = false
 
-    public init(role: ClientRole) async throws {
+    public init(role: ClientRole, sudo: Bool = false) async throws {
+        guard !sudo || role == .application else { throw ServiceError.unauthorized }
         let isApp = role == .application
         let identity = try await SignedIdentity.current(
             expectedIdentifier:
                 isApp ? LimitlessIdentity.application : LimitlessIdentity.commandLine)
         let connection = NSXPCConnection(
             machServiceName:
-                isApp ? LimitlessIdentity.controlService : LimitlessIdentity.taskService,
+                sudo
+                ? LimitlessIdentity.sudoService
+                : (isApp ? LimitlessIdentity.controlService : LimitlessIdentity.taskService),
             options: .privileged)
         connection.setCodeSigningRequirement(
-            try identity.requirement(for: LimitlessIdentity.helper))
+            try identity.requirement(
+                for: sudo ? LimitlessIdentity.sudoHelper : LimitlessIdentity.helper))
         connection.remoteObjectInterface = NSXPCInterface(with: LimitlessXPC.self)
         connection.interruptionHandler = { [weak connection] in connection?.invalidate() }
         lifetime = ConnectionLifetime(connection)

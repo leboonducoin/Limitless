@@ -108,15 +108,16 @@ func certificateRequirement(identifier: String, certificate: String) throws -> S
         [
             "io.github.leboonducoin.Limitless", "io.github.leboonducoin.Limitless.cli",
             "io.github.leboonducoin.Limitless.helper",
+            "io.github.leboonducoin.Limitless.sudo", "io.github.leboonducoin.Limitless.sudo.helper",
         ].contains(identifier)
             && matches(certificate, "[A-Fa-f0-9]{40}"), "Invalid certificate identity.")
     return "identifier \"\(identifier)\" and certificate leaf = H\"\(certificate.lowercased())\""
 }
 
-func communityMetadata(info: [String: Any], certificate: String?) throws
+func communityMetadata(info: [String: Any], certificate: String?, sudo: Bool = false) throws
     -> (app: [String: Any], helper: [String: Any], daemon: [String: Any])
 {
-    let identifier = "io.github.leboonducoin.Limitless"
+    let identifier = "io.github.leboonducoin.Limitless" + (sudo ? ".sudo" : "")
     guard let version = info["CFBundleShortVersionString"] as? String,
         let build = info["CFBundleVersion"] as? String
     else { throw CocoaError(.coderValueNotFound) }
@@ -136,11 +137,18 @@ func communityMetadata(info: [String: Any], certificate: String?) throws
     app["LimitlessHelperInstallation"] = "blessed"
     app["SMPrivilegedExecutables"] = [identifier + ".helper": helperRequirement]
     let helper: [String: Any] = [
-        "CFBundleIdentifier": identifier + ".helper", "CFBundleName": "Limitless Helper",
+        "CFBundleIdentifier": identifier + ".helper",
+        "CFBundleName": sudo ? "Limitless — Touch ID for sudo" : "Limitless Helper",
         "CFBundleVersion": build, "CFBundleShortVersionString": version,
         "SMAuthorizedClients": [appRequirement],
     ]
-    var daemon = try propertyList(URL(fileURLWithPath: "Packaging/" + identifier + ".helper.plist"))
+    var daemon =
+        sudo
+        ? [
+            "Label": identifier + ".helper", "UserName": "root",
+            "MachServices": [identifier + ".control": true],
+        ]
+        : try propertyList(URL(fileURLWithPath: "Packaging/" + identifier + ".helper.plist"))
     daemon.removeValue(forKey: "BundleProgram")
     daemon.removeValue(forKey: "ProgramArguments")
     try require(
@@ -209,12 +217,13 @@ func embeddedPropertyList(_ data: Data, section name: String) throws -> [String:
         userInfo: [NSLocalizedDescriptionKey: "Missing embedded \(name)."])
 }
 
-func verifyCommunityMetadata(_ app: URL, certificate: String?) throws {
+func verifyCommunityMetadata(_ app: URL, certificate: String?, sudo: Bool = false) throws {
     let contents = app.appendingPathComponent("Contents")
     let info = try propertyList(contents.appendingPathComponent("Info.plist"))
-    let expected = try communityMetadata(info: info, certificate: certificate)
+    let expected = try communityMetadata(info: info, certificate: certificate, sudo: sudo)
     let helper = contents.appendingPathComponent(
-        "Library/LaunchServices/io.github.leboonducoin.Limitless.helper")
+        "Library/LaunchServices/io.github.leboonducoin.Limitless"
+            + (sudo ? ".sudo.helper" : ".helper"))
     try require(
         NSDictionary(dictionary: info).isEqual(to: expected.app),
         "App and embedded helper metadata disagree with the signing identity.")
@@ -325,6 +334,11 @@ func verifyRelease(_ app: URL, identity: ReleaseIdentity, notarized: Bool) throw
     for (relative, suffix) in [
         ("MacOS/limitless", ".cli"),
         (identity.helperPath, ".helper"),
+        ("Helpers/Limitless Sudo.app", ".sudo"),
+        (
+            "Helpers/Limitless Sudo.app/Contents/Library/LaunchServices/io.github.leboonducoin.Limitless.sudo.helper",
+            ".sudo.helper"
+        ),
     ] {
         let peerCertificate = try verifyCode(
             app.appendingPathComponent("Contents/" + relative),
@@ -351,6 +365,10 @@ func verifyRelease(_ app: URL, identity: ReleaseIdentity, notarized: Bool) throw
         try require(!notarized, "Community artifacts do not claim notarization.")
         try verifyCommunityMetadata(app, certificate: certificate)
     }
+    try verifyCommunityMetadata(
+        contents.appendingPathComponent("Helpers/Limitless Sudo.app"),
+        certificate: Insecure.SHA1.hash(data: certificate).map { String(format: "%02x", $0) }
+            .joined(), sudo: true)
     let record = try JSONDecoder().decode(
         BuildRecord.self,
         from: Data(contentsOf: contents.appendingPathComponent("Resources/Build.json")))
@@ -368,6 +386,8 @@ func verifyRelease(_ app: URL, identity: ReleaseIdentity, notarized: Bool) throw
 func verifyCompatibility(_ contents: URL, helperPath: String) throws {
     for relative in [
         "MacOS/LimitlessApp", "MacOS/limitless", helperPath,
+        "Helpers/Limitless Sudo.app/Contents/MacOS/LimitlessSudo",
+        "Helpers/Limitless Sudo.app/Contents/Library/LaunchServices/io.github.leboonducoin.Limitless.sudo.helper",
     ] {
         let executable = contents.appendingPathComponent(relative)
         let architectures = try run(
@@ -474,6 +494,19 @@ func selfTest(developmentApp: URL? = nil) throws {
                 && metadata.daemon["BundleProgram"] == nil,
             "Community metadata must bind both peers and leave the installed program to SMJobBless."
         )
+        var sudoInfo = info
+        sudoInfo["CFBundleIdentifier"] = identifier + ".sudo"
+        let sudoMetadata = try communityMetadata(info: sudoInfo, certificate: pin, sudo: true)
+        let sudoRequirement =
+            try pin.map {
+                try certificateRequirement(identifier: identifier + ".sudo", certificate: $0)
+            } ?? "false"
+        try require(
+            sudoMetadata.helper["SMAuthorizedClients"] as? [String] == [sudoRequirement]
+                && sudoMetadata.daemon["MachServices"] as? [String: Bool] == [
+                    identifier + ".sudo.control": true
+                ],
+            "The sudo helper belongs only to the sudo component and exposes no power endpoint.")
     }
     var invalidInfo = info
     invalidInfo["CFBundleVersion"] = "../invalid"
@@ -496,6 +529,9 @@ func selfTest(developmentApp: URL? = nil) throws {
         }
     }
     if let developmentApp {
+        try verifyCommunityMetadata(
+            developmentApp.appendingPathComponent("Contents/Helpers/Limitless Sudo.app"),
+            certificate: nil, sudo: true)
         let info = try propertyList(developmentApp.appendingPathComponent("Contents/Info.plist"))
         if info["LimitlessHelperInstallation"] as? String == "blessed" {
             try verifyCommunityMetadata(developmentApp, certificate: nil)
@@ -663,6 +699,7 @@ do {
     }
     var buildEnvironment = ProcessInfo.processInfo.environment
     buildEnvironment.removeValue(forKey: "LIMITLESS_HELPER_METADATA")
+    buildEnvironment.removeValue(forKey: "LIMITLESS_SUDO_METADATA")
     if bundle {
         let configuration =
             signing
@@ -708,6 +745,32 @@ do {
             }
             buildEnvironment["LIMITLESS_HELPER_METADATA"] = directory.path
         }
+        var sudoInfo = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
+        sudoInfo["CFBundleIdentifier"] = "io.github.leboonducoin.Limitless.sudo"
+        sudoInfo["CFBundleExecutable"] = "LimitlessSudo"
+        sudoInfo["CFBundleName"] = "Limitless — Touch ID for sudo"
+        sudoInfo["CFBundleDisplayName"] = "Limitless — Touch ID for sudo"
+        sudoInfo["NSSystemAdministrationUsageDescription"] =
+            "Enable or disable Touch ID for sudo commands. Your password remains available."
+        let sudoMetadata = try communityMetadata(
+            info: sudoInfo, certificate: signing ? certificate : nil, sudo: true)
+        sudoInfo = sudoMetadata.app
+        let sudoMetadataDirectory = output.appendingPathComponent("SudoMetadata")
+        try manager.createDirectory(at: sudoMetadataDirectory, withIntermediateDirectories: false)
+        for (name, value) in [
+            ("HelperInfo.plist", sudoMetadata.helper), ("HelperLaunchd.plist", sudoMetadata.daemon),
+        ] {
+            try PropertyListSerialization.data(fromPropertyList: value, format: .xml, options: 0)
+                .write(
+                    to: sudoMetadataDirectory.appendingPathComponent(name),
+                    options: .withoutOverwriting)
+        }
+        buildEnvironment["LIMITLESS_SUDO_METADATA"] = sudoMetadataDirectory.path
+        if info["LimitlessPreviewState"] != nil {
+            info["CFBundleIdentifier"] = "io.github.leboonducoin.Limitless.preview"
+            info["CFBundleName"] = "Limitless Preview"
+            info["CFBundleDisplayName"] = "Limitless Preview"
+        }
         let architectures =
             info["LimitlessPreviewState"] == nil
             ? ["--arch", "arm64", "--arch", "x86_64"] : []
@@ -751,6 +814,9 @@ do {
         let contents = app.appendingPathComponent("Contents", isDirectory: true)
         for directory in [
             "MacOS", "Resources",
+            "Helpers/Limitless Sudo.app/Contents/MacOS",
+            "Helpers/Limitless Sudo.app/Contents/Resources",
+            "Helpers/Limitless Sudo.app/Contents/Library/LaunchServices",
         ]
             + (community
                 ? ["Library/LaunchServices"] : ["Library/LaunchDaemons", "Library/HelperTools"])
@@ -761,6 +827,11 @@ do {
         for (source, destination) in [
             ("LimitlessApp", "MacOS/LimitlessApp"), ("limitless", "MacOS/limitless"),
             ("LimitlessHelper", identity.helperPath),
+            ("LimitlessSudo", "Helpers/Limitless Sudo.app/Contents/MacOS/LimitlessSudo"),
+            (
+                "LimitlessSudoHelper",
+                "Helpers/Limitless Sudo.app/Contents/Library/LaunchServices/io.github.leboonducoin.Limitless.sudo.helper"
+            ),
         ] {
             let executable = contents.appendingPathComponent(destination)
             try manager.copyItem(
@@ -783,6 +854,10 @@ do {
         }
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
             .write(to: contents.appendingPathComponent("Info.plist"), options: .withoutOverwriting)
+        try PropertyListSerialization.data(fromPropertyList: sudoInfo, format: .xml, options: 0)
+            .write(
+                to: contents.appendingPathComponent(
+                    "Helpers/Limitless Sudo.app/Contents/Info.plist"), options: .withoutOverwriting)
         let daemon = "io.github.leboonducoin.Limitless.helper.plist"
         if !community {
             try manager.copyItem(
@@ -829,6 +904,10 @@ do {
                 try cleanRevision() == sourceRevision && record.sourceRevision == sourceRevision,
                 "Source changed during the release build.")
         }
+        try manager.copyItem(
+            at: contents.appendingPathComponent("Resources/Limitless.icns"),
+            to: contents.appendingPathComponent(
+                "Helpers/Limitless Sudo.app/Contents/Resources/Limitless.icns"))
         let signature = signing ? certificate : "-"
         let signingOptions =
             signing
@@ -836,6 +915,11 @@ do {
         for (path, identifier) in [
             ("MacOS/limitless", "io.github.leboonducoin.Limitless.cli"),
             (identity.helperPath, "io.github.leboonducoin.Limitless.helper"),
+            (
+                "Helpers/Limitless Sudo.app/Contents/Library/LaunchServices/io.github.leboonducoin.Limitless.sudo.helper",
+                "io.github.leboonducoin.Limitless.sudo.helper"
+            ),
+            ("Helpers/Limitless Sudo.app", "io.github.leboonducoin.Limitless.sudo"),
         ] {
             _ = try run(
                 "/usr/bin/codesign",

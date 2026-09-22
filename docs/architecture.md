@@ -7,6 +7,7 @@
 | LimitlessApp | SwiftUI menu, AppKit integration and preferences |
 | LimitlessCLI | Commands, process tracking and AI hooks |
 | LimitlessHelper | Privileged sleep operations and watchdog |
+| LimitlessSudo / LimitlessSudoHelper | Separate sudo setup and privileged PAM changes |
 
 Swift throughout. No package dependencies, database or analytics.
 
@@ -40,7 +41,13 @@ and certificate. Requests are bounded to 128 KiB, with 64 clients and 256 sessio
 The helper accepts no arbitrary command or path. It alone installs the fixed CLI
 link. Root files use ownership, permissions, no-follow, locking and atomic writes.
 
-The app-only Touch ID operation edits the fixed `sudo_local` file, never `sudo`.
+The optional sudo component has its own app identity, icon and administrator
+approval. Its helper belongs only to that component; Full Disk Access is not
+requested for the menu app or power helper. Only the signed menu app of the
+current console user can call its XPC endpoint. It accepts sudo settings and its
+own cleanup, with eight clients and 1 KiB requests, then exits when idle.
+
+The Touch ID operation edits the fixed `sudo_local` file, never `sudo`.
 It requires the standard macOS PAM stack, preserves password fallback and rejects
 custom active rules. Explicit disable can remove an existing Touch ID rule after
 confirmation. Updates keep it; uninstall removes only Limitless’s owned block.
@@ -57,10 +64,11 @@ Checks and download attempts each wait at least 24 hours, persisted across
 launches. Failures back off to seven days; longer GitHub retry deadlines are
 respected. Background errors stay quiet. No GitHub token is needed or stored.
 
-Updates verify archive bounds, SHA-256, source metadata and pinned app/CLI/helper
-signatures. They retain quarantine and a rollback backup. Removal closes admission,
+Updates verify archive bounds, SHA-256, source metadata and all five executable
+signatures, including the sudo component and helper. They retain quarantine and a rollback backup. Removal closes admission,
 confirms sleep restoration, removes the helper and owned CLI link, then clears
-preferences and recycles the app. Failed cleanup stays visible and retryable.
+preferences and recycles the app. Sudo cleanup runs in its own helper before
+removing its service; updates preserve the setting. Failed cleanup stays visible and retryable.
 
 ## Apple certificate selector
 

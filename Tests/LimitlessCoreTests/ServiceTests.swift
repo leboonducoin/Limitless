@@ -214,7 +214,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     for data in [
         Data(), Data("{}".utf8), Data(repeating: 32, count: ServiceWire.maximumMessageBytes + 1),
         Data(
-            #"{"version":9,"operation":{"configure":{"_0":{"mode":"all","batteryFloor":81,"allowsAutomation":true}}}}"#
+            #"{"version":10,"operation":{"configure":{"_0":{"mode":"all","batteryFloor":81,"allowsAutomation":true}}}}"#
                 .utf8),
     ] {
         #expect(throws: ServiceError.invalidMessage) { try ServiceWire.decodeRequest(data) }

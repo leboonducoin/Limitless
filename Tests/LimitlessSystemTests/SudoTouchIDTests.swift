@@ -5,6 +5,20 @@ import Testing
 
 @testable import LimitlessSystem
 
+@Test func sudoEndpointRejectsPowerAndGeneralHelperOperations() throws {
+    for operation: ServiceOperation in [
+        .status, .setSudoTouchID(true), .setSudoTouchID(false), .prepareRemoval, .prepareUpdate,
+        .finishRemoval,
+    ] {
+        try SudoTouchID.validateOperation(operation)
+    }
+    for operation: ServiceOperation in [
+        .installCLI, .rearm, .retryRestoration, .stopAll, .heartbeat, .start(SessionRequest()),
+    ] {
+        #expect(throws: ServiceError.unauthorized) { try SudoTouchID.validateOperation(operation) }
+    }
+}
+
 private let sudoPolicy = """
     auth       include        sudo_local
     auth       sufficient     pam_smartcard.so
@@ -55,6 +69,10 @@ func sudoTouchIDDeniedWritePreservesConfigurationAndAllowsExplicitRetry(enabled:
     #expect(throws: ServiceError.sudoTouchIDFailed) {
         try SudoTouchID.change(true, root: root, owner: getuid())
     }
+    #expect(try String(contentsOf: local, encoding: .utf8) == "auth required custom.so\n")
+    #expect(
+        try SudoTouchID.access(change: nil, checkingOwnership: true, root: root, owner: getuid())
+            == .disabled)
     #expect(try String(contentsOf: local, encoding: .utf8) == "auth required custom.so\n")
 }
 
@@ -118,6 +136,11 @@ func sudoTouchIDDeniedWritePreservesConfigurationAndAllowsExplicitRetry(enabled:
         _ = try SudoTouchID.access(change: value, root: root, owner: getuid())
     }
     try change(true)
+    let owned = try Data(contentsOf: local)
+    #expect(
+        try SudoTouchID.access(change: nil, checkingOwnership: true, root: root, owner: getuid())
+            == .enabled)
+    #expect(try Data(contentsOf: local) == owned)
     #expect(try SudoTouchID.access(change: nil, root: root, owner: getuid()) == .enabled)
     var info = stat()
     #expect(lstat(local.path, &info) == 0 && info.st_mode & 0o777 == 0o444)

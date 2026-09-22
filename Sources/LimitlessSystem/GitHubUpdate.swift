@@ -389,7 +389,10 @@ public enum GitHubUpdate {
         let helperInfo = try identity.verifyExecutable(
             at: app.appendingPathComponent("Contents/" + helperPath),
             identifier: LimitlessIdentity.helper)
-        for details in [info, cliInfo, helperInfo] {
+        let sudoInfo = try SudoInstallation.verifyBundle(
+            app.appendingPathComponent(LimitlessIdentity.sudoBundlePath), identity: identity,
+            build: build)
+        for details in [info, cliInfo, helperInfo] + sudoInfo {
             guard let flags = details[kSecCodeInfoFlags as String] as? UInt32,
                 flags & 0x10000 != 0,
                 (details[kSecCodeInfoEntitlementsDict as String] as? [String: Any] ?? [:]).isEmpty

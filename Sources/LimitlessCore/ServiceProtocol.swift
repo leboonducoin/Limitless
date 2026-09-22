@@ -125,19 +125,22 @@ public struct ServiceReply: Codable, Sendable {
     public let status: ServiceStatus?
     public let startedSession: UUID?
     public let error: ServiceError?
+    public let sudoTouchID: SudoTouchIDState?
 
     public init(
-        status: ServiceStatus? = nil, startedSession: UUID? = nil, error: ServiceError? = nil
+        status: ServiceStatus? = nil, startedSession: UUID? = nil, error: ServiceError? = nil,
+        sudoTouchID: SudoTouchIDState? = nil
     ) {
         version = ServiceWire.version
         self.status = status
         self.startedSession = startedSession
         self.error = error
+        self.sudoTouchID = sudoTouchID
     }
 }
 
 public enum ServiceWire {
-    public static let version = 9
+    public static let version = 10
     public static let maximumMessageBytes = 131_072
 
     public static func decodeRequest(_ data: Data) throws -> ServiceRequest {

@@ -180,7 +180,7 @@ private struct BlessedHelperInstallation: HelperInstallation {
     }
 }
 
-private func withAuthorization(right: String, operation: (AuthorizationRef) throws -> Void) throws {
+func withAuthorization(right: String, operation: (AuthorizationRef) throws -> Void) throws {
     var reference: AuthorizationRef?
     let created = AuthorizationCreate(nil, nil, [], &reference)
     guard created == errAuthorizationSuccess, let reference else {

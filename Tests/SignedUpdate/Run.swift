@@ -56,6 +56,11 @@ func main() throws {
                 helper,
                 "io.github.leboonducoin.Limitless.helper"
             ),
+            (
+                "Contents/Helpers/Limitless Sudo.app/Contents/Library/LaunchServices/io.github.leboonducoin.Limitless.sudo.helper",
+                "io.github.leboonducoin.Limitless.sudo.helper"
+            ),
+            ("Contents/Helpers/Limitless Sudo.app", "io.github.leboonducoin.Limitless.sudo"),
         ] {
             try run(
                 "/usr/bin/codesign",

@@ -11,6 +11,25 @@ public enum LimitlessIdentity {
     public static let controlService = application + ".control"
     public static let taskService = application + ".tasks"
     public static let daemonPlist = helper + ".plist"
+    public static let sudoApplication = application + ".sudo"
+    public static let sudoHelper = sudoApplication + ".helper"
+    public static let sudoService = sudoApplication + ".control"
+    public static let sudoBundlePath = "Contents/Helpers/Limitless Sudo.app"
+}
+
+public enum InstalledHelperKind: Sendable {
+    case power, sudo
+
+    var identifier: String {
+        self == .power ? LimitlessIdentity.helper : LimitlessIdentity.sudoHelper
+    }
+    var services: Set<String> {
+        self == .power
+            ? [LimitlessIdentity.controlService, LimitlessIdentity.taskService]
+            : [LimitlessIdentity.sudoService]
+    }
+    var executablePath: String { "/Library/PrivilegedHelperTools/" + identifier }
+    var daemonPath: String { "/Library/LaunchDaemons/" + identifier + ".plist" }
 }
 
 public enum SignatureError: Error, Sendable {
@@ -85,7 +104,8 @@ public struct SignedIdentity: Sendable {
         guard
             [
                 LimitlessIdentity.application, LimitlessIdentity.commandLine,
-                LimitlessIdentity.helper,
+                LimitlessIdentity.helper, LimitlessIdentity.sudoApplication,
+                LimitlessIdentity.sudoHelper,
             ]
             .contains(identifier), certificateFingerprint.utf8.count == 40,
             certificateFingerprint.utf8.allSatisfy({

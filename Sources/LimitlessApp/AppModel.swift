@@ -11,6 +11,7 @@ import ServiceManagement
 
     private(set) var status: ServiceStatus?
     private(set) var busy = false
+    private(set) var sudoTouchIDBusy = false
     private(set) var connectionError: String?
     private(set) var helperStatus: SMAppService.Status = .notRegistered
     private(set) var loginStatus: SMAppService.Status = .notRegistered
@@ -30,7 +31,7 @@ import ServiceManagement
     }
     var message: String?
     private(set) var batteryNotice: String?
-    private(set) var sudoTouchIDNeedsPermission = false
+    private(set) var sudoTouchIDError: ServiceError?
     var pendingSudoTouchID: Bool?
     var draft = PolicyDraft()
     var stopChoice: StopChoice = .preset(60)
@@ -201,7 +202,7 @@ import ServiceManagement
                     }
                     if tick % 5 == 0 { await refresh() }
                     if automaticUpdates, availableUpdate != nil,
-                        Date() >= updateSchedule.nextDownload, !busy, !updating,
+                        Date() >= updateSchedule.nextDownload, !busy, !sudoTouchIDBusy, !updating,
                         readyToUpdate
                     {
                         requestUpdate()
@@ -229,7 +230,7 @@ import ServiceManagement
     }
 
     func installUpdate() async {
-        guard trustedBuild, !isPreview, !quitting, !updating, !busy,
+        guard trustedBuild, !isPreview, !quitting, !updating, !busy, !sudoTouchIDBusy,
             let availableUpdate
         else { return }
         guard readyToUpdate else {
@@ -394,7 +395,6 @@ import ServiceManagement
         busy = true
         revision &+= 1
         message = nil
-        sudoTouchIDNeedsPermission = false
         defer { busy = false }
         do {
             try accept(await client.send(operation))
@@ -414,15 +414,24 @@ import ServiceManagement
     }
 
     func reportOperationError(_ error: any Error) {
-        sudoTouchIDNeedsPermission = error as? ServiceError == .sudoTouchIDPermissionDenied
-        if sudoTouchIDNeedsPermission {
-            message = "Allow Limitless in Full Disk Access, then try again."
-        } else if error as? ServiceError == .sudoTouchIDFailed {
-            message =
-                "Touch ID could not be changed. Check your sudo configuration before retrying."
-        } else {
+        switch error as? ServiceError {
+        case .sudoTouchIDPermissionDenied, .sudoTouchIDFailed:
+            sudoTouchIDError = error as? ServiceError
+        default:
             message =
                 "The request was not confirmed. Check the current state and your limits before retrying."
+        }
+    }
+
+    var sudoTouchIDNeedsPermission: Bool { sudoTouchIDError == .sudoTouchIDPermissionDenied }
+
+    var sudoTouchIDMessage: String? {
+        switch sudoTouchIDError {
+        case .sudoTouchIDPermissionDenied:
+            "Allow Limitless — Touch ID for sudo in Full Disk Access, then try again."
+        case .sudoTouchIDFailed:
+            "Touch ID could not be changed. Check your sudo configuration before retrying."
+        default: nil
         }
     }
 
@@ -520,16 +529,30 @@ import ServiceManagement
     }
 
     func setSudoTouchID(_ enabled: Bool) async {
-        guard canControl, !busy, !enabled || hasTouchID
+        guard canControl, !busy, !sudoTouchIDBusy, !updating, !quitting, !enabled || hasTouchID
         else { return }
-        guard await perform(.setSudoTouchID(enabled)) else { return }
-        if enabled
-            ? status?.sudoTouchID != .enabled && status?.sudoTouchID != .external
-            : status?.sudoTouchID != .disabled
-        {
-            message =
-                "Touch ID could not be changed. Check the current sudo setting before retrying."
+        sudoTouchIDBusy = true
+        sudoTouchIDError = nil
+        var sudoClient: ServiceClient?
+        do {
+            try await SudoInstallation.ensureInstalled()
+            guard !quitting else { throw CancellationError() }
+            let client = try await ServiceClient(role: .application, sudo: true)
+            sudoClient = client
+            let reply = try await client.send(.setSudoTouchID(enabled))
+            guard
+                enabled
+                    ? reply.sudoTouchID == .enabled || reply.sudoTouchID == .external
+                    : reply.sudoTouchID == .disabled
+            else { throw ServiceError.sudoTouchIDFailed }
+        } catch {
+            reportOperationError(
+                error as? ServiceError == .sudoTouchIDPermissionDenied
+                    ? ServiceError.sudoTouchIDPermissionDenied : ServiceError.sudoTouchIDFailed)
         }
+        await sudoClient?.close()
+        sudoTouchIDBusy = false
+        await refresh()
     }
 
     func registerHelper() async {
@@ -582,6 +605,9 @@ import ServiceManagement
     func openPrivacySettings() {
         guard !isPreview else { return }
         let workspace = NSWorkspace.shared
+        workspace.activateFileViewerSelecting([
+            Bundle.main.bundleURL.appendingPathComponent(LimitlessIdentity.sudoBundlePath)
+        ])
         if workspace.open(
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
         ) {
@@ -595,7 +621,7 @@ import ServiceManagement
     }
 
     func removeIntegration(forUpdate: Bool = false) async -> Bool {
-        guard trustedBuild, !isPreview, !busy, let helper else {
+        guard trustedBuild, !isPreview, !busy, !sudoTouchIDBusy, let helper else {
             message = "Removal requires a correctly signed Limitless installation."
             return false
         }
@@ -620,15 +646,20 @@ import ServiceManagement
                 guard let status, status.removal == .ready, status.canRemoveService,
                     try SecureOwnershipJournal.isStateDirectoryAbsent()
                 else { throw ServiceError.restorationRequired }
-                if try !InstalledHelperFiles.areAbsent() {
-                    _ = try? await client.send(.finishRemoval)
-                }
             } else {
                 guard try SecureOwnershipJournal.isStateDirectoryAbsent(),
                     try InstalledHelperFiles.areAbsent()
                 else {
                     throw ServiceError.restorationRequired
                 }
+            }
+            removalStep = "Removing the sudo component…"
+            try await SudoInstallation.remove(forUpdate: forUpdate)
+            if try !InstalledHelperFiles.areAbsent() {
+                await client?.close()
+                client = try await ServiceClient(role: .application)
+                _ = try await client?.send(forUpdate ? .prepareUpdate : .prepareRemoval)
+                _ = try await client?.send(.finishRemoval)
             }
             removalStep = "Removing the helper…"
             if !forUpdate, try InstalledCLI.isAppOwnedLinkPresent() {
@@ -654,11 +685,18 @@ import ServiceManagement
                         resources: Bundle.main.bundleURL.appendingPathComponent(
                             "Contents/Resources/limitless-skill"))
                 }
+                let library = try FileManager.default.url(
+                    for: .libraryDirectory, in: .userDomainMask,
+                    appropriateFor: nil, create: false)
                 try Self.erasePreferences(
-                    preferences, domain: LimitlessIdentity.application,
-                    library: FileManager.default.url(
-                        for: .libraryDirectory, in: .userDomainMask,
-                        appropriateFor: nil, create: false))
+                    preferences, domain: LimitlessIdentity.application, library: library)
+                guard
+                    let sudoPreferences = UserDefaults(suiteName: LimitlessIdentity.sudoApplication)
+                else {
+                    throw ServiceError.unavailable
+                }
+                try Self.erasePreferences(
+                    sudoPreferences, domain: LimitlessIdentity.sudoApplication, library: library)
             }
             helperStatus = helper.status
             loginStatus = SMAppService.mainApp.status
@@ -690,7 +728,9 @@ import ServiceManagement
             loginStatus = SMAppService.mainApp.status
             message =
                 "\(removalStep ?? "Uninstall") failed: \(error.localizedDescription) Keep Limitless installed and retry."
-            if error as? ServiceError == .sudoTouchIDPermissionDenied {
+            if error as? ServiceError == .sudoTouchIDPermissionDenied
+                || error as? ServiceError == .sudoTouchIDFailed
+            {
                 reportOperationError(error)
             }
             return false

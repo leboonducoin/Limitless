@@ -15,25 +15,33 @@ public final class InstalledHelperFiles {
     }
 
     private let root: Int32
+    private let kind: InstalledHelperKind
     private let library: Int32
     private let owner: uid_t
     private let helperURL: URL
     private let verifyHelper: (URL) throws -> Void
     private var entries: [Entry] = []
 
-    public convenience init?(identity: SignedIdentity) throws {
-        guard identity.executableURL.path == Self.executablePath else { return nil }
+    public convenience init?(identity: SignedIdentity, kind: InstalledHelperKind = .power) throws {
+        guard identity.executableURL.path == kind.executablePath else { return nil }
         guard geteuid() == 0 else { throw JournalError.administratorRequired }
-        try self.init(rootURL: URL(fileURLWithPath: "/"), owner: 0) {
-            try identity.verifyExecutable(at: $0, identifier: LimitlessIdentity.helper)
+        try self.init(rootURL: URL(fileURLWithPath: "/"), owner: 0, kind: kind) {
+            try identity.verifyExecutable(at: $0, identifier: kind.identifier)
         }
     }
 
-    convenience init(testRoot: URL, verifyHelper: @escaping (URL) throws -> Void) throws {
-        try self.init(rootURL: testRoot, owner: geteuid(), verifyHelper: verifyHelper)
+    convenience init(
+        testRoot: URL, kind: InstalledHelperKind = .power,
+        verifyHelper: @escaping (URL) throws -> Void
+    ) throws {
+        try self.init(rootURL: testRoot, owner: geteuid(), kind: kind, verifyHelper: verifyHelper)
     }
 
-    private init(rootURL: URL, owner: uid_t, verifyHelper: @escaping (URL) throws -> Void) throws {
+    private init(
+        rootURL: URL, owner: uid_t, kind: InstalledHelperKind = .power,
+        verifyHelper: @escaping (URL) throws -> Void
+    ) throws {
+        self.kind = kind
         root = open(rootURL.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
         guard root >= 0 else { throw JournalError.system(errno) }
         library = openat(root, "Library", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
@@ -45,11 +53,11 @@ public final class InstalledHelperFiles {
         self.owner = owner
         self.verifyHelper = verifyHelper
         helperURL = rootURL.appendingPathComponent("Library/PrivilegedHelperTools/")
-            .appendingPathComponent(LimitlessIdentity.helper)
+            .appendingPathComponent(kind.identifier)
         try validateParents()
         for (directory, name) in [
-            ("LaunchDaemons", LimitlessIdentity.daemonPlist),
-            ("PrivilegedHelperTools", LimitlessIdentity.helper),
+            ("LaunchDaemons", kind.identifier + ".plist"),
+            ("PrivilegedHelperTools", kind.identifier),
         ] {
             let parent = openat(library, directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
             guard parent >= 0 else { throw JournalError.system(errno) }
@@ -76,9 +84,9 @@ public final class InstalledHelperFiles {
         close(root)
     }
 
-    public static func areAbsent() throws -> Bool {
-        try SecureOwnershipJournal.directoryIsAbsent(at: executablePath)
-            && SecureOwnershipJournal.directoryIsAbsent(at: daemonPath)
+    public static func areAbsent(kind: InstalledHelperKind = .power) throws -> Bool {
+        try SecureOwnershipJournal.directoryIsAbsent(at: kind.executablePath)
+            && SecureOwnershipJournal.directoryIsAbsent(at: kind.daemonPath)
     }
 
     public func remove() throws {
@@ -139,14 +147,12 @@ public final class InstalledHelperFiles {
             guard let data, data.count <= 65_536,
                 let value = try PropertyListSerialization.propertyList(from: data, format: nil)
                     as? [String: Any],
-                value["Label"] as? String == LimitlessIdentity.helper,
-                value["Program"] == nil || value["Program"] as? String == Self.executablePath,
-                value["ProgramArguments"] as? [String] == [Self.executablePath],
+                value["Label"] as? String == kind.identifier,
+                value["Program"] == nil || value["Program"] as? String == kind.executablePath,
+                value["ProgramArguments"] as? [String] == [kind.executablePath],
                 value["UserName"] as? String == "root",
                 let services = value["MachServices"] as? [String: Any],
-                Set(services.keys) == [
-                    LimitlessIdentity.controlService, LimitlessIdentity.taskService,
-                ],
+                Set(services.keys) == kind.services,
                 services.values.allSatisfy({
                     guard let number = $0 as? NSNumber else { return false }
                     return CFGetTypeID(number) == CFBooleanGetTypeID() && number.boolValue

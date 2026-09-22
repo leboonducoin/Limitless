@@ -15,6 +15,18 @@ let helperLinkerSettings: [LinkerSetting] =
         ]
     } ?? []
 
+let sudoLinkerSettings: [LinkerSetting] =
+    ProcessInfo.processInfo.environment["LIMITLESS_SUDO_METADATA"].map { directory in
+        [
+            .unsafeFlags([
+                "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist",
+                "-Xlinker", directory + "/HelperInfo.plist",
+                "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__launchd_plist",
+                "-Xlinker", directory + "/HelperLaunchd.plist",
+            ])
+        ]
+    } ?? []
+
 let package = Package(
     name: "Limitless",
     platforms: [.macOS(.v14)],
@@ -24,6 +36,8 @@ let package = Package(
         .executable(name: "LimitlessHelper", targets: ["LimitlessHelper"]),
         .executable(name: "limitless", targets: ["LimitlessCLI"]),
         .executable(name: "LimitlessApp", targets: ["LimitlessApp"]),
+        .executable(name: "LimitlessSudo", targets: ["LimitlessSudo"]),
+        .executable(name: "LimitlessSudoHelper", targets: ["LimitlessSudoHelper"]),
     ],
     targets: [
         .target(name: "LimitlessCore"),
@@ -39,6 +53,10 @@ let package = Package(
             name: "LimitlessApp", dependencies: ["LimitlessSystem", "LimitlessCore"]),
         .testTarget(name: "LimitlessAppTests", dependencies: ["LimitlessApp"]),
         .testTarget(name: "LimitlessSystemTests", dependencies: ["LimitlessSystem"]),
+        .executableTarget(name: "LimitlessSudo", dependencies: ["LimitlessSystem"]),
+        .executableTarget(
+            name: "LimitlessSudoHelper", dependencies: ["LimitlessSystem", "LimitlessCore"],
+            linkerSettings: sudoLinkerSettings),
     ],
     swiftLanguageModes: [.v6]
 )

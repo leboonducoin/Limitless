@@ -246,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     @objc private func quit() { NSApp.terminate(nil) }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        menuItem.action != #selector(uninstall) || !model.updating
+        menuItem.action != #selector(uninstall) || (!model.updating && !model.sudoTouchIDBusy)
     }
 
     @objc private func uninstall() {

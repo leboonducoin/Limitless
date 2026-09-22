@@ -284,14 +284,19 @@ private func status(
             ServiceWire.encode(ServiceReply(error: .sudoTouchIDPermissionDenied)))
         model.reportOperationError(try #require(reply.error))
         #expect(model.sudoTouchIDNeedsPermission)
-        #expect(model.message == "Allow Limitless in Full Disk Access, then try again.")
+        #expect(
+            model.sudoTouchIDMessage
+                == "Allow Limitless — Touch ID for sudo in Full Disk Access, then try again.")
+        #expect(model.message == nil)
         #expect(model.status == before && !model.busy && model.connectionError == nil)
         model.openPrivacySettings()
         model.reportOperationError(ServiceError.sudoTouchIDFailed)
         #expect(!model.sudoTouchIDNeedsPermission)
-        #expect(model.message?.contains("sudo configuration") == true)
+        #expect(model.sudoTouchIDMessage?.contains("sudo configuration") == true)
+        #expect(model.message == nil)
         model.reportOperationError(ServiceError.unavailable)
         #expect(!model.sudoTouchIDNeedsPermission)
+        #expect(model.message != nil && model.sudoTouchIDMessage != nil)
         #expect(model.status == before && model.connectionError == nil)
     }
 
@@ -303,6 +308,8 @@ private func status(
         #expect(model.buildTrust == .untrusted)
         await model.stopAll()
         await model.setAutomation(false)
+        await model.setSudoTouchID(true)
+        await model.setSudoTouchID(false)
         await model.registerHelper()
         await model.setLaunchAtLogin(true)
         model.draft.batteryFloor = 42
