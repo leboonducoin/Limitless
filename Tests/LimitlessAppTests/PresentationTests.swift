@@ -168,9 +168,43 @@ private func status(
     for value in 0...80 {
         #expect(SettingsView.batteryFloor(from: String(value)) == value)
     }
-    for value in ["", "-1", "81", "20.5", "20,5", "20x", "NaN", "∞", "-∞", "1e100"] {
+    for value in ["81", "100", String(repeating: "9", count: 500)] {
+        #expect(SettingsView.batteryFloor(from: value) == 80)
+    }
+    #expect(SettingsView.batteryFloor(from: "٢٠") == 20)
+    #expect(SettingsView.batteryFloor(from: "８１") == 80)
+    for value in ["", "-1", "20.5", "20,5", "20x", "NaN", "∞", "-∞", "1e100", "²", " 20 "] {
         #expect(SettingsView.batteryFloor(from: value) == nil)
     }
+}
+
+@Test @MainActor func batteryCutoffExplainsFailedStartsAndStopsAfterLaterPolling() throws {
+    let now = try ClockSnapshot(continuous: 100, wall: Date())
+    var registry = SessionRegistry(policy: try UserPolicy(batteryFloor: 30))
+    let id = try registry.start(.init(), owner: UUID(), kind: .manual, now: now)
+    let low = PowerSnapshot(source: .battery, battery: .available(percent: 25, isDischarging: true))
+    _ = registry.evaluate(power: low, now: now)
+    let cutoff = try #require(registry.batteryCutoff)
+    let report = ServiceStatus(
+        policy: registry.policy, power: low,
+        sleep: .init(phase: .inactive, observed: .allowed, ownsGlobalHold: false, fault: nil),
+        sessions: [], sampledAt: now.wall, batteryCutoff: cutoff)
+    let started = AppModel()
+    try started.accept(
+        ServiceWire.decodeReply(
+            ServiceWire.encode(
+                ServiceReply(status: report, startedSession: id))))
+    #expect(started.batteryNotice == "Battery at 25%. Charge above 30% to start.")
+    try started.accept(ServiceReply(status: report))
+    #expect(started.batteryNotice == "Battery at 25%. Charge above 30% to start.")
+    let running = AppModel()
+    try running.accept(ServiceReply(status: report))
+    #expect(running.batteryNotice == "Session ended at 25% battery (limit: 30%).")
+    let clear = ServiceStatus(
+        policy: report.policy, power: report.power, sleep: report.sleep,
+        sessions: [], sampledAt: now.wall)
+    try running.accept(ServiceReply(status: clear))
+    #expect(running.batteryNotice == nil)
 }
 
 #if DEBUG

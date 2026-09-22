@@ -83,6 +83,7 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
     public let sampledAt: Date
     public let removal: RemovalState
     public let sudoTouchID: SudoTouchIDState
+    public let batteryCutoff: BatteryCutoff?
 
     public var canRemoveService: Bool {
         removal != .none && sessions.isEmpty && !sleep.ownsGlobalHold
@@ -105,7 +106,7 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
     public init(
         policy: UserPolicy, power: PowerSnapshot, sleep: SleepReport,
         sessions: [SessionSummary], sampledAt: Date, removal: RemovalState = .none,
-        sudoTouchID: SudoTouchIDState = .unavailable
+        sudoTouchID: SudoTouchIDState = .unavailable, batteryCutoff: BatteryCutoff? = nil
     ) {
         self.policy = policy
         self.power = power
@@ -114,6 +115,7 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
         self.sampledAt = sampledAt
         self.removal = removal
         self.sudoTouchID = sudoTouchID
+        self.batteryCutoff = batteryCutoff
     }
 }
 
@@ -134,7 +136,7 @@ public struct ServiceReply: Codable, Sendable {
 }
 
 public enum ServiceWire {
-    public static let version = 7
+    public static let version = 8
     public static let maximumMessageBytes = 131_072
 
     public static func decodeRequest(_ data: Data) throws -> ServiceRequest {

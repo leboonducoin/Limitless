@@ -36,29 +36,42 @@ struct SettingsView: View {
                         HStack {
                             Text("Battery reserved limit")
                             Spacer()
-                            TextField("Percent", text: batteryInput.projectedValue)
-                                .textFieldStyle(.roundedBorder)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 44)
-                                .accessibilityLabel("Battery reserved limit, percent")
-                                .focused($batteryFocused)
-                                .onSubmit { applyBatteryInput() }
-                                .onChange(of: batteryFocused) {
-                                    if !batteryFocused { applyBatteryInput() }
-                                }
-                                .onChange(of: model.draft.batteryFloor, initial: true) {
-                                    batteryInput.wrappedValue =
-                                        Self.batteryFormatter.string(
-                                            from: NSNumber(value: model.draft.batteryFloor)) ?? ""
-                                }
-                                .onDisappear { applyBatteryInput() }
+                            HStack(spacing: 2) {
+                                TextField("Percent", text: batteryInput.projectedValue)
+                                    .textFieldStyle(.roundedBorder)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(width: 44)
+                                    .accessibilityLabel("Battery reserved limit, percent")
+                                    .focused($batteryFocused)
+                                    .onSubmit { applyBatteryInput() }
+                                    .onChange(of: batteryInput.wrappedValue) { previous, input in
+                                        guard !input.isEmpty else { return }
+                                        batteryInput.wrappedValue =
+                                            Self.batteryFloor(from: input)
+                                            .flatMap {
+                                                Self.batteryFormatter.string(
+                                                    from: NSNumber(value: $0))
+                                            }
+                                            ?? previous
+                                    }
+                                    .onChange(of: batteryFocused) {
+                                        if !batteryFocused { applyBatteryInput() }
+                                    }
+                                    .onChange(of: model.draft.batteryFloor, initial: true) {
+                                        batteryInput.wrappedValue =
+                                            Self.batteryFormatter.string(
+                                                from: NSNumber(value: model.draft.batteryFloor))
+                                            ?? ""
+                                    }
+                                    .onDisappear { applyBatteryInput() }
+                                Stepper(
+                                    "Battery reserved limit", value: $model.draft.batteryFloor,
+                                    in: UserPolicy.batteryFloorRange, step: 1
+                                )
+                                .labelsHidden().fixedSize()
+                                .accessibilityValue("\(model.draft.batteryFloor)%")
+                            }
                             Text("%")
-                            Stepper(
-                                "Battery reserved limit", value: $model.draft.batteryFloor,
-                                in: UserPolicy.batteryFloorRange, step: 1
-                            )
-                            .labelsHidden().fixedSize()
-                            .accessibilityValue("\(model.draft.batteryFloor)%")
                         }
                         .monospacedDigit()
                         if model.draft.batteryFloor == 0 {
@@ -187,9 +200,14 @@ struct SettingsView: View {
     }
 
     static func batteryFloor(from text: String) -> Int? {
-        guard let number = batteryFormatter.number(from: text),
-            let value = Int(exactly: number), UserPolicy.batteryFloorRange.contains(value)
+        guard !text.isEmpty,
+            text.unicodeScalars.allSatisfy({ CharacterSet.decimalDigits.contains($0) })
         else { return nil }
+        var value = 0
+        for digit in text {
+            guard let number = digit.wholeNumberValue else { return nil }
+            value = min(UserPolicy.batteryFloorRange.upperBound, value * 10 + number)
+        }
         return value
     }
 }

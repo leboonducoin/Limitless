@@ -51,7 +51,7 @@ settings and refuses linked or invalid files. Removal preserves other integratio
 
 ## Updates and removal
 
-Checks and download attempts each wait at least eight hours, persisted across
+Checks and download attempts each wait at least 24 hours, persisted across
 launches. Failures back off to seven days; longer GitHub retry deadlines are
 respected. Background errors stay quiet. No GitHub token is needed or stored.
 

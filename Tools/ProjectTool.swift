@@ -384,6 +384,15 @@ func verifyCompatibility(_ contents: URL, helperPath: String) throws {
         try require(
             minimumVersions.count == 2 && minimumVersions.allSatisfy { $0 == ["minos", "14.0"] },
             "Both architectures must target macOS 14.0.")
+        let sdkVersions = build.split(separator: "\n").map {
+            $0.split(whereSeparator: \.isWhitespace)
+        }.filter { $0.first == "sdk" }
+        try require(
+            sdkVersions.count == 2
+                && sdkVersions.allSatisfy {
+                    $0.count == 2 && (Int($0[1].split(separator: ".").first ?? "") ?? 0) >= 26
+                },
+            "Both architectures must identify the modern SDK used to build the app.")
     }
 }
 
@@ -640,9 +649,17 @@ do {
     }
     let plugin = developer + "/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
     var compilerFlags = ["-Xswiftc", "-warnings-as-errors"]
+    let sdkPath = try run("/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-path"], capture: true)
+    let sdkVersion = try run(
+        "/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-version"], capture: true)
+    compilerFlags += [
+        "-Xlinker", "-platform_version", "-Xlinker", "macos", "-Xlinker", "14.0",
+        "-Xlinker", sdkVersion,
+    ]
     let buildPath =
-        ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]
-        .map { ["--scratch-path", $0] } ?? []
+        ["--sdk", sdkPath]
+        + (ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]
+            .map { ["--scratch-path", $0] } ?? [])
     if URL(fileURLWithPath: developer).lastPathComponent == "CommandLineTools",
         FileManager.default.fileExists(atPath: plugin)
     {

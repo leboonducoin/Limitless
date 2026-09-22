@@ -29,6 +29,7 @@ import ServiceManagement
         }
     }
     var message: String?
+    private(set) var batteryNotice: String?
     var pendingSudoTouchID: Bool?
     var draft = PolicyDraft()
     var stopChoice: StopChoice = .preset(60)
@@ -371,8 +372,15 @@ import ServiceManagement
         }
     }
 
-    private func accept(_ reply: ServiceReply) throws {
+    func accept(_ reply: ServiceReply) throws {
         guard let received = reply.status else { throw ServiceError.unavailable }
+        if received.batteryCutoff != status?.batteryCutoff {
+            batteryNotice = received.batteryCutoff.map { cutoff in
+                reply.startedSession == cutoff.sessionID
+                    ? "Battery at \(cutoff.percent)%. Charge above \(cutoff.limit)% to start."
+                    : "Session ended at \(cutoff.percent)% battery (limit: \(cutoff.limit)%)."
+            }
+        }
         if !draftChanged { draft = PolicyDraft(received.policy) }
         baseline = PolicyDraft(received.policy)
         status = received
@@ -704,24 +712,37 @@ import ServiceManagement
             let policy = try! UserPolicy(
                 mode: waiting || state == "external" ? .external : .all,
                 allowsAutomation: true)
+            var registry = SessionRegistry(policy: policy)
+            if state == "battery-low" {
+                let now = try! SystemClock.now()
+                try! registry.start(.init(), owner: UUID(), kind: .manual, now: now)
+                _ = registry.evaluate(
+                    power: .init(
+                        source: .battery, battery: .available(percent: 18, isDischarging: true)),
+                    now: now)
+            }
             let session = SessionSummary(
                 id: UUID(), kind: .manual, end: .after(seconds: 3_600),
                 startedAt: Date().addingTimeInterval(-900), remainingSeconds: 2_700,
                 suspension: waiting ? .powerSource : nil, belongsToClient: true)
-            model.status = ServiceStatus(
+            let previewStatus = ServiceStatus(
                 policy: policy,
                 power: PowerSnapshot(
                     source: state == "desktop" ? .external : .battery,
                     battery: state == "desktop"
                         ? .notPresent
                         : (state == "battery-unknown"
-                            ? .unavailable : .available(percent: 76, isDischarging: true))),
+                            ? .unavailable
+                            : .available(
+                                percent: state == "battery-low" ? 18 : 76, isDischarging: true))),
                 sleep: SleepReport(
                     phase: active ? .active : (failed ? .restoring : .inactive),
                     observed: unknown ? .unknown : (active || failed ? .disabled : .allowed),
                     ownsGlobalHold: active || failed, fault: failed ? .restorationFailed : nil),
                 sessions: active || waiting ? [session] : [], sampledAt: Date(),
-                sudoTouchID: state == "touch-id-external" ? .external : .disabled)
+                sudoTouchID: state == "touch-id-external" ? .external : .disabled,
+                batteryCutoff: registry.batteryCutoff)
+            try! model.accept(ServiceReply(status: previewStatus))
             model.draft = PolicyDraft(policy)
             model.baseline = model.draft
             model.watchedProcesses = watchedProcesses

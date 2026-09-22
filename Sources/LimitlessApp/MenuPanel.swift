@@ -175,6 +175,11 @@ struct MenuPanel: View {
                 .frame(height: CGFloat(min(processes.count, 4)) * 18)
                 .scrollBounceBehavior(.basedOnSize)
             }
+            if let notice = model.batteryNotice {
+                Label(notice, systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

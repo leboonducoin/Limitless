@@ -24,7 +24,8 @@ prompt. Remote sessions may still need a password.
 ## Updates and removal
 
 Automatic updates are optional. Otherwise, an **Update** button appears when a
-version is available. Updates install when no session is running.
+version is available. Limitless checks at most once every 24 hours. It verifies
+the download, waits until no session is running, then installs and reopens the app.
 
 Right-click the menu-bar icon → **Uninstall Limitless**. This stops sessions and
 removes the app, helper, CLI shortcut, login item, preferences and AI integrations

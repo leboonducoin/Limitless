@@ -17,8 +17,9 @@ separate preferences window. Content sets the height; long lists scroll.
 Hide unavailable controls before helper approval. Enable launch at login after helper
 activation, then respect the user's choice. Login never starts a keep-awake session.
 Hide power controls on desktops and the battery limit in adapter mode. Zero warns.
-Battery limit accepts a typed integer from 0 to 80 beside the one-percent arrows.
-Return or leaving the field applies it; invalid input keeps the previous value.
+Battery limit accepts digits only, with the one-percent arrows beside the field.
+Values above 80 become 80. Return or leaving the field applies it.
+Explain a blocked start or battery cutoff beside the session controls.
 Only process mode shows the session ceiling; wait for all selected PIDs.
 
 CLI opt-in is remembered without restarting a session. Updates are opt-in and

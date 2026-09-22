@@ -39,7 +39,7 @@ For the setup screen instead:
 env LIMITLESS_PREVIEW_STATE=setup swift Tools/ProjectTool.swift bundle
 ```
 
-Other previews: `inactive`, `process`, `desktop`, `external`, `battery-unknown`
+Other previews: `inactive`, `process`, `desktop`, `external`, `battery-unknown`, `battery-low`
 and `touch-id-external`. Check light/dark mode, Tab navigation, VoiceOver and
 Reduce Motion/Transparency. Keyboard input must follow the Mac's layout and locale.
 
@@ -52,8 +52,8 @@ macOS version and any steps that fail.
   app: it must stay off. Login must never start a session.
 - Start a short timer, then try Stop, a date and multiple PIDs.
 - On a laptop, test lid open/closed, switching power and the battery limit.
-- Type a battery limit, press Return or leave the field, then try the arrows. Accept 0–80;
-  an invalid entry such as 81 must keep the previous value.
+- Type a battery limit, press Return or leave the field, then try the arrows.
+  Letters are refused; 81 becomes 80. A blocked start or battery cutoff explains why.
 - Run two AI tasks. The last one ending stops their hold; manual sessions stay yours.
 - Try Touch ID, Cancel and password fallback for sudo.
 - Check updates while idle, then uninstall. The app should close and its integrations disappear.
