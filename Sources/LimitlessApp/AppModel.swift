@@ -675,7 +675,8 @@ import ServiceManagement
                 try await SMAppService.mainApp.unregister()
             }
             guard forUpdate || absentLoginStates.contains(SMAppService.mainApp.status),
-                helper.removalIsConfirmed
+                helper.removalIsConfirmed,
+                try InstalledHelperFiles.areAbsent(kind: .sudo), !SudoInstallation.isRegistered
             else { throw ServiceError.restorationRequired }
             if !forUpdate {
                 removalStep = "Removing preferences…"

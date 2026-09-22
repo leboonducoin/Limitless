@@ -472,6 +472,7 @@ public enum GitHubUpdate {
         try verify(app, identity: identity, newerThan: current)
         guard try SecureOwnershipJournal.isStateDirectoryAbsent(),
             try InstalledHelperFiles.areAbsent(),
+            try InstalledHelperFiles.areAbsent(kind: .sudo), !SudoInstallation.isRegistered,
             HelperInstallationKind.blessed.service.status == .notRegistered
         else { throw UpdateError.busy }
         let backupName = ".Limitless-previous-\(UUID().uuidString).app"
