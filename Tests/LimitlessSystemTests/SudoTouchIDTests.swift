@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import LimitlessCore
 import Testing
 
 @testable import LimitlessSystem
@@ -12,6 +13,50 @@ private let sudoPolicy = """
     password   required       pam_deny.so
     session    required       pam_permit.so
     """
+
+@Test(arguments: [false, true])
+func sudoTouchIDDeniedWritePreservesConfigurationAndAllowsExplicitRetry(enabled: Bool) throws {
+    try #require(geteuid() != 0)
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let directory = root.appendingPathComponent("private/etc/pam.d")
+    try FileManager.default.createDirectory(
+        at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    defer {
+        chmod(directory.path, 0o700)
+        try? FileManager.default.removeItem(at: root)
+    }
+    let sudo = directory.appendingPathComponent("sudo")
+    let local = directory.appendingPathComponent("sudo_local")
+    let original = "# Local settings\n" + (enabled ? "" : "auth sufficient pam_tid.so\n")
+    try Data(sudoPolicy.utf8).write(to: sudo)
+    try Data(original.utf8).write(to: local)
+    #expect(chmod(local.path, 0o444) == 0)
+    #expect(chmod(directory.path, 0o500) == 0)
+    #expect(throws: ServiceError.sudoTouchIDPermissionDenied) {
+        try SudoTouchID.change(enabled, removeExternal: true, root: root, owner: getuid())
+    }
+    #expect(try String(contentsOf: local, encoding: .utf8) == original)
+    #expect(try String(contentsOf: sudo, encoding: .utf8) == sudoPolicy)
+    #expect(
+        try Set(FileManager.default.contentsOfDirectory(atPath: directory.path)) == [
+            "sudo", "sudo_local",
+        ])
+    #expect(chmod(directory.path, 0o700) == 0)
+    #expect(
+        try SudoTouchID.change(enabled, removeExternal: true, root: root, owner: getuid())
+            == (enabled ? .enabled : .disabled))
+    #expect(try String(contentsOf: sudo, encoding: .utf8) == sudoPolicy)
+    if enabled {
+        #expect(try SudoTouchID.change(false, root: root, owner: getuid()) == .disabled)
+    }
+    #expect(try String(contentsOf: local, encoding: .utf8) == "# Local settings\n")
+    #expect(chmod(local.path, 0o600) == 0)
+    try Data("auth required custom.so\n".utf8).write(to: local)
+    #expect(throws: ServiceError.sudoTouchIDFailed) {
+        try SudoTouchID.change(true, root: root, owner: getuid())
+    }
+    #expect(try String(contentsOf: local, encoding: .utf8) == "auth required custom.so\n")
+}
 
 @Test func sudoTouchIDPreservesPasswordAndOnlyRemovesItsOwnSetting() throws {
     for original: String? in [nil, "", "# Custom heading\n#auth sufficient pam_tid.so\n"] {

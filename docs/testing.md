@@ -39,8 +39,8 @@ For the setup screen instead:
 env LIMITLESS_PREVIEW_STATE=setup swift Tools/ProjectTool.swift bundle
 ```
 
-Other previews: `inactive`, `process`, `desktop`, `external`, `battery-unknown`, `battery-low`
-and `touch-id-external`. Check light/dark mode, Tab navigation, VoiceOver and
+Other previews: `inactive`, `process`, `desktop`, `external`, `battery-unknown`, `battery-low`,
+`touch-id-external` and `touch-id-permission`. Check light/dark mode, Tab navigation, VoiceOver and
 Reduce Motion/Transparency. Keyboard input must follow the Mac's layout and locale.
 
 ## Test the installed app
@@ -56,6 +56,8 @@ macOS version and any steps that fail.
   Letters are refused; 81 becomes 80. A blocked start or battery cutoff explains why.
 - Run two AI tasks. The last one ending stops their hold; manual sessions stay yours.
 - Try Touch ID, Cancel and password fallback for sudo.
+  Without Full Disk Access, a refused change must explain the missing permission
+  and keep the app responsive. Grant access manually and retry; no automatic retry.
 - Check updates while idle, then uninstall. The app should close and its integrations disappear.
 
 For long runs, keep the Mac ventilated and leave battery protection enabled.

@@ -14,12 +14,26 @@ public enum SudoTouchID {
 
     public static func setEnabled(_ enabled: Bool) throws {
         guard geteuid() == 0 else { throw JournalError.administratorRequired }
-        _ = try access(change: enabled, removeExternal: true)
+        _ = try change(enabled, removeExternal: true)
     }
 
     public static func removeOwnedSetting() throws {
         guard geteuid() == 0 else { throw JournalError.administratorRequired }
-        _ = try access(change: false)
+        _ = try change(false)
+    }
+
+    static func change(
+        _ enabled: Bool, removeExternal: Bool = false,
+        root: URL = URL(fileURLWithPath: "/"), owner: uid_t = 0
+    ) throws -> SudoTouchIDState {
+        do {
+            return try access(
+                change: enabled, removeExternal: removeExternal, root: root, owner: owner)
+        } catch JournalError.system(let code) where code == EPERM || code == EACCES {
+            throw ServiceError.sudoTouchIDPermissionDenied
+        } catch {
+            throw ServiceError.sudoTouchIDFailed
+        }
     }
 
     static func transform(

@@ -277,6 +277,24 @@ private func status(
         #expect(registrations == 1)
     }
 
+    @Test @MainActor func sudoTouchIDPermissionFeedbackPreservesSessionState() throws {
+        let model = AppModel.preview("active")
+        let before = model.status
+        let reply = try ServiceWire.decodeReply(
+            ServiceWire.encode(ServiceReply(error: .sudoTouchIDPermissionDenied)))
+        model.reportOperationError(try #require(reply.error))
+        #expect(model.sudoTouchIDNeedsPermission)
+        #expect(model.message == "Allow Limitless in Full Disk Access, then try again.")
+        #expect(model.status == before && !model.busy && model.connectionError == nil)
+        model.openPrivacySettings()
+        model.reportOperationError(ServiceError.sudoTouchIDFailed)
+        #expect(!model.sudoTouchIDNeedsPermission)
+        #expect(model.message?.contains("sudo configuration") == true)
+        model.reportOperationError(ServiceError.unavailable)
+        #expect(!model.sudoTouchIDNeedsPermission)
+        #expect(model.status == before && model.connectionError == nil)
+    }
+
     @Test @MainActor func previewCannotControlPowerOrAuthorizeAutomation() async {
         let model = AppModel.preview("active")
         let before = model.status

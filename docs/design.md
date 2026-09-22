@@ -7,7 +7,7 @@ separate preferences window. Content sets the height; long lists scroll.
 - Standard square menu-bar item: 21-point loop, 5-point orange dot below/right.
 - Small footer: version, blue author link, MIT and GitHub.
 - Immediate settings, one Stop button, outside-click dismissal.
-- Right-click Quit/Uninstall; red destructive confirmation.
+- Right-click Quit/Uninstall follows the app's light/dark appearance; red destructive confirmation.
 - Timer and remaining PIDs refresh each second without animation.
 - Native opening motion; immediate keyboard and Reduce Motion opening.
 - No selected control on opening; Tab keeps its native focus indicator.
@@ -28,6 +28,8 @@ Uninstall shows progress and keeps a retryable error if cleanup fails.
 
 Touch ID for sudo appears on supported Macs after helper approval. Confirm its
 Mac-wide scope before enabling or disabling a setting configured elsewhere.
+If macOS denies the write, show a short Full Disk Access hint and a settings button.
+Keep the observed toggle state and the helper connection.
 
 Native previews are inert. Check light/dark appearance, keyboard, VoiceOver,
 contrast and reduced motion before release. [Testing](testing.md).

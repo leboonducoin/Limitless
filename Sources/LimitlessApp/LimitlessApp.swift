@@ -231,6 +231,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
 
     private func actionsMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.appearance = NSApp.effectiveAppearance
         let uninstall = NSMenuItem(
             title: "Uninstall Limitless…", action: #selector(uninstall), keyEquivalent: "")
         uninstall.target = self
