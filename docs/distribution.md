@@ -21,6 +21,11 @@ Enable it in the menu to use your fingerprint for `sudo`. Your password still
 works. This is a Mac-wide setting; it does not change Limitless's administrator
 prompt. Remote sessions may still need a password.
 
+If macOS blocks the change, open **System Settings → Privacy & Security → Full
+Disk Access**, enable **Limitless**, reopen the app and retry. This permission is
+for changing sudo; keeping the Mac awake does not require it. You can revoke it
+afterward, but changing Touch ID again or removing Limitless's rule needs it again.
+
 ## Updates and removal
 
 Automatic updates are optional. Otherwise, an **Update** button appears when a

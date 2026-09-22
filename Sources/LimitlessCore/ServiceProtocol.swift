@@ -33,6 +33,7 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
 public enum ServiceError: String, Error, Codable, Sendable {
     case invalidMessage, incompatibleVersion, unauthorized, ownerExpired, capacityReached
     case sessionRejected, restorationRequired, removalInProgress, unavailable
+    case sudoTouchIDPermissionDenied, sudoTouchIDFailed
 }
 
 public enum RemovalState: String, Codable, Equatable, Sendable {
@@ -136,7 +137,7 @@ public struct ServiceReply: Codable, Sendable {
 }
 
 public enum ServiceWire {
-    public static let version = 8
+    public static let version = 9
     public static let maximumMessageBytes = 131_072
 
     public static func decodeRequest(_ data: Data) throws -> ServiceRequest {

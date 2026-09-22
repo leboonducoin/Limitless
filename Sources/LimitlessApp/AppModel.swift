@@ -30,6 +30,7 @@ import ServiceManagement
     }
     var message: String?
     private(set) var batteryNotice: String?
+    private(set) var sudoTouchIDNeedsPermission = false
     var pendingSudoTouchID: Bool?
     var draft = PolicyDraft()
     var stopChoice: StopChoice = .preset(60)
@@ -393,13 +394,13 @@ import ServiceManagement
         busy = true
         revision &+= 1
         message = nil
+        sudoTouchIDNeedsPermission = false
         defer { busy = false }
         do {
             try accept(await client.send(operation))
             return true
         } catch {
-            message =
-                "The request was not confirmed. Check the current state and your limits before retrying."
+            reportOperationError(error)
             if let reply = try? await client.send(.status) {
                 try? accept(reply)
             } else {
@@ -409,6 +410,19 @@ import ServiceManagement
                 watchedProcesses = nil
             }
             return false
+        }
+    }
+
+    func reportOperationError(_ error: any Error) {
+        sudoTouchIDNeedsPermission = error as? ServiceError == .sudoTouchIDPermissionDenied
+        if sudoTouchIDNeedsPermission {
+            message = "Allow Limitless in Full Disk Access, then try again."
+        } else if error as? ServiceError == .sudoTouchIDFailed {
+            message =
+                "Touch ID could not be changed. Check your sudo configuration before retrying."
+        } else {
+            message =
+                "The request was not confirmed. Check the current state and your limits before retrying."
         }
     }
 
@@ -508,10 +522,10 @@ import ServiceManagement
     func setSudoTouchID(_ enabled: Bool) async {
         guard canControl, !busy, !enabled || hasTouchID
         else { return }
-        if !(await perform(.setSudoTouchID(enabled)))
-            || (enabled
-                ? status?.sudoTouchID != .enabled && status?.sudoTouchID != .external
-                : status?.sudoTouchID != .disabled)
+        guard await perform(.setSudoTouchID(enabled)) else { return }
+        if enabled
+            ? status?.sudoTouchID != .enabled && status?.sudoTouchID != .external
+            : status?.sudoTouchID != .disabled
         {
             message =
                 "Touch ID could not be changed. Check the current sudo setting before retrying."
@@ -563,6 +577,21 @@ import ServiceManagement
     func openLoginSettings() {
         guard !isPreview else { return }
         SMAppService.openSystemSettingsLoginItems()
+    }
+
+    func openPrivacySettings() {
+        guard !isPreview else { return }
+        let workspace = NSWorkspace.shared
+        if workspace.open(
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+        ) {
+            return
+        }
+        if let settings = workspace.urlForApplication(
+            withBundleIdentifier: "com.apple.systempreferences")
+        {
+            workspace.open(settings)
+        }
     }
 
     func removeIntegration(forUpdate: Bool = false) async -> Bool {
@@ -661,6 +690,9 @@ import ServiceManagement
             loginStatus = SMAppService.mainApp.status
             message =
                 "\(removalStep ?? "Uninstall") failed: \(error.localizedDescription) Keep Limitless installed and retry."
+            if error as? ServiceError == .sudoTouchIDPermissionDenied {
+                reportOperationError(error)
+            }
             return false
         }
     }
@@ -743,6 +775,9 @@ import ServiceManagement
                 sudoTouchID: state == "touch-id-external" ? .external : .disabled,
                 batteryCutoff: registry.batteryCutoff)
             try! model.accept(ServiceReply(status: previewStatus))
+            if state == "touch-id-permission" {
+                model.reportOperationError(ServiceError.sudoTouchIDPermissionDenied)
+            }
             model.draft = PolicyDraft(policy)
             model.baseline = model.draft
             model.watchedProcesses = watchedProcesses

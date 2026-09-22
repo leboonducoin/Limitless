@@ -44,6 +44,8 @@ The app-only Touch ID operation edits the fixed `sudo_local` file, never `sudo`.
 It requires the standard macOS PAM stack, preserves password fallback and rejects
 custom active rules. Explicit disable can remove an existing Touch ID rule after
 confirmation. Updates keep it; uninstall removes only Limitless’s owned block.
+macOS permission refusals are separate from connection failures. The app offers
+Full Disk Access guidance; it never grants access or retries the write automatically.
 
 AI hooks read lifecycle IDs only. Private markers bind a task to its original
 process and file identity. Setup merges only Limitless hooks, backs up existing
