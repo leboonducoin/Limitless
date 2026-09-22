@@ -4,13 +4,32 @@ import Foundation
 import Security
 
 public struct UpdateSchedule: Codable, Sendable {
-    public static let interval: TimeInterval = 8 * 3_600
+    public static let interval: TimeInterval = 24 * 3_600
     public private(set) var nextCheck = Date.distantPast
     public private(set) var nextDownload = Date.distantPast
     private var checkFailures = 0
     private var downloadFailures = 0
+    private let scheduledInterval = Self.interval
+
+    private enum CodingKeys: String, CodingKey {
+        case nextCheck, nextDownload, checkFailures, downloadFailures, scheduledInterval
+    }
 
     public init() {}
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let previousInterval =
+            try values.decodeIfPresent(
+                TimeInterval.self, forKey: .scheduledInterval) ?? 8 * 3_600
+        let extensionSeconds = max(0, Self.interval - previousInterval)
+        nextCheck = try values.decode(Date.self, forKey: .nextCheck)
+            .addingTimeInterval(extensionSeconds)
+        nextDownload = try values.decode(Date.self, forKey: .nextDownload)
+            .addingTimeInterval(extensionSeconds)
+        checkFailures = try values.decode(Int.self, forKey: .checkFailures)
+        downloadFailures = try values.decode(Int.self, forKey: .downloadFailures)
+    }
 
     public mutating func beginCheck(at now: Date = Date()) -> Bool {
         guard now >= nextCheck else { return false }

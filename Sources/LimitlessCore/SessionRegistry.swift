@@ -15,9 +15,16 @@ public struct SessionEvaluation: Equatable, Sendable {
     public var wantsAwake: Bool { !eligible.isEmpty }
 }
 
+public struct BatteryCutoff: Codable, Equatable, Sendable {
+    public let sessionID: UUID
+    public let percent: Int
+    public let limit: Int
+}
+
 public struct SessionRegistry: Sendable {
     public private(set) var policy: UserPolicy
     public private(set) var sessions: [UUID: Session] = [:]
+    public private(set) var batteryCutoff: BatteryCutoff?
     public static let capacity = 256
 
     public init(policy: UserPolicy) { self.policy = policy }
@@ -40,6 +47,7 @@ public struct SessionRegistry: Sendable {
             id: id, owner: owner, kind: kind, request: request,
             started: now, authorizedDuration: policy.maximumDuration
         )
+        batteryCutoff = nil
         return id
     }
 
@@ -91,6 +99,8 @@ public struct SessionRegistry: Sendable {
                 case .available(let percent, let discharging):
                     if power.source == .battery || discharging, percent <= floor {
                         stopped[session.id] = .batteryFloor
+                        batteryCutoff = BatteryCutoff(
+                            sessionID: session.id, percent: percent, limit: floor)
                         continue
                     }
                 case .unavailable:

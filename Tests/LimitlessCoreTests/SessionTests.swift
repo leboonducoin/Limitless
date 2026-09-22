@@ -29,7 +29,12 @@ func batteryFloorPermanentlyStopsEvenWhenAdapterCannotKeepUp(_ source: PowerSour
     let id = try registry.start(.init(), owner: UUID(), kind: .manual, now: clock())
     let low = PowerSnapshot(source: source, battery: .available(percent: 20, isDischarging: true))
     #expect(registry.evaluate(power: low, now: try clock()).stopped[id] == .batteryFloor)
+    let cutoff = try #require(registry.batteryCutoff)
+    #expect(cutoff.sessionID == id && cutoff.percent == 20 && cutoff.limit == 20)
     #expect(!registry.evaluate(power: ac, now: try clock(200)).wantsAwake)
+    #expect(registry.batteryCutoff == cutoff)
+    try registry.start(.init(), owner: UUID(), kind: .manual, now: clock(201))
+    #expect(registry.batteryCutoff == nil)
 }
 
 @Test func chargingLowBatteryDoesNotTriggerDischargeCutoff() throws {

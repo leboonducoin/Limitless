@@ -10,7 +10,7 @@ how to verify them.
 - Timers, dates, unlimited sessions and waiting for all selected processes.
 - CLI and whole-task AI tracking that respect limits and manual sessions.
 - Helper activation enables launch at login. Users can disable it independently.
-- Optional updates, at most one check/download per eight hours; install while idle.
+- Optional updates, at most one check/download per 24 hours; install while idle.
 - Optional Touch ID for sudo, native administrator consent and complete uninstall.
 
 The sleep flag is global. Restore only state owned by Limitless. Stop, battery

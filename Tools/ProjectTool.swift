@@ -384,6 +384,15 @@ func verifyCompatibility(_ contents: URL, helperPath: String) throws {
         try require(
             minimumVersions.count == 2 && minimumVersions.allSatisfy { $0 == ["minos", "14.0"] },
             "Both architectures must target macOS 14.0.")
+        let sdkVersions = build.split(separator: "\n").map {
+            $0.split(whereSeparator: \.isWhitespace)
+        }.filter { $0.first == "sdk" }
+        try require(
+            sdkVersions.count == 2
+                && sdkVersions.allSatisfy {
+                    $0.count == 2 && (Int($0[1].split(separator: ".").first ?? "") ?? 0) >= 26
+                },
+            "Both architectures must identify the modern SDK used to build the app.")
     }
 }
 
@@ -640,9 +649,13 @@ do {
     }
     let plugin = developer + "/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
     var compilerFlags = ["-Xswiftc", "-warnings-as-errors"]
+    let sdkPath = try run("/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-path"], capture: true)
+    let sdkVersion = try run(
+        "/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-version"], capture: true)
     let buildPath =
-        ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]
-        .map { ["--scratch-path", $0] } ?? []
+        ["--sdk", sdkPath]
+        + (ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]
+            .map { ["--scratch-path", $0] } ?? [])
     if URL(fileURLWithPath: developer).lastPathComponent == "CommandLineTools",
         FileManager.default.fileExists(atPath: plugin)
     {
@@ -749,9 +762,24 @@ do {
             ("LimitlessApp", "MacOS/LimitlessApp"), ("limitless", "MacOS/limitless"),
             ("LimitlessHelper", identity.helperPath),
         ] {
+            let executable = contents.appendingPathComponent(destination)
             try manager.copyItem(
                 at: URL(fileURLWithPath: binaryPath).appendingPathComponent(source),
-                to: contents.appendingPathComponent(destination))
+                to: executable)
+            let build = try run(
+                "/usr/bin/xcrun", ["vtool", "-show-build", executable.path], capture: true)
+            let minimumVersions = build.split(separator: "\n").map {
+                $0.split(whereSeparator: \.isWhitespace)
+            }.filter { $0.first == "minos" }
+            try require(
+                !minimumVersions.isEmpty && minimumVersions.allSatisfy { $0 == ["minos", "14.0"] },
+                "The compiled binaries must already target macOS 14.0.")
+            _ = try run(
+                "/usr/bin/xcrun",
+                [
+                    "vtool", "-set-build-version", "macos", "14.0", sdkVersion,
+                    "-replace", "-output", executable.path, executable.path,
+                ])
         }
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
             .write(to: contents.appendingPathComponent("Info.plist"), options: .withoutOverwriting)

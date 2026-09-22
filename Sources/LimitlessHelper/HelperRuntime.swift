@@ -42,7 +42,7 @@ final class HelperRuntime {
             sessions: sessions.summaries(for: owner, evaluation: evaluation, now: now),
             sampledAt: now.wall,
             removal: sessions.isRemoving ? (removalReady ? .ready : .preparing) : .none,
-            sudoTouchID: SudoTouchID.status())
+            sudoTouchID: SudoTouchID.status(), batteryCutoff: sessions.registry.batteryCutoff)
     }
 
     func takeExpiredOwners() -> Set<UUID> {

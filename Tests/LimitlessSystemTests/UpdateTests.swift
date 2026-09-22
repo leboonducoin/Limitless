@@ -58,7 +58,7 @@ import Testing
 @Test func updateRequestsStaySpacedAcrossRestartsAndRepeatedFailures() throws {
     let now = Date(timeIntervalSince1970: 1_700_000_000)
     let interval = UpdateSchedule.interval
-    #expect(interval == 28_800)
+    #expect(interval == 86_400)
     var schedule = UpdateSchedule()
     func check(_ date: Date) -> Bool { schedule.beginCheck(at: date) }
     func download(_ date: Date) -> Bool { schedule.beginDownload(at: date) }
@@ -83,6 +83,26 @@ import Testing
     #expect(!download(reset.addingTimeInterval(-1)))
     #expect(check(reset))
     #expect(download(reset))
+}
+
+@Test func oldEightHourScheduleMovesToDailyWithoutShorteningGitHubBackoff() throws {
+    let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
+    let data = try JSONSerialization.data(withJSONObject: [
+        "nextCheck": now.addingTimeInterval(8 * 3_600).timeIntervalSinceReferenceDate,
+        "nextDownload": now.addingTimeInterval(7 * 86_400).timeIntervalSinceReferenceDate,
+        "checkFailures": 0, "downloadFailures": 4,
+    ])
+    var schedule = try JSONDecoder().decode(UpdateSchedule.self, from: data)
+    #expect(schedule.nextCheck == now.addingTimeInterval(86_400))
+    #expect(schedule.nextDownload >= now.addingTimeInterval(7 * 86_400))
+    let restored = try JSONDecoder().decode(
+        UpdateSchedule.self, from: JSONEncoder().encode(schedule))
+    #expect(restored.nextCheck == schedule.nextCheck)
+    #expect(restored.nextDownload == schedule.nextDownload)
+    let early = schedule.beginCheck(at: now.addingTimeInterval(86_399))
+    #expect(!early)
+    let due = schedule.beginCheck(at: now.addingTimeInterval(86_400))
+    #expect(due)
 }
 
 private func releaseData(
