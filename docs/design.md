@@ -7,7 +7,7 @@ separate preferences window. Content sets the height; long lists scroll.
 - Standard square menu-bar item: 21-point loop, 5-point orange dot below/right.
 - Small footer: version, blue author link, MIT and GitHub.
 - Immediate settings, one Stop button, outside-click dismissal.
-- Right-click Quit/Uninstall follows the app's light/dark appearance; red destructive confirmation.
+- Right-click Check for Updates/Quit/Uninstall follows the app's light/dark appearance; red destructive confirmation.
 - Timer and remaining PIDs refresh each second without animation.
 - Native opening motion; immediate keyboard and Reduce Motion opening.
 - No selected control on opening; Tab keeps its native focus indicator.
@@ -22,8 +22,8 @@ Values above 80 become 80. Return or leaving the field applies it.
 Explain a blocked start or battery cutoff beside the session controls, with a red warning symbol.
 Only process mode shows the session ceiling; wait for all selected PIDs.
 
-CLI opt-in is remembered without restarting a session. Updates are opt-in and
-install only while idle; background check failures do not add text to the menu.
+CLI opt-in is remembered without restarting a session. Updates start enabled
+after helper approval and install only while idle; background check failures do not add text to the menu.
 Uninstall shows progress and keeps a retryable error if cleanup fails.
 
 Touch ID for sudo appears on supported Macs after helper approval. Confirm its

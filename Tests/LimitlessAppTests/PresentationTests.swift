@@ -277,6 +277,21 @@ private func status(
         #expect(registrations == 1)
     }
 
+    @Test @MainActor func helperApprovalEnablesUpdatesOnlyWhenNoChoiceWasSaved() throws {
+        let suite = "Limitless-updates-test-\(UUID().uuidString)"
+        let preferences = try #require(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let model = AppModel(preferences: preferences)
+        model.completeUpdateSetup(helperStatus: .requiresApproval)
+        #expect(!model.automaticUpdates)
+        model.completeUpdateSetup(helperStatus: .enabled)
+        #expect(model.automaticUpdates)
+        model.automaticUpdates = false
+        let reopened = AppModel(preferences: preferences)
+        reopened.completeUpdateSetup(helperStatus: .enabled)
+        #expect(!reopened.automaticUpdates)
+    }
+
     @Test @MainActor func sudoTouchIDPermissionFeedbackPreservesSessionState() throws {
         let model = AppModel.preview("active")
         let before = model.status
@@ -315,7 +330,7 @@ private func status(
         await model.setLaunchAtLogin(true)
         model.draft.batteryFloor = 42
         model.policyEdited()
-        await model.checkForUpdates()
+        _ = await model.checkForUpdates()
         await model.installUpdate()
         #expect(model.availableUpdate == nil && !model.updating)
         #expect(await model.removeIntegration() == false)

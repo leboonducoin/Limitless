@@ -30,9 +30,11 @@ This remains a broad macOS permission, held by the separate sudo helper.
 
 ## Updates and removal
 
-Automatic updates are optional. Otherwise, an **Update** button appears when a
-version is available. Limitless checks at most once every 24 hours. It verifies
-the download, waits until no session is running, then installs and reopens the app.
+Automatic updates turn on with the helper and can be disabled. Otherwise, an **Update** button appears when a
+version is available. Limitless checks every 12 hours. Right-click the menu-bar
+icon → **Check for Updates** to check now and install an available update while
+idle. A manual check resets the 12-hour timer. Checks and downloads use the same
+12-hour interval. Limitless verifies the download, then installs and reopens the app.
 
 Right-click the menu-bar icon → **Uninstall Limitless**. This stops sessions and
 removes the app, helper, CLI shortcut, login item, preferences and AI integrations

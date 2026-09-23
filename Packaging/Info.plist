@@ -8,7 +8,7 @@
     <key>CFBundleExecutable</key><string>LimitlessApp</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.0.1</string>
-    <key>CFBundleVersion</key><string>25</string>
+    <key>CFBundleVersion</key><string>26</string>
     <key>CFBundleIconFile</key><string>Limitless</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LimitlessHelperInstallation</key><string>bundled</string>

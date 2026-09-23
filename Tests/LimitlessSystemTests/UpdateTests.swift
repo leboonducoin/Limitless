@@ -58,7 +58,7 @@ import Testing
 @Test func updateRequestsStaySpacedAcrossRestartsAndRepeatedFailures() throws {
     let now = Date(timeIntervalSince1970: 1_700_000_000)
     let interval = UpdateSchedule.interval
-    #expect(interval == 86_400)
+    #expect(interval == 43_200)
     var schedule = UpdateSchedule()
     func check(_ date: Date) -> Bool { schedule.beginCheck(at: date) }
     func download(_ date: Date) -> Bool { schedule.beginDownload(at: date) }
@@ -85,7 +85,24 @@ import Testing
     #expect(download(reset))
 }
 
-@Test func oldEightHourScheduleMovesToDailyWithoutShorteningGitHubBackoff() throws {
+@Test func manualCheckResetsTwelveHourClockWithoutBypassingCooldownOrRateLimits() throws {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    var schedule = UpdateSchedule()
+    func check(_ date: Date, manual: Bool = false) -> Bool {
+        schedule.beginCheck(manual: manual, at: date)
+    }
+    #expect(check(now))
+    #expect(!check(now.addingTimeInterval(299), manual: true))
+    let manual = now.addingTimeInterval(300)
+    #expect(check(manual, manual: true))
+    #expect(schedule.nextCheck == manual.addingTimeInterval(UpdateSchedule.interval))
+    schedule.failed(download: false, retryAfter: manual.addingTimeInterval(86_400), at: manual)
+    schedule = try JSONDecoder().decode(UpdateSchedule.self, from: JSONEncoder().encode(schedule))
+    #expect(!check(manual.addingTimeInterval(600), manual: true))
+    #expect(check(manual.addingTimeInterval(86_400), manual: true))
+}
+
+@Test func oldEightHourScheduleMovesToTwelveHoursWithoutShorteningGitHubBackoff() throws {
     let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
     let data = try JSONSerialization.data(withJSONObject: [
         "nextCheck": now.addingTimeInterval(8 * 3_600).timeIntervalSinceReferenceDate,
@@ -93,16 +110,32 @@ import Testing
         "checkFailures": 0, "downloadFailures": 4,
     ])
     var schedule = try JSONDecoder().decode(UpdateSchedule.self, from: data)
-    #expect(schedule.nextCheck == now.addingTimeInterval(86_400))
+    #expect(schedule.nextCheck == now.addingTimeInterval(43_200))
     #expect(schedule.nextDownload >= now.addingTimeInterval(7 * 86_400))
     let restored = try JSONDecoder().decode(
         UpdateSchedule.self, from: JSONEncoder().encode(schedule))
     #expect(restored.nextCheck == schedule.nextCheck)
     #expect(restored.nextDownload == schedule.nextDownload)
-    let early = schedule.beginCheck(at: now.addingTimeInterval(86_399))
+    let early = schedule.beginCheck(at: now.addingTimeInterval(43_199))
     #expect(!early)
-    let due = schedule.beginCheck(at: now.addingTimeInterval(86_400))
+    let due = schedule.beginCheck(at: now.addingTimeInterval(43_200))
     #expect(due)
+}
+
+@Test func oldDailyScheduleMovesToTwelveHoursButKeepsFailureBackoff() throws {
+    let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
+    func legacy(_ failures: Int) throws -> UpdateSchedule {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "nextCheck": now.addingTimeInterval(86_400).timeIntervalSinceReferenceDate,
+            "nextDownload": now.addingTimeInterval(86_400).timeIntervalSinceReferenceDate,
+            "checkFailures": failures, "downloadFailures": 0,
+            "scheduledInterval": 86_400,
+        ])
+        return try JSONDecoder().decode(UpdateSchedule.self, from: data)
+    }
+    #expect(try legacy(0).nextCheck == now.addingTimeInterval(43_200))
+    #expect(try legacy(1).nextCheck == now.addingTimeInterval(86_400))
+    #expect(try legacy(0).nextDownload == now.addingTimeInterval(43_200))
 }
 
 private func releaseData(

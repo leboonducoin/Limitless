@@ -4,15 +4,18 @@ import Foundation
 import Security
 
 public struct UpdateSchedule: Codable, Sendable {
-    public static let interval: TimeInterval = 24 * 3_600
+    public static let interval: TimeInterval = 12 * 3_600
     public private(set) var nextCheck = Date.distantPast
     public private(set) var nextDownload = Date.distantPast
     private var checkFailures = 0
     private var downloadFailures = 0
+    private var manualCheckAfter = Date.distantPast
+    private var rateLimitUntil = Date.distantPast
     private let scheduledInterval = Self.interval
 
     private enum CodingKeys: String, CodingKey {
         case nextCheck, nextDownload, checkFailures, downloadFailures, scheduledInterval
+        case manualCheckAfter, rateLimitUntil
     }
 
     public init() {}
@@ -22,18 +25,32 @@ public struct UpdateSchedule: Codable, Sendable {
         let previousInterval =
             try values.decodeIfPresent(
                 TimeInterval.self, forKey: .scheduledInterval) ?? 8 * 3_600
-        let extensionSeconds = max(0, Self.interval - previousInterval)
-        nextCheck = try values.decode(Date.self, forKey: .nextCheck)
-            .addingTimeInterval(extensionSeconds)
-        nextDownload = try values.decode(Date.self, forKey: .nextDownload)
-            .addingTimeInterval(extensionSeconds)
         checkFailures = try values.decode(Int.self, forKey: .checkFailures)
         downloadFailures = try values.decode(Int.self, forKey: .downloadFailures)
+        let checkShift =
+            checkFailures == 0
+            ? Self.interval - previousInterval : max(0, Self.interval - previousInterval)
+        let downloadShift =
+            downloadFailures == 0
+            ? Self.interval - previousInterval : max(0, Self.interval - previousInterval)
+        nextCheck = try values.decode(Date.self, forKey: .nextCheck)
+            .addingTimeInterval(checkShift)
+        nextDownload = try values.decode(Date.self, forKey: .nextDownload)
+            .addingTimeInterval(downloadShift)
+        manualCheckAfter =
+            try values.decodeIfPresent(Date.self, forKey: .manualCheckAfter)
+            ?? .distantPast
+        rateLimitUntil =
+            try values.decodeIfPresent(Date.self, forKey: .rateLimitUntil)
+            ?? .distantPast
     }
 
-    public mutating func beginCheck(at now: Date = Date()) -> Bool {
-        guard now >= nextCheck else { return false }
+    public mutating func beginCheck(manual: Bool = false, at now: Date = Date()) -> Bool {
+        let due = (manual && checkFailures == 0) || now >= nextCheck
+        guard now >= manualCheckAfter, now >= rateLimitUntil, due
+        else { return false }
         nextCheck = now.addingTimeInterval(Self.interval)
+        manualCheckAfter = now.addingTimeInterval(5 * 60)
         return true
     }
 
@@ -60,6 +77,7 @@ public struct UpdateSchedule: Codable, Sendable {
             nextCheck = max(nextCheck, next)
         }
         if let retryAfter {
+            rateLimitUntil = max(rateLimitUntil, retryAfter)
             nextCheck = max(nextCheck, retryAfter)
             nextDownload = max(nextDownload, retryAfter)
         }

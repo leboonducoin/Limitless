@@ -11,9 +11,11 @@ I made Limitless to keep my Mac awake while it works. A small, native macOS
 menu-bar app, written in Swift. Free and open source.
 I also added Touch ID for sudo because I was tired of typing my long password.
 
-https://github.com/user-attachments/assets/9c802476-0d3e-4361-849e-47052ec59acb
+https://github.com/user-attachments/assets/cb0233de-a04c-4922-82fa-3982a875f0d6
 
-Original soundtrack: [MP3](https://github.com/leboonducoin/Limitless/releases/download/v1.0.1/Controlled-Acceleration.mp3) · [WAV](https://github.com/leboonducoin/Limitless/releases/download/v1.0.1/Controlled-Acceleration.wav)
+[Showcase video](assets/showcase.mp4) · [Screenshots](assets/showcase-stills/)
+
+Original soundtrack: [MP3](assets/Controlled-Acceleration.mp3) · [WAV](assets/Controlled-Acceleration.wav)
 
 ## Install
 
@@ -38,10 +40,10 @@ Choose a duration and click **Keep awake**. The orange dot means it is active.
 - Choose battery, power adapter, or both. Reserve 20% battery by default.
 - Keep awake with the lid closed, without an external display on compatible Macs.
 - Let Codex, Claude, Cursor or Gemini keep your Mac awake during their tasks.
-- Open automatically at login and enable automatic updates if you want them.
+- Launch at login and automatic updates turn on when you enable the helper; both can be turned off.
 - Optionally use Touch ID for sudo, with password fallback.
 
-Right-click the icon to **Quit** or **Uninstall**.
+Right-click the icon to **Check for Updates**, **Quit** or **Uninstall**.
 
 For the terminal and AI integrations, enable **Allow CLI & AI tasks** in the app:
 

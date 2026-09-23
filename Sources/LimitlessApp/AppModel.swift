@@ -62,6 +62,8 @@ import ServiceManagement
     private var policyApplication: Task<Void, Never>?
     private var updateMonitoring: Task<Void, Never>?
     private var updateInstallation: Task<Void, Never>?
+    private var checkingUpdates = false
+    private var lastUpdateCheckSucceeded = false
     private var updateSchedule: UpdateSchedule {
         didSet {
             guard !isPreview, let data = try? JSONEncoder().encode(updateSchedule) else { return }
@@ -138,6 +140,15 @@ import ServiceManagement
             && status.sleep.observed == .allowed
             && (status.sleep.phase == .inactive || status.sleep.phase == .blocked)
     }
+    var canInstallAvailableUpdate: Bool {
+        !busy && !sudoTouchIDBusy && !updating && readyToUpdate
+            && Date() >= updateSchedule.nextDownload
+    }
+    var updateInstallBlockMessage: String {
+        Date() < updateSchedule.nextDownload
+            ? "Update postponed. Please try again later."
+            : "Stop current sessions to install the update."
+    }
 
     func remainingSeconds(_ session: SessionSummary) -> Double? {
         guard let remaining = session.remainingSeconds else { return nil }
@@ -183,7 +194,7 @@ import ServiceManagement
         if trustedBuild {
             updateMonitoring = Task { [weak self] in
                 while !Task.isCancelled {
-                    await self?.checkForUpdates()
+                    _ = await self?.checkForUpdates()
                     let delay = max(
                         60,
                         self?.updateSchedule.nextCheck.timeIntervalSinceNow
@@ -214,19 +225,28 @@ import ServiceManagement
         }
     }
 
-    func checkForUpdates() async {
-        guard trustedBuild, !isPreview, !quitting, !updating,
-            updateSchedule.beginCheck()
-        else { return }
+    func checkForUpdates(manual: Bool = false) async -> Bool? {
+        guard trustedBuild, !isPreview, !quitting, !updating, !checkingUpdates else { return nil }
+        guard updateSchedule.beginCheck(manual: manual) else {
+            return manual && lastUpdateCheckSucceeded ? availableUpdate != nil : nil
+        }
+        checkingUpdates = true
+        defer { checkingUpdates = false }
+        if manual { updateMessage = nil }
         do {
             availableUpdate = try await GitHubUpdate.latest(
                 currentVersion: LimitlessIdentity.version)
             updateSchedule.checked()
+            lastUpdateCheckSucceeded = true
+            return availableUpdate != nil
         } catch UpdateError.rateLimited(let until) {
             updateSchedule.failed(download: false, retryAfter: until)
         } catch {
             updateSchedule.failed(download: false)
         }
+        lastUpdateCheckSucceeded = false
+        if manual { updateMessage = "Update check failed. Please try again later." }
+        return nil
     }
 
     func installUpdate() async {
@@ -303,6 +323,7 @@ import ServiceManagement
             watchedProcesses = nil
             return
         }
+        completeUpdateSetup(helperStatus: helperStatus)
         do {
             try completeLoginSetup(helperStatus: helperStatus) {
                 if loginStatus != .enabled && loginStatus != .requiresApproval {
@@ -595,6 +616,13 @@ import ServiceManagement
         else { return }
         preferences.removeObject(forKey: "enableLoginAfterHelperApproval")
         try register()
+    }
+
+    func completeUpdateSetup(helperStatus: SMAppService.Status) {
+        guard helperStatus == .enabled,
+            preferences.object(forKey: "automaticUpdates") == nil
+        else { return }
+        automaticUpdates = true
     }
 
     func openLoginSettings() {

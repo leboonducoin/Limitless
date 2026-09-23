@@ -1,9 +1,9 @@
 # Changelog
 
-## 1.0.1 — 2026-09-23
+## 1.0.1 — 2026-09-24
 
-- Add the launch film and original soundtrack downloads in MP3 and WAV.
-- Bump the app version for the GitHub automatic-update test. No feature changes.
+- Add the showcase film, its screenshots and original MP3/WAV soundtrack to `assets/`.
+- Enable automatic updates with the helper; check every 12 hours or check and install from the menu-bar icon.
 
 ## 1.0.0 — 2026-09-23
 

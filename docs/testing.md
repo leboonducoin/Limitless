@@ -66,7 +66,8 @@ macOS version and any steps that fail.
   without interrupting an awake session. The button must open only System Settings.
   Enable the sudo helper's entry and retry; no automatic retry. Revoke access and
   verify that a later change fails.
-- Check updates while idle, then uninstall. The app should close and its integrations disappear.
+- Right-click **Check for Updates**. An available update installs only while idle;
+  a manual check resets the 12-hour clock. Then uninstall: the app should close and its integrations disappear.
   Cancel the sudo component's administrator prompt, retry removal, and verify both
   helpers disappear. An existing external sudo setting must remain unchanged.
 

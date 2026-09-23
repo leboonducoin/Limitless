@@ -137,7 +137,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         item.button?.target = self
         item.button?.action = #selector(clickStatusItem)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        item.button?.setAccessibilityHelp("Click to open. Right-click for Quit and Uninstall.")
+        item.button?.setAccessibilityHelp(
+            "Click to open. Right-click for updates, uninstall and quit.")
         if let button = item.button {
             activeDot.frame = NSRect(
                 x: button.bounds.midX + 6,
@@ -232,6 +233,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     private func actionsMenu() -> NSMenu {
         let menu = NSMenu()
         menu.appearance = NSApp.effectiveAppearance
+        let updates = NSMenuItem(
+            title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.target = self
+        menu.addItem(updates)
+        menu.addItem(.separator())
         let uninstall = NSMenuItem(
             title: "Uninstall Limitless…", action: #selector(uninstall), keyEquivalent: "")
         uninstall.target = self
@@ -246,7 +252,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     @objc private func quit() { NSApp.terminate(nil) }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        menuItem.action != #selector(uninstall) || (!model.updating && !model.sudoTouchIDBusy)
+        if menuItem.action == #selector(checkForUpdates) {
+            return model.trustedBuild && !model.isPreview && !model.updating
+        }
+        return menuItem.action != #selector(uninstall)
+            || (!model.updating && !model.sudoTouchIDBusy)
+    }
+
+    @objc private func checkForUpdates() {
+        Task {
+            let result = await model.checkForUpdates(manual: true)
+            if result == true, model.canInstallAvailableUpdate {
+                model.requestUpdate()
+                return
+            }
+            let alert = NSAlert()
+            alert.messageText = result == true ? "Update available" : "Limitless updates"
+            alert.informativeText =
+                result == true
+                ? model.updateInstallBlockMessage
+                : result == false
+                    ? "Limitless is up to date."
+                    : model.updateMessage ?? "The next check is available later."
+            alert.addButton(withTitle: "OK")
+            NSApp.activate()
+            alert.runModal()
+        }
     }
 
     @objc private func uninstall() {
