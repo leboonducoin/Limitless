@@ -34,7 +34,7 @@ Access button. It opens only System Settings.
 Keep the observed toggle state and the helper connection.
 
 Native previews are inert. Check light/dark appearance, keyboard, VoiceOver,
-contrast and reduced motion before release. [Testing](testing.md).
+contrast and reduced motion for each release. [Testing](testing.md).
 
 Keep the translucent native material on macOS 14 and later. Use Liquid Glass
 controls on macOS 26+, with standard controls on older versions. Accessibility

@@ -6,8 +6,6 @@
 2. Unzip it, drag **Limitless.app** to **Applications** and open it.
 3. Click its menu-bar icon, then **Enable Limitless**. Approve the macOS prompt.
 
-The first public archive has not been published yet.
-
 The same download includes the app, CLI and AI skill. Launch at login turns on
 after helper approval. You can turn it off; it never starts a keep-awake session.
 Enable **Allow CLI & AI tasks** to use the [terminal and AI integrations](cli.md).

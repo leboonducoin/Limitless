@@ -685,9 +685,11 @@ do {
     }
     let plugin = developer + "/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
     var compilerFlags = ["-Xswiftc", "-warnings-as-errors"]
-    let sdkPath = try run("/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-path"], capture: true)
+    let sdkPath =
+        try ProcessInfo.processInfo.environment["SDKROOT"]
+        ?? run("/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-path"], capture: true)
     let sdkVersion = try run(
-        "/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-version"], capture: true)
+        "/usr/bin/xcrun", ["--sdk", sdkPath, "--show-sdk-version"], capture: true)
     let buildPath =
         ["--sdk", sdkPath]
         + (ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]

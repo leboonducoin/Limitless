@@ -20,9 +20,9 @@ I also added Touch ID for sudo because I was tired of typing my long password.
 **Intel & Apple Silicon · macOS 14 or later**
 
 [GitHub Releases](https://github.com/leboonducoin/Limitless/releases) is the only
-download location. The first public archive has not been published yet.
+download location.
 
-Once available: unzip **Limitless.app**, drag it to **Applications**, then open it.
+Unzip the archive, drag **Limitless.app** to **Applications**, then open it.
 The icon appears in your menu bar. Click **Enable Limitless** and approve the
 macOS administrator prompt. Your password is never stored.
 Launch at login turns on with the helper; you can turn it off in the menu.
