@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 — 2026-09-23
+
+- Add the launch film and original soundtrack downloads in MP3 and WAV.
+- Bump the app version for the GitHub automatic-update test. No feature changes.
+
 ## 1.0.0 — 2026-09-23
 
 - Keep your Mac awake from the menu bar, including with the lid closed where supported.

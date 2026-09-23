@@ -11,9 +11,9 @@ I made Limitless to keep my Mac awake while it works. A small, native macOS
 menu-bar app, written in Swift. Free and open source.
 I also added Touch ID for sudo because I was tired of typing my long password.
 
-<p align="center">
-  <img src="docs/images/menu-preview.png" width="340" alt="Limitless on macOS: active keep-awake session, timer, power source and battery protection">
-</p>
+https://github.com/user-attachments/assets/9c802476-0d3e-4361-849e-47052ec59acb
+
+Original soundtrack: [MP3](https://github.com/leboonducoin/Limitless/releases/download/v1.0.1/Controlled-Acceleration.mp3) · [WAV](https://github.com/leboonducoin/Limitless/releases/download/v1.0.1/Controlled-Acceleration.wav)
 
 ## Install
 
