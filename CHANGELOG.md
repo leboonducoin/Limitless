@@ -1,15 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 — 2026-09-23
 
-- Native macOS menu-bar app with closed-lid keep-awake support.
-- Timers, dates, multiple processes and unlimited sessions.
-- Battery protection and separate battery/adapter modes.
-- CLI commands and whole-task AI integration with manual-session priority.
-- One-command setup for Codex, Claude, Cursor and Gemini.
-- Larger menu icon and orange active dot, within standard menu-bar spacing.
-- Update checks and downloads spaced by at least eight hours, including after relaunch.
-- Quieter update handling, with longer waits after failures.
-- Retina menu preview and shorter user guides.
-- Independent launch at login and complete app removal.
-- Optional Touch ID for sudo, preserving password fallback and existing setups.
+- Keep your Mac awake from the menu bar, including with the lid closed where supported.
+- Choose a timer, date, process, power source and battery limit.
+- Use the CLI and whole-task integration with Codex, Claude, Cursor or Gemini.
+- Enable Touch ID for sudo, launch at login and automatic updates if you want them.
+- Uninstall the app and its integrations from the menu bar.

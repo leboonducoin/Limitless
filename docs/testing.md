@@ -25,6 +25,8 @@ If the repository is in an iCloud-synced folder, keep build files outside it:
 env LIMITLESS_BUILD_PATH=/private/tmp/limitless-build swift Tools/ProjectTool.swift check
 ```
 
+Set `SDKROOT` to an installed SDK path if the selected SDK and Swift compiler do not match.
+
 ## Preview the interface
 
 ```sh
