@@ -27,7 +27,9 @@ public struct UpdateSchedule: Codable, Sendable {
                 TimeInterval.self, forKey: .scheduledInterval) ?? 8 * 3_600
         checkFailures = try values.decode(Int.self, forKey: .checkFailures)
         downloadFailures = try values.decode(Int.self, forKey: .downloadFailures)
-        guard [8 * 3_600, Self.interval, 24 * 3_600].contains(previousInterval),
+        guard
+            [TimeInterval(8 * 3_600), Self.interval, TimeInterval(24 * 3_600)]
+                .contains(previousInterval),
             (0...6).contains(checkFailures), (0...6).contains(downloadFailures)
         else {
             throw DecodingError.dataCorrupted(
