@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2 — 2026-09-24
+
+- Harden Codex, Claude, Cursor and Gemini setup against unsafe path changes and restore the previous configuration after a failed setup or removal.
+- Restore the previous app and helper state after a failed automatic update, and reset download backoff after a successful update.
+
 ## 1.0.1 — 2026-09-24
 
 - Add the showcase film, its screenshots and original MP3/WAV soundtrack to `assets/`.
