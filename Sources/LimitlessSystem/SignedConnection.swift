@@ -4,7 +4,7 @@ import Security
 import SystemConfiguration
 
 public enum LimitlessIdentity {
-    public static let version = "1.0.2"
+    public static let version = "1.0.3"
     public static let application = "io.github.leboonducoin.Limitless"
     public static let commandLine = application + ".cli"
     public static let helper = application + ".helper"

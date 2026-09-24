@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.3 — 2026-09-25
 
 - Install automatic updates immediately after an eight-hour check, hide delayed update actions and allow a fresh manual check from the menu-bar icon.
 - Accept the bundled Limitless Sudo app during secure update extraction and keep the power-source control stable while the menu opens.
