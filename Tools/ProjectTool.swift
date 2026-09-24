@@ -126,6 +126,11 @@ func certificateRequirement(identifier: String, certificate: String) throws -> S
     return "identifier \"\(identifier)\" and certificate leaf = H\"\(certificate.lowercased())\""
 }
 
+func communityDesignatedRequirement(identifier: String, certificate: String) throws -> String {
+    _ = try certificateRequirement(identifier: identifier, certificate: certificate)
+    return "identifier \"\(identifier)\" and anchor = H\"\(certificate.lowercased())\""
+}
+
 func communityMetadata(info: [String: Any], certificate: String?, sudo: Bool = false) throws
     -> (app: [String: Any], helper: [String: Any], daemon: [String: Any])
 {
@@ -477,6 +482,11 @@ func selfTest(developmentApp: URL? = nil) throws {
     let identifier = "io.github.leboonducoin.Limitless"
     let certificate = String(repeating: "AB", count: 20)
     _ = try ReleaseIdentity.community(certificate: certificate).requirement(identifier: identifier)
+    let designated = try communityDesignatedRequirement(
+        identifier: identifier, certificate: certificate)
+    try require(
+        designated.contains("anchor = H\"\(certificate.lowercased())\""),
+        "Community signatures must pin their self-signed anchor.")
     for invalid in ["", String(certificate.dropLast()), certificate + "\n", "\" or true"] {
         try rejects { _ = try certificateRequirement(identifier: identifier, certificate: invalid) }
     }
@@ -921,14 +931,27 @@ do {
             ),
             ("Helpers/Limitless Sudo.app", "io.github.leboonducoin.Limitless.sudo"),
         ] {
+            let requirements =
+                signing && community
+                ? [
+                    "--requirements",
+                    "=designated => \(try communityDesignatedRequirement(identifier: identifier, certificate: certificate))",
+                ] : []
             _ = try run(
                 "/usr/bin/codesign",
                 [
                     "--force", "--sign", signature, "--identifier", identifier,
-                ] + signingOptions + [contents.appendingPathComponent(path).path])
+                ] + signingOptions + requirements + [contents.appendingPathComponent(path).path])
         }
+        let appRequirements =
+            signing && community
+            ? [
+                "--requirements",
+                "=designated => \(try communityDesignatedRequirement(identifier: "io.github.leboonducoin.Limitless", certificate: certificate))",
+            ] : []
         _ = try run(
-            "/usr/bin/codesign", ["--force", "--sign", signature] + signingOptions + [app.path])
+            "/usr/bin/codesign",
+            ["--force", "--sign", signature] + signingOptions + appRequirements + [app.path])
         _ = try run("/usr/bin/codesign", ["--verify", "--strict", "--deep", app.path])
         _ = try run(
             "/usr/bin/plutil",

@@ -83,3 +83,7 @@ is a reviewed exception: Apple’s certificate selector requires a SHA-1 fingerp
 It identifies a public certificate; archive integrity uses SHA-256. Native
 signature validation remains mandatory and the query stays enabled.
 [Apple requirement language](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/RequirementLang/RequirementLang.html).
+Community signatures also embed a designated requirement for the exact self-signed
+anchor and executable identifier. Reciprocal app, CLI and helper authorization keeps
+pinning the exact leaf certificate and identifier; neither requirement asks macOS to
+trust a separately installed certificate.

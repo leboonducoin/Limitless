@@ -69,11 +69,16 @@ func main() throws {
                 .write(
                     to: contents.appendingPathComponent("Info.plist"), options: .withoutOverwriting)
         }
-        for bundle in [service, app] {
+        for (bundle, identifier) in [
+            (service, "io.github.leboonducoin.Limitless.helper"),
+            (app, "io.github.leboonducoin.Limitless.cli"),
+        ] {
             try run(
                 "/usr/bin/codesign",
                 [
                     "--force", "--sign", certificate, "--options", "runtime", "--timestamp=none",
+                    "--requirements",
+                    "=designated => identifier \"\(identifier)\" and anchor = H\"\(certificate)\"",
                     bundle.path,
                 ])
         }

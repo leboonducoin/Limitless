@@ -42,6 +42,14 @@ func main() throws {
     let candidate = staging.appendingPathComponent("Limitless.app")
     let certificate = args[0]
     func sign(_ app: URL, certificate: String) throws {
+        func requirements(for identifier: String) -> [String] {
+            certificate == "-"
+                ? []
+                : [
+                    "--requirements",
+                    "=designated => identifier \"\(identifier)\" and anchor = H\"\(certificate)\"",
+                ]
+        }
         let plist =
             try PropertyListSerialization.propertyList(
                 from: Data(contentsOf: app.appendingPathComponent("Contents/Info.plist")),
@@ -66,15 +74,14 @@ func main() throws {
                 "/usr/bin/codesign",
                 [
                     "--force", "--sign", certificate, "--options", "runtime", "--timestamp=none",
-                    "--identifier", identifier, app.appendingPathComponent(path).path,
-                ])
+                    "--identifier", identifier,
+                ] + requirements(for: identifier) + [app.appendingPathComponent(path).path])
         }
         try run(
             "/usr/bin/codesign",
             [
                 "--force", "--sign", certificate, "--options", "runtime", "--timestamp=none",
-                app.path,
-            ])
+            ] + requirements(for: "io.github.leboonducoin.Limitless") + [app.path])
     }
     func setVersion(_ app: URL, _ version: String) throws {
         let path = app.appendingPathComponent("Contents/Info.plist")
