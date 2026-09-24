@@ -45,6 +45,20 @@ public enum AgentSetup {
         }
     }
 
+    private static func restore(_ url: URL, home: URL, previous: Data?, attempted: Data) throws {
+        try validate(url, home: home)
+        let current = try read(url)
+        guard current == previous || current == attempted else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        guard current != previous else { return }
+        if let previous {
+            try previous.write(to: url, options: .atomic)
+        } else {
+            try FileManager.default.removeItem(at: url)
+        }
+    }
+
     static func merged(_ data: Data?, template: Data, provider: String, remove: Bool) throws -> Data
     {
         let source = try JSONSerialization.jsonObject(with: template) as? [String: Any]
@@ -121,7 +135,8 @@ public enum AgentSetup {
             contentsOf: resources.appendingPathComponent("hooks/\(provider).json"))
         let updated = try merged(old, template: template, provider: provider, remove: remove)
         let skillText = try Data(contentsOf: resources.appendingPathComponent("SKILL.md"))
-        if fileManager.fileExists(atPath: skill.path) {
+        let skillExisted = fileManager.fileExists(atPath: skill.path)
+        if skillExisted {
             try validate(skill.appendingPathComponent("SKILL.md"), home: home)
             try validate(marker, home: home)
             let names = try fileManager.contentsOfDirectory(atPath: skill.path)
@@ -137,28 +152,55 @@ public enum AgentSetup {
         try fileManager.createDirectory(
             at: config.deletingLastPathComponent(), withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
-        if !unchanged, let old {
-            let backup = config.appendingPathExtension("limitless-backup-" + UUID().uuidString)
-            guard
-                fileManager.createFile(
-                    atPath: backup.path, contents: old, attributes: [.posixPermissions: 0o600])
-            else {
-                throw CocoaError(.fileWriteUnknown)
+        var backup: URL?
+        do {
+            if !unchanged, let old {
+                let path = config.appendingPathExtension("limitless-backup-" + UUID().uuidString)
+                guard
+                    fileManager.createFile(
+                        atPath: path.path, contents: old, attributes: [.posixPermissions: 0o600])
+                else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
+                backup = path
             }
-        }
-        if !remove {
-            try fileManager.createDirectory(
-                at: skill, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700]
-            )
-            try skillText.write(to: skill.appendingPathComponent("SKILL.md"), options: .atomic)
-            try savedMarker.write(to: marker, options: .atomic)
-        }
-        if !unchanged {
-            guard try read(config) == old else { throw CocoaError(.fileWriteUnknown) }
-            try updated.write(to: config, options: .atomic)
-            if old == nil {
-                try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: config.path)
+            if !remove {
+                try fileManager.createDirectory(
+                    at: skill, withIntermediateDirectories: true,
+                    attributes: [.posixPermissions: 0o700]
+                )
+                try skillText.write(to: skill.appendingPathComponent("SKILL.md"), options: .atomic)
+                try savedMarker.write(to: marker, options: .atomic)
             }
+            if !unchanged {
+                guard try read(config) == old else { throw CocoaError(.fileWriteUnknown) }
+                try updated.write(to: config, options: .atomic)
+                if old == nil {
+                    try fileManager.setAttributes(
+                        [.posixPermissions: 0o600], ofItemAtPath: config.path)
+                }
+            }
+        } catch {
+            let setupError = error
+            try restore(config, home: home, previous: old, attempted: updated)
+            if !remove {
+                try restore(
+                    skill.appendingPathComponent("SKILL.md"), home: home,
+                    previous: oldSkill, attempted: skillText)
+                try restore(
+                    marker, home: home, previous: existingMarker, attempted: savedMarker)
+                if !skillExisted, fileManager.fileExists(atPath: skill.path),
+                    try fileManager.contentsOfDirectory(atPath: skill.path).isEmpty
+                {
+                    try fileManager.removeItem(at: skill)
+                }
+            }
+            if let backup {
+                try validate(backup, home: home)
+                guard try read(backup) == old else { throw CocoaError(.fileWriteUnknown) }
+                try fileManager.removeItem(at: backup)
+            }
+            throw setupError
         }
         if remove {
             let remaining = try JSONSerialization.jsonObject(with: updated) as? [String: Any] ?? [:]

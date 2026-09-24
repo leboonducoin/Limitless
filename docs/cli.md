@@ -41,7 +41,8 @@ Close your agent, then run its command once:
 Restart the agent and accept its normal hook approval if asked. Setup installs
 the skill and task hooks together. Existing settings are kept, with a private
 `.limitless-backup-*` copy beside the settings file. Invalid or linked files are
-left untouched. Custom configuration locations need manual setup.
+left untouched. A failed setup restores its previous skill files. Custom
+configuration locations need manual setup.
 
 During a task, Limitless uses **both power sources and a 20% battery reserve**,
 including while the agent thinks. Stricter app limits still apply. The last task

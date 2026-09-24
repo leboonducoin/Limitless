@@ -90,3 +90,45 @@ func agentSetupPreservesSettingsIsRepeatableAndRemovesOnlyItsIntegration(_ provi
     }
     #expect(try Data(contentsOf: outside) == Data("{}".utf8))
 }
+
+@Test(arguments: [false, true])
+func failedAgentSetupRestoresManagedSkillAndAllowsRetry(_ existingSkill: Bool) throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let configDirectory = root.appendingPathComponent(".codex")
+    let config = configDirectory.appendingPathComponent("hooks.json")
+    let skill = root.appendingPathComponent(".agents/skills/limitless")
+    let marker = skill.appendingPathComponent(".limitless-managed")
+    let oldSkill = Data("Previous managed skill\n".utf8)
+    let oldMarker = Data("Limitless:new-config\n".utf8)
+    let resources = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+            "skills/limitless")
+    defer {
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o700], ofItemAtPath: configDirectory.path)
+        try? FileManager.default.removeItem(at: root)
+    }
+    try FileManager.default.createDirectory(at: configDirectory, withIntermediateDirectories: true)
+    if existingSkill {
+        try FileManager.default.createDirectory(at: skill, withIntermediateDirectories: true)
+        try oldSkill.write(to: skill.appendingPathComponent("SKILL.md"))
+        try oldMarker.write(to: marker)
+    }
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o500], ofItemAtPath: configDirectory.path)
+    #expect(throws: (any Error).self) {
+        try AgentSetup.configure("codex", home: root, resources: resources)
+    }
+    #expect(!FileManager.default.fileExists(atPath: config.path))
+    if existingSkill {
+        #expect(try Data(contentsOf: skill.appendingPathComponent("SKILL.md")) == oldSkill)
+        #expect(try Data(contentsOf: marker) == oldMarker)
+    } else {
+        #expect(!FileManager.default.fileExists(atPath: skill.path))
+    }
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o700], ofItemAtPath: configDirectory.path)
+    try AgentSetup.configure("codex", home: root, resources: resources)
+    #expect(FileManager.default.fileExists(atPath: config.path))
+    #expect(FileManager.default.fileExists(atPath: marker.path))
+}
