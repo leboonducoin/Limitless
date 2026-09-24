@@ -11,7 +11,7 @@ I made Limitless to keep my Mac awake while it works. A small, native macOS
 menu-bar app, written in Swift. Free and open source.
 I also added Touch ID for sudo because I was tired of typing my long password.
 
-https://github.com/user-attachments/assets/cb0233de-a04c-4922-82fa-3982a875f0d6
+https://github.com/user-attachments/assets/15da3854-5b99-43b1-89f6-534bf4ab5946
 
 Original soundtrack: [MP3 & WAV](assets/music/)
 
@@ -63,7 +63,7 @@ management policies can interrupt a session. Launch at login never resumes one.
 
 The name was inspired by the film [Limitless](https://en.wikipedia.org/wiki/Limitless_%28film%29).
 
-*No NZT. Just an app. Hopefully, my impact won't be limited to the sidewalk.*
+*No NZT. Just an app. Hopefully, its impact won't be limited to the sidewalk.*
 
 ---
 
