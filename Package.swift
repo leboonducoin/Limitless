@@ -3,8 +3,8 @@
 import Foundation
 import PackageDescription
 
-let helperLinkerSettings: [LinkerSetting] =
-    ProcessInfo.processInfo.environment["LIMITLESS_HELPER_METADATA"].map { directory in
+func metadataLinkerSettings(_ environment: String) -> [LinkerSetting] {
+    ProcessInfo.processInfo.environment[environment].map { directory in
         [
             .unsafeFlags([
                 "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist",
@@ -14,18 +14,7 @@ let helperLinkerSettings: [LinkerSetting] =
             ])
         ]
     } ?? []
-
-let sudoLinkerSettings: [LinkerSetting] =
-    ProcessInfo.processInfo.environment["LIMITLESS_SUDO_METADATA"].map { directory in
-        [
-            .unsafeFlags([
-                "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist",
-                "-Xlinker", directory + "/HelperInfo.plist",
-                "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__launchd_plist",
-                "-Xlinker", directory + "/HelperLaunchd.plist",
-            ])
-        ]
-    } ?? []
+}
 
 let package = Package(
     name: "Limitless",
@@ -44,7 +33,7 @@ let package = Package(
         .target(name: "LimitlessSystem", dependencies: ["LimitlessCore"]),
         .executableTarget(
             name: "LimitlessHelper", dependencies: ["LimitlessSystem", "LimitlessCore"],
-            linkerSettings: helperLinkerSettings),
+            linkerSettings: metadataLinkerSettings("LIMITLESS_HELPER_METADATA")),
         .testTarget(name: "LimitlessCoreTests", dependencies: ["LimitlessCore"]),
         .executableTarget(
             name: "LimitlessCLI", dependencies: ["LimitlessSystem", "LimitlessCore"]),
@@ -56,7 +45,7 @@ let package = Package(
         .executableTarget(name: "LimitlessSudo", dependencies: ["LimitlessSystem"]),
         .executableTarget(
             name: "LimitlessSudoHelper", dependencies: ["LimitlessSystem", "LimitlessCore"],
-            linkerSettings: sudoLinkerSettings),
+            linkerSettings: metadataLinkerSettings("LIMITLESS_SUDO_METADATA")),
     ],
     swiftLanguageModes: [.v6]
 )

@@ -52,6 +52,18 @@ func propertyList(_ path: URL) throws -> [String: Any] {
     return dictionary
 }
 
+func writeHelperMetadata(
+    helper: [String: Any], daemon: [String: Any], to directory: URL
+) throws {
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+    for (name, value) in [
+        ("HelperInfo.plist", helper), ("HelperLaunchd.plist", daemon),
+    ] {
+        try PropertyListSerialization.data(fromPropertyList: value, format: .xml, options: 0)
+            .write(to: directory.appendingPathComponent(name), options: .withoutOverwriting)
+    }
+}
+
 func cleanRevision() throws -> String {
     try require(
         try run("/usr/bin/git", ["status", "--porcelain", "--untracked-files=all"], capture: true)
@@ -736,15 +748,8 @@ do {
                 info: info, certificate: signing ? certificate : nil)
             info = metadata.app
             let directory = output.appendingPathComponent("Metadata", isDirectory: true)
-            try manager.createDirectory(at: directory, withIntermediateDirectories: false)
-            for (name, value) in [
-                ("HelperInfo.plist", metadata.helper), ("HelperLaunchd.plist", metadata.daemon),
-            ] {
-                try PropertyListSerialization.data(
-                    fromPropertyList: value, format: .xml, options: 0
-                )
-                .write(to: directory.appendingPathComponent(name), options: .withoutOverwriting)
-            }
+            try writeHelperMetadata(
+                helper: metadata.helper, daemon: metadata.daemon, to: directory)
             buildEnvironment["LIMITLESS_HELPER_METADATA"] = directory.path
         }
         var sudoInfo = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
@@ -758,15 +763,8 @@ do {
             info: sudoInfo, certificate: signing ? certificate : nil, sudo: true)
         sudoInfo = sudoMetadata.app
         let sudoMetadataDirectory = output.appendingPathComponent("SudoMetadata")
-        try manager.createDirectory(at: sudoMetadataDirectory, withIntermediateDirectories: false)
-        for (name, value) in [
-            ("HelperInfo.plist", sudoMetadata.helper), ("HelperLaunchd.plist", sudoMetadata.daemon),
-        ] {
-            try PropertyListSerialization.data(fromPropertyList: value, format: .xml, options: 0)
-                .write(
-                    to: sudoMetadataDirectory.appendingPathComponent(name),
-                    options: .withoutOverwriting)
-        }
+        try writeHelperMetadata(
+            helper: sudoMetadata.helper, daemon: sudoMetadata.daemon, to: sudoMetadataDirectory)
         buildEnvironment["LIMITLESS_SUDO_METADATA"] = sudoMetadataDirectory.path
         if info["LimitlessPreviewState"] != nil {
             info["CFBundleIdentifier"] = "io.github.leboonducoin.Limitless.preview"
