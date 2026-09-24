@@ -2,11 +2,11 @@ import AppKit
 import Carbon
 import Foundation
 import LimitlessCore
-import LimitlessSystem
 import ServiceManagement
 import Testing
 
 @testable import LimitlessApp
+@testable import LimitlessSystem
 
 private final class MockUpdateHelper: @unchecked Sendable, HelperInstallation {
     var status: SMAppService.Status
@@ -388,5 +388,30 @@ private func status(
         #expect(!model.removalComplete)
         #expect(model.status == before)
         #expect(model.loginStatus == .notRegistered)
+    }
+
+    @Test @MainActor func detectedAutomaticUpdateStartsImmediatelyAndCooldownHidesButton() throws {
+        let update = GitHubUpdate.Release(
+            version: "1.0.3",
+            url: URL(
+                string:
+                    "https://github.com/leboonducoin/Limitless/releases/download/v1.0.3/Limitless-1.0.3-universal.zip"
+            )!, size: 1, digest: String(repeating: "a", count: 64))
+        let automatic = AppModel.preview("inactive")
+        automatic.automaticUpdates = true
+        #expect(automatic.recordDetectedUpdate(update, manual: false))
+        #expect(automatic.availableUpdate == update)
+
+        let suite = "Limitless-update-presentation-\(UUID().uuidString)"
+        let preferences = try #require(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        var schedule = UpdateSchedule()
+        let beganDownload = schedule.beginDownload()
+        #expect(beganDownload)
+        preferences.set(try JSONEncoder().encode(schedule), forKey: "updateSchedule")
+        let manual = AppModel(preferences: preferences, helper: nil, buildTrust: .trusted)
+        #expect(!manual.recordDetectedUpdate(update, manual: true))
+        #expect(!manual.showsUpdateButton)
+        #expect(!manual.canInstallAvailableUpdate(manual: true))
     }
 #endif

@@ -28,6 +28,7 @@ import ServiceManagement
         didSet {
             guard !isPreview else { return }
             preferences.set(automaticUpdates, forKey: "automaticUpdates")
+            if automaticUpdates { requestAutomaticUpdateIfReady() }
         }
     }
     var message: String?
@@ -62,7 +63,6 @@ import ServiceManagement
     private var updateMonitoring: Task<Void, Never>?
     private var updateInstallation: Task<Void, Never>?
     private var checkingUpdates = false
-    private var lastUpdateCheckSucceeded = false
     private var updateSchedule: UpdateSchedule {
         didSet {
             guard !isPreview, let data = try? JSONEncoder().encode(updateSchedule) else { return }
@@ -173,12 +173,15 @@ import ServiceManagement
             && status.sleep.observed == .allowed
             && (status.sleep.phase == .inactive || status.sleep.phase == .blocked)
     }
-    var canInstallAvailableUpdate: Bool {
+    func canInstallAvailableUpdate(manual: Bool = false) -> Bool {
         !busy && !sudoTouchIDBusy && !updating && readyToUpdate
-            && Date() >= updateSchedule.nextDownload
+            && updateSchedule.canBeginDownload(manual: manual)
     }
-    var updateInstallBlockMessage: String {
-        Date() < updateSchedule.nextDownload
+    var showsUpdateButton: Bool {
+        availableUpdate != nil && !automaticUpdates && updateSchedule.canBeginDownload()
+    }
+    func updateInstallBlockMessage(manual: Bool = false) -> String {
+        !updateSchedule.canBeginDownload(manual: manual)
             ? "Update postponed. Please try again later."
             : "Stop current sessions to install the update."
     }
@@ -227,6 +230,7 @@ import ServiceManagement
         if trustedBuild {
             updateMonitoring = Task { [weak self] in
                 while !Task.isCancelled {
+                    await self?.refresh()
                     _ = await self?.checkForUpdates()
                     let delay = max(
                         60,
@@ -245,12 +249,7 @@ import ServiceManagement
                         await stopManual()
                     }
                     if tick % 5 == 0 { await refresh() }
-                    if automaticUpdates, availableUpdate != nil,
-                        Date() >= updateSchedule.nextDownload, !busy, !sudoTouchIDBusy, !updating,
-                        readyToUpdate
-                    {
-                        requestUpdate()
-                    }
+                    requestAutomaticUpdateIfReady()
                 }
                 tick &+= 1
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
@@ -260,29 +259,40 @@ import ServiceManagement
 
     func checkForUpdates(manual: Bool = false) async -> Bool? {
         guard trustedBuild, !isPreview, !quitting, !updating, !checkingUpdates else { return nil }
-        guard updateSchedule.beginCheck(manual: manual) else {
-            return manual && lastUpdateCheckSucceeded ? availableUpdate != nil : nil
-        }
+        guard updateSchedule.beginCheck(manual: manual) else { return nil }
         checkingUpdates = true
         defer { checkingUpdates = false }
         if manual { updateMessage = nil }
         do {
-            availableUpdate = try await GitHubUpdate.latest(
+            let update = try await GitHubUpdate.latest(
                 currentVersion: LimitlessIdentity.version)
-            updateSchedule.checked()
-            lastUpdateCheckSucceeded = true
-            return availableUpdate != nil
+            recordDetectedUpdate(update, manual: manual)
+            return update != nil
         } catch UpdateError.rateLimited(let until) {
             updateSchedule.failed(download: false, retryAfter: until)
         } catch {
             updateSchedule.failed(download: false)
         }
-        lastUpdateCheckSucceeded = false
         if manual { updateMessage = "Update check failed. Please try again later." }
         return nil
     }
 
-    func installUpdate() async {
+    @discardableResult
+    func recordDetectedUpdate(_ update: GitHubUpdate.Release?, manual: Bool) -> Bool {
+        availableUpdate = update
+        updateSchedule.checked()
+        return !manual && requestAutomaticUpdateIfReady()
+    }
+
+    @discardableResult
+    func requestAutomaticUpdateIfReady() -> Bool {
+        guard automaticUpdates, availableUpdate != nil, canInstallAvailableUpdate() else {
+            return false
+        }
+        return requestUpdate()
+    }
+
+    func installUpdate(manual: Bool = false) async {
         guard trustedBuild, !isPreview, !quitting, !updating, !busy, !sudoTouchIDBusy,
             let availableUpdate
         else { return }
@@ -290,7 +300,7 @@ import ServiceManagement
             updateMessage = "Stop the current sessions before updating."
             return
         }
-        guard updateSchedule.beginDownload() else {
+        guard updateSchedule.beginDownload(manual: manual) else {
             updateMessage = "Update postponed. Please try again later."
             return
         }
@@ -341,12 +351,14 @@ import ServiceManagement
         }
     }
 
-    func requestUpdate() {
-        guard updateInstallation == nil else { return }
+    @discardableResult
+    func requestUpdate(manual: Bool = false) -> Bool {
+        guard updateInstallation == nil else { return false }
         updateInstallation = Task { [weak self] in
-            await self?.installUpdate()
+            await self?.installUpdate(manual: manual)
             self?.updateInstallation = nil
         }
+        return true
     }
 
     func refresh() async {

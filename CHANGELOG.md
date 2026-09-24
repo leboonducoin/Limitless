@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Install automatic updates immediately after an eight-hour check, hide delayed update actions and allow a fresh manual check from the menu-bar icon.
+- Accept the bundled Limitless Sudo app during secure update extraction and keep the power-source control stable while the menu opens.
+
 ## 1.0.2 — 2026-09-24
 
 - Harden Codex, Claude, Cursor and Gemini setup against unsafe path changes and restore the previous configuration after a failed setup or removal.

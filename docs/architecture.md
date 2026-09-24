@@ -61,11 +61,12 @@ removal roll back the skill, marker and settings together. Removal preserves oth
 
 ## Updates and removal
 
-Checks and download attempts wait 12 hours, persisted across launches.
-A manual check resets the 12-hour clock and has a
-five-minute cooldown. Failures back off to seven days; longer GitHub retry deadlines are
-respected, and a verified download resets its failure count. Invalid persisted counters are
-discarded. Background errors stay quiet. No GitHub token is needed or stored.
+Checks and download attempts wait eight hours, persisted across launches. A detected update
+starts downloading immediately while the app is idle. A manual check resets the eight-hour
+clock and can retry a delayed download after a five-minute cooldown. GitHub retry deadlines
+remain mandatory. Failures back off to seven days, and a verified download resets its failure
+count. Invalid persisted counters are discarded. Background errors stay quiet. No GitHub token
+is needed or stored.
 
 Updates verify archive bounds, SHA-256, source metadata and all five executable
 signatures, including the sudo component and helper. They retain quarantine and a rollback backup. Removal closes admission,

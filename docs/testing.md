@@ -66,8 +66,10 @@ macOS version and any steps that fail.
   without interrupting an awake session. The button must open only System Settings.
   Enable the sudo helper's entry and retry; no automatic retry. Revoke access and
   verify that a later change fails.
-- Right-click **Check for Updates**. An available update installs only while idle;
-  a manual check resets the 12-hour clock. Verify the helper returns after the reopened
+- Right-click **Check for Updates**. An available update installs immediately while idle;
+  a manual check resets the eight-hour clock and can retry a delayed download after five
+  minutes. During that delay, verify that the inline **Update** button is absent. Confirm the
+  published archive accepts the bundled `Limitless Sudo.app` path. Verify the helper returns after the reopened
   app; if replacement is deliberately failed, verify the previous app reopens and restores it.
   Then uninstall: the app should close and its integrations disappear.
   Cancel the sudo component's administrator prompt, retry removal, and verify both

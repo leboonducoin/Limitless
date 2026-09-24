@@ -30,11 +30,13 @@ This remains a broad macOS permission, held by the separate sudo helper.
 
 ## Updates and removal
 
-Automatic updates turn on with the helper and can be disabled. Otherwise, an **Update** button appears when a
-version is available. Limitless checks every 12 hours. Right-click the menu-bar
-icon → **Check for Updates** to check now and install an available update while
-idle. A manual check resets the 12-hour timer. Checks and downloads use the same
-12-hour interval. Limitless verifies the download, then installs and reopens the app.
+Automatic updates turn on with the helper and can be disabled. Limitless checks every eight
+hours and starts installing a detected update immediately while idle. Otherwise, an **Update**
+button appears when a version is available and disappears during the retry delay. Right-click
+the menu-bar icon → **Check for Updates** to perform a fresh check and install an available
+update while idle. A manual check resets the eight-hour timer and can retry a delayed download
+after five minutes; GitHub retry deadlines still apply. Limitless verifies the download, then
+installs and reopens the app.
 If the helper was enabled, the reopened version restores it; a failed replacement reopens
 the previous app so the same recovery can run.
 

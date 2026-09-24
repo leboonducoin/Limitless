@@ -58,7 +58,7 @@ import Testing
 @Test func updateRequestsStaySpacedAcrossRestartsAndRepeatedFailures() throws {
     let now = Date(timeIntervalSince1970: 1_700_000_000)
     let interval = UpdateSchedule.interval
-    #expect(interval == 43_200)
+    #expect(interval == 28_800)
     var schedule = UpdateSchedule()
     func check(_ date: Date) -> Bool { schedule.beginCheck(at: date) }
     func download(_ date: Date) -> Bool { schedule.beginDownload(at: date) }
@@ -120,7 +120,7 @@ import Testing
     }
 }
 
-@Test func manualCheckResetsTwelveHourClockWithoutBypassingCooldownOrRateLimits() throws {
+@Test func manualCheckResetsEightHourClockAndHonorsCooldownAndRateLimits() throws {
     let now = Date(timeIntervalSince1970: 1_700_000_000)
     var schedule = UpdateSchedule()
     func check(_ date: Date, manual: Bool = false) -> Bool {
@@ -137,7 +137,26 @@ import Testing
     #expect(check(manual.addingTimeInterval(86_400), manual: true))
 }
 
-@Test func oldEightHourScheduleMovesToTwelveHoursWithoutShorteningGitHubBackoff() throws {
+@Test func manualDownloadBypassesNormalDelayAndHonorsCooldownAndRateLimits() throws {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    var schedule = UpdateSchedule()
+    func download(_ date: Date, manual: Bool = false) -> Bool {
+        schedule.beginDownload(manual: manual, at: date)
+    }
+    #expect(download(now))
+    #expect(!schedule.canBeginDownload(at: now.addingTimeInterval(300)))
+    #expect(!download(now.addingTimeInterval(299), manual: true))
+    let manual = now.addingTimeInterval(300)
+    #expect(download(manual, manual: true))
+    #expect(!download(manual.addingTimeInterval(299), manual: true))
+    let retry = manual.addingTimeInterval(86_400)
+    schedule.failed(download: true, retryAfter: retry, at: manual)
+    schedule = try JSONDecoder().decode(UpdateSchedule.self, from: JSONEncoder().encode(schedule))
+    #expect(!download(manual.addingTimeInterval(600), manual: true))
+    #expect(download(retry, manual: true))
+}
+
+@Test func existingEightHourScheduleStaysDueWithoutShorteningGitHubBackoff() throws {
     let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
     let data = try JSONSerialization.data(withJSONObject: [
         "nextCheck": now.addingTimeInterval(8 * 3_600).timeIntervalSinceReferenceDate,
@@ -145,32 +164,34 @@ import Testing
         "checkFailures": 0, "downloadFailures": 4,
     ])
     var schedule = try JSONDecoder().decode(UpdateSchedule.self, from: data)
-    #expect(schedule.nextCheck == now.addingTimeInterval(43_200))
+    #expect(schedule.nextCheck == now.addingTimeInterval(28_800))
     #expect(schedule.nextDownload >= now.addingTimeInterval(7 * 86_400))
     let restored = try JSONDecoder().decode(
         UpdateSchedule.self, from: JSONEncoder().encode(schedule))
     #expect(restored.nextCheck == schedule.nextCheck)
     #expect(restored.nextDownload == schedule.nextDownload)
-    let early = schedule.beginCheck(at: now.addingTimeInterval(43_199))
+    let early = schedule.beginCheck(at: now.addingTimeInterval(28_799))
     #expect(!early)
-    let due = schedule.beginCheck(at: now.addingTimeInterval(43_200))
+    let due = schedule.beginCheck(at: now.addingTimeInterval(28_800))
     #expect(due)
 }
 
-@Test func oldDailyScheduleMovesToTwelveHoursButKeepsFailureBackoff() throws {
+@Test func oldSchedulesMoveToEightHoursButKeepFailureBackoff() throws {
     let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
-    func legacy(_ failures: Int) throws -> UpdateSchedule {
+    func legacy(_ interval: TimeInterval, failures: Int) throws -> UpdateSchedule {
         let data = try JSONSerialization.data(withJSONObject: [
-            "nextCheck": now.addingTimeInterval(86_400).timeIntervalSinceReferenceDate,
-            "nextDownload": now.addingTimeInterval(86_400).timeIntervalSinceReferenceDate,
+            "nextCheck": now.addingTimeInterval(interval).timeIntervalSinceReferenceDate,
+            "nextDownload": now.addingTimeInterval(interval).timeIntervalSinceReferenceDate,
             "checkFailures": failures, "downloadFailures": 0,
-            "scheduledInterval": 86_400,
+            "scheduledInterval": interval,
         ])
         return try JSONDecoder().decode(UpdateSchedule.self, from: data)
     }
-    #expect(try legacy(0).nextCheck == now.addingTimeInterval(43_200))
-    #expect(try legacy(1).nextCheck == now.addingTimeInterval(86_400))
-    #expect(try legacy(0).nextDownload == now.addingTimeInterval(43_200))
+    for interval in [TimeInterval(43_200), TimeInterval(86_400)] {
+        #expect(try legacy(interval, failures: 0).nextCheck == now.addingTimeInterval(28_800))
+        #expect(try legacy(interval, failures: 1).nextCheck == now.addingTimeInterval(interval))
+        #expect(try legacy(interval, failures: 0).nextDownload == now.addingTimeInterval(28_800))
+    }
 }
 
 private func releaseData(
@@ -216,6 +237,8 @@ private func releaseData(
         drwxr-xr-x 0 501 0 0 Sep 19 18:42 Limitless.app/
         -rw-r--r-- 0 501 0 12 Sep 19 18:42 Limitless.app/Contents/Info.plist
         -rwxr-xr-x 0 501 0 20 Sep 19 18:42 Limitless.app/Contents/MacOS/LimitlessApp
+        drwxr-xr-x 0 501 0 0 Sep 19 18:42 Limitless.app/Contents/Helpers/Limitless Sudo.app/
+        -rwxr-xr-x 0 501 0 20 Sep 19 18:42 Limitless.app/Contents/Helpers/Limitless Sudo.app/Contents/MacOS/LimitlessSudo
         """
     try GitHubUpdate.validateListing(valid)
     for entry in [
@@ -225,7 +248,7 @@ private func releaseData(
         "-rwsr-xr-x 0 501 0 1 Sep 19 18:42 Limitless.app/root",
         "-rw-r--r-- 0 501 0 999999999999 Sep 19 18:42 Limitless.app/huge",
         "-rw-r--r-- 0 501 0 1 Sep 19 18:42 Limitless.app/Contents/Info.plist",
-        "-rw-r--r-- 0 501 0 1 Sep 19 18:42 Limitless.app/name with spaces",
+        "-rw-r--r-- 0 501 0 1 Sep 19 18:42 Limitless.app/name:with-colon",
     ] {
         #expect(throws: UpdateError.invalidArchive) {
             try GitHubUpdate.validateListing(valid + "\n" + entry)
@@ -240,11 +263,17 @@ private func releaseData(
     let destination = root.appendingPathComponent("extract")
     try FileManager.default.createDirectory(
         at: source.appendingPathComponent("Contents/MacOS"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+        at: source.appendingPathComponent("Contents/Helpers/Limitless Sudo.app/Contents/MacOS"),
+        withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
     defer { try? FileManager.default.removeItem(at: root) }
     try Data("plist".utf8).write(to: source.appendingPathComponent("Contents/Info.plist"))
     try Data("executable".utf8).write(
         to: source.appendingPathComponent("Contents/MacOS/LimitlessApp"))
+    try Data("sudo".utf8).write(
+        to: source.appendingPathComponent(
+            "Contents/Helpers/Limitless Sudo.app/Contents/MacOS/LimitlessSudo"))
     func archive(_ name: String) throws -> URL {
         let zip = root.appendingPathComponent(name)
         let command = Process()
@@ -260,6 +289,11 @@ private func releaseData(
         try Data(
             contentsOf: destination.appendingPathComponent(
                 "Limitless.app/Contents/MacOS/LimitlessApp")) == Data("executable".utf8))
+    #expect(
+        try Data(
+            contentsOf: destination.appendingPathComponent(
+                "Limitless.app/Contents/Helpers/Limitless Sudo.app/Contents/MacOS/LimitlessSudo"))
+            == Data("sudo".utf8))
     try GitHubUpdate.quarantine(
         destination.appendingPathComponent("Limitless.app"), downloadedFrom: GitHubUpdate.repository
     )

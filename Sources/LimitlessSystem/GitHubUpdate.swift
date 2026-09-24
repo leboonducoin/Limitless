@@ -4,18 +4,19 @@ import Foundation
 import Security
 
 public struct UpdateSchedule: Codable, Sendable {
-    public static let interval: TimeInterval = 12 * 3_600
+    public static let interval: TimeInterval = 8 * 3_600
     public private(set) var nextCheck = Date.distantPast
     public private(set) var nextDownload = Date.distantPast
     private var checkFailures = 0
     private var downloadFailures = 0
     private var manualCheckAfter = Date.distantPast
+    private var manualDownloadAfter = Date.distantPast
     private var rateLimitUntil = Date.distantPast
     private let scheduledInterval = Self.interval
 
     private enum CodingKeys: String, CodingKey {
         case nextCheck, nextDownload, checkFailures, downloadFailures, scheduledInterval
-        case manualCheckAfter, rateLimitUntil
+        case manualCheckAfter, manualDownloadAfter, rateLimitUntil
     }
 
     public init() {}
@@ -28,7 +29,7 @@ public struct UpdateSchedule: Codable, Sendable {
         checkFailures = try values.decode(Int.self, forKey: .checkFailures)
         downloadFailures = try values.decode(Int.self, forKey: .downloadFailures)
         guard
-            [TimeInterval(8 * 3_600), Self.interval, TimeInterval(24 * 3_600)]
+            [Self.interval, TimeInterval(12 * 3_600), TimeInterval(24 * 3_600)]
                 .contains(previousInterval),
             (0...6).contains(checkFailures), (0...6).contains(downloadFailures)
         else {
@@ -48,13 +49,16 @@ public struct UpdateSchedule: Codable, Sendable {
         manualCheckAfter =
             try values.decodeIfPresent(Date.self, forKey: .manualCheckAfter)
             ?? .distantPast
+        manualDownloadAfter =
+            try values.decodeIfPresent(Date.self, forKey: .manualDownloadAfter)
+            ?? .distantPast
         rateLimitUntil =
             try values.decodeIfPresent(Date.self, forKey: .rateLimitUntil)
             ?? .distantPast
     }
 
     public mutating func beginCheck(manual: Bool = false, at now: Date = Date()) -> Bool {
-        let due = (manual && checkFailures == 0) || now >= nextCheck
+        let due = manual || now >= nextCheck
         guard now >= manualCheckAfter, now >= rateLimitUntil, due
         else { return false }
         nextCheck = now.addingTimeInterval(Self.interval)
@@ -62,9 +66,14 @@ public struct UpdateSchedule: Codable, Sendable {
         return true
     }
 
-    public mutating func beginDownload(at now: Date = Date()) -> Bool {
-        guard now >= nextDownload else { return false }
+    public func canBeginDownload(manual: Bool = false, at now: Date = Date()) -> Bool {
+        now >= rateLimitUntil && (manual ? now >= manualDownloadAfter : now >= nextDownload)
+    }
+
+    public mutating func beginDownload(manual: Bool = false, at now: Date = Date()) -> Bool {
+        guard canBeginDownload(manual: manual, at: now) else { return false }
         nextDownload = now.addingTimeInterval(Self.interval)
+        manualDownloadAfter = now.addingTimeInterval(5 * 60)
         return true
     }
 
@@ -296,7 +305,8 @@ public enum GitHubUpdate {
         var total = 0
         var names: Set<String> = []
         for line in lines {
-            let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            let fields = line.split(
+                maxSplits: 8, whereSeparator: { $0 == " " || $0 == "\t" })
             guard fields.count == 9, let mode = fields.first,
                 mode.first == "-" || mode.first == "d",
                 !mode.contains("s"), !mode.contains("S"), !mode.contains("t"), !mode.contains("T"),
@@ -306,7 +316,7 @@ public enum GitHubUpdate {
             guard path.hasPrefix("Limitless.app/"),
                 path.utf8.allSatisfy({
                     (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0)
-                        || [45, 46, 47, 95].contains($0)
+                        || [32, 45, 46, 47, 95].contains($0)
                 }),
                 !path.split(separator: "/").contains(".."), !path.contains("//"),
                 names.insert(path).inserted

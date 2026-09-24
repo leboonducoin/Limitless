@@ -267,15 +267,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     @objc private func checkForUpdates() {
         Task {
             let result = await model.checkForUpdates(manual: true)
-            if result == true, model.canInstallAvailableUpdate {
-                model.requestUpdate()
+            if result == true, model.canInstallAvailableUpdate(manual: true) {
+                model.requestUpdate(manual: true)
                 return
             }
             let alert = NSAlert()
             alert.messageText = result == true ? "Update available" : "Limitless updates"
             alert.informativeText =
                 result == true
-                ? model.updateInstallBlockMessage
+                ? model.updateInstallBlockMessage(manual: true)
                 : result == false
                     ? "Limitless is up to date."
                     : model.updateMessage ?? "The next check is available later."

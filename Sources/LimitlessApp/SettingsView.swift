@@ -24,13 +24,18 @@ struct SettingsView: View {
             if model.showsPowerControls {
                 Group {
                     if model.showsPowerSource {
-                        Picker("Power source", selection: $model.draft.mode) {
-                            ForEach(PowerMode.allCases, id: \.self) { mode in
-                                Text(mode.label).tag(mode)
+                        HStack {
+                            Text("Power source").fixedSize(horizontal: true, vertical: false)
+                            Spacer(minLength: 8)
+                            Picker("", selection: $model.draft.mode) {
+                                ForEach(PowerMode.allCases, id: \.self) { mode in
+                                    Text(mode.label).tag(mode)
+                                }
                             }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .accessibilityLabel("Power source")
                         }
-                        .pickerStyle(.segmented)
-                        .accessibilityLabel("Power source")
                     }
                     if model.showsBatteryLimit {
                         HStack {
@@ -191,10 +196,10 @@ struct SettingsView: View {
                 HStack {
                     Toggle("Automatic updates", isOn: $model.automaticUpdates)
                         .disabled((!model.trustedBuild && !model.isPreview) || model.updating)
-                    if let update = model.availableUpdate, !model.automaticUpdates {
+                    if let update = model.availableUpdate, model.showsUpdateButton {
                         Button("Update") { model.requestUpdate() }
                             .help("Install Limitless \(update.version)")
-                            .disabled(model.updating || model.busy || model.sudoTouchIDBusy)
+                            .disabled(!model.canInstallAvailableUpdate())
                     }
                 }
                 if let message = model.updateMessage {
