@@ -3,6 +3,257 @@ import Foundation
 
 public enum AgentSetup {
     public static let providers = ["codex", "claude", "cursor", "gemini"]
+    private static let maximumFileSize = 1_024 * 1_024
+
+    private struct ManagedFile: Equatable {
+        let data: Data
+        let device: dev_t
+        let inode: ino_t
+        let mode: mode_t
+    }
+
+    private final class ManagedDirectory {
+        private let descriptors: [Int32]
+        private let components: [String]
+        private let owner: uid_t
+        private var descriptor: Int32 { descriptors.last! }
+
+        private init(descriptors: [Int32], components: [String], owner: uid_t) {
+            self.descriptors = descriptors
+            self.components = components
+            self.owner = owner
+        }
+
+        deinit {
+            for descriptor in descriptors.reversed() { close(descriptor) }
+        }
+
+        static func open(
+            home: URL, components: [String], create: Bool, owner: uid_t
+        ) throws -> ManagedDirectory? {
+            if create, mkdir(home.path, 0o700) != 0, errno != EEXIST {
+                throw JournalError.system(errno)
+            }
+            let root = Darwin.open(
+                home.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            guard root >= 0 else {
+                if !create, errno == ENOENT { return nil }
+                throw JournalError.system(errno)
+            }
+            var descriptors = [root]
+            do {
+                try validateDirectory(root, owner: owner)
+                for component in components {
+                    try validateName(component)
+                    let parent = descriptors.last!
+                    var child = openat(
+                        parent, component, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+                    if child < 0, errno == ENOENT {
+                        guard create else {
+                            for descriptor in descriptors.reversed() { close(descriptor) }
+                            return nil
+                        }
+                        guard mkdirat(parent, component, 0o700) == 0 || errno == EEXIST else {
+                            throw JournalError.system(errno)
+                        }
+                        child = openat(
+                            parent, component,
+                            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+                    }
+                    guard child >= 0 else { throw JournalError.system(errno) }
+                    descriptors.append(child)
+                    try validateDirectory(child, owner: owner)
+                    try SecureOwnershipJournal.requireSameEntry(
+                        parent, name: component, descriptor: child)
+                }
+                return ManagedDirectory(
+                    descriptors: descriptors, components: components, owner: owner)
+            } catch {
+                for descriptor in descriptors.reversed() { close(descriptor) }
+                throw error
+            }
+        }
+
+        func read(_ name: String) throws -> ManagedFile? {
+            try Self.validateName(name)
+            try validate()
+            let file = openat(
+                descriptor, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK)
+            guard file >= 0 else {
+                if errno == ENOENT { return nil }
+                throw JournalError.system(errno)
+            }
+            defer { close(file) }
+            let initial = try validateFile(file)
+            let data =
+                try FileHandle(fileDescriptor: file, closeOnDealloc: false)
+                .read(upToCount: maximumFileSize + 1) ?? Data()
+            let final = try validateFile(file)
+            guard data.count <= maximumFileSize, initial.st_dev == final.st_dev,
+                initial.st_ino == final.st_ino, initial.st_size == final.st_size,
+                final.st_size == off_t(data.count)
+            else { throw CocoaError(.fileReadCorruptFile) }
+            try SecureOwnershipJournal.requireSameEntry(
+                descriptor, name: name, descriptor: file)
+            try validate()
+            return ManagedFile(
+                data: data, device: final.st_dev, inode: final.st_ino,
+                mode: final.st_mode & 0o777)
+        }
+
+        func names() throws -> Set<String> {
+            try validate()
+            let copy = fcntl(descriptor, F_DUPFD_CLOEXEC, 0)
+            guard copy >= 0 else { throw JournalError.system(errno) }
+            guard let directory = fdopendir(copy) else {
+                let code = errno
+                close(copy)
+                throw JournalError.system(code)
+            }
+            defer { closedir(directory) }
+            var names: Set<String> = []
+            while true {
+                errno = 0
+                guard let entry = readdir(directory) else {
+                    guard errno == 0 else { throw JournalError.system(errno) }
+                    break
+                }
+                let name = withUnsafePointer(to: entry.pointee.d_name) {
+                    $0.withMemoryRebound(
+                        to: CChar.self, capacity: Int(entry.pointee.d_namlen) + 1
+                    ) { String(cString: $0) }
+                }
+                if name != ".", name != ".." { names.insert(name) }
+            }
+            try validate()
+            return names
+        }
+
+        func create(_ name: String, data: Data, mode: mode_t) throws -> ManagedFile {
+            try Self.validateName(name)
+            guard data.count <= maximumFileSize else {
+                throw CocoaError(.fileWriteOutOfSpace)
+            }
+            try validate()
+            let file = openat(
+                descriptor, name,
+                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, mode)
+            guard file >= 0 else { throw JournalError.system(errno) }
+            defer { close(file) }
+            try FileHandle(fileDescriptor: file, closeOnDealloc: false).write(contentsOf: data)
+            guard fchmod(file, mode) == 0, fsync(file) == 0 else {
+                throw JournalError.system(errno)
+            }
+            let info = try validateFile(file)
+            guard info.st_size == off_t(data.count) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            try SecureOwnershipJournal.requireSameEntry(
+                descriptor, name: name, descriptor: file)
+            guard fsync(descriptor) == 0 else { throw JournalError.system(errno) }
+            try validate()
+            return ManagedFile(
+                data: data, device: info.st_dev, inode: info.st_ino,
+                mode: info.st_mode & 0o777)
+        }
+
+        func replace(
+            _ name: String, data: Data, expected: ManagedFile?, replacement: inout ManagedFile?
+        ) throws {
+            try Self.validateName(name)
+            guard data.count <= maximumFileSize else {
+                throw CocoaError(.fileWriteOutOfSpace)
+            }
+            guard try read(name) == expected else { throw CocoaError(.fileWriteUnknown) }
+            let temporary = ".limitless-\(UUID().uuidString)"
+            let file = openat(
+                descriptor, temporary,
+                O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0o600)
+            guard file >= 0 else { throw JournalError.system(errno) }
+            defer {
+                close(file)
+                unlinkat(descriptor, temporary, 0)
+            }
+            try FileHandle(fileDescriptor: file, closeOnDealloc: false).write(contentsOf: data)
+            guard fchmod(file, expected?.mode ?? 0o600) == 0, fsync(file) == 0 else {
+                throw JournalError.system(errno)
+            }
+            let info = try validateFile(file)
+            guard info.st_size == off_t(data.count) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            let candidate = ManagedFile(
+                data: data, device: info.st_dev, inode: info.st_ino,
+                mode: info.st_mode & 0o777)
+            try validate()
+            guard try read(name) == expected else { throw CocoaError(.fileWriteUnknown) }
+            replacement = candidate
+            guard renameat(descriptor, temporary, descriptor, name) == 0,
+                fsync(descriptor) == 0
+            else { throw JournalError.system(errno) }
+            guard try read(name) == candidate else { throw CocoaError(.fileWriteUnknown) }
+        }
+
+        func remove(_ name: String, expected: ManagedFile?) throws {
+            try Self.validateName(name)
+            let current = try read(name)
+            guard current == expected else { throw CocoaError(.fileWriteUnknown) }
+            guard current != nil else { return }
+            try validate()
+            guard try read(name) == expected else { throw CocoaError(.fileWriteUnknown) }
+            guard unlinkat(descriptor, name, 0) == 0, fsync(descriptor) == 0 else {
+                throw JournalError.system(errno)
+            }
+            guard try read(name) == nil else { throw CocoaError(.fileWriteUnknown) }
+        }
+
+        func removeIfEmpty() throws {
+            guard descriptors.count > 1, let name = components.last else {
+                throw CocoaError(.fileWriteNoPermission)
+            }
+            guard try names().isEmpty else { return }
+            let parent = descriptors[descriptors.count - 2]
+            try SecureOwnershipJournal.requireSameEntry(
+                parent, name: name, descriptor: descriptor)
+            guard unlinkat(parent, name, AT_REMOVEDIR) == 0, fsync(parent) == 0 else {
+                throw JournalError.system(errno)
+            }
+        }
+
+        private func validate() throws {
+            for descriptor in descriptors {
+                try Self.validateDirectory(descriptor, owner: owner)
+            }
+            for (index, component) in components.enumerated() {
+                try SecureOwnershipJournal.requireSameEntry(
+                    descriptors[index], name: component, descriptor: descriptors[index + 1])
+            }
+        }
+
+        private func validateFile(_ file: Int32) throws -> stat {
+            var info = stat()
+            guard fstat(file, &info) == 0 else { throw JournalError.system(errno) }
+            guard info.st_mode & S_IFMT == S_IFREG, info.st_uid == owner,
+                info.st_nlink == 1, info.st_size >= 0,
+                info.st_size <= off_t(maximumFileSize)
+            else { throw CocoaError(.fileReadCorruptFile) }
+            return info
+        }
+
+        private static func validateDirectory(_ descriptor: Int32, owner: uid_t) throws {
+            var info = stat()
+            guard fstat(descriptor, &info) == 0 else { throw JournalError.system(errno) }
+            guard info.st_mode & S_IFMT == S_IFDIR, info.st_uid == owner else {
+                throw CocoaError(.fileWriteNoPermission)
+            }
+        }
+
+        private static func validateName(_ name: String) throws {
+            guard !name.isEmpty, name != ".", name != "..", !name.contains("/") else {
+                throw CocoaError(.fileReadInvalidFileName)
+            }
+        }
+    }
 
     private static func locations(_ provider: String) throws -> (config: String, skill: String) {
         switch provider {
@@ -14,48 +265,20 @@ public enum AgentSetup {
         }
     }
 
-    private static func validate(_ url: URL, home: URL) throws {
-        guard url.path.hasPrefix(home.path + "/"), geteuid() != 0 else {
-            throw CocoaError(.fileWriteNoPermission)
-        }
-        var current = url
-        while current.path != home.path {
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: current.path)
-                guard attributes[.type] as? FileAttributeType != .typeSymbolicLink,
-                    attributes[.ownerAccountID] as? UInt32 == geteuid()
-                else { throw CocoaError(.fileWriteNoPermission) }
-            } catch let error as CocoaError
-                where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile
-            {
-            }
-            current.deleteLastPathComponent()
-        }
-    }
-
-    private static func read(_ url: URL) throws -> Data? {
-        do {
-            let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
-            guard values.isRegularFile == true, (values.fileSize ?? Int.max) <= 1_024 * 1_024 else {
-                throw CocoaError(.fileReadCorruptFile)
-            }
-            return try Data(contentsOf: url)
-        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-            return nil
-        }
-    }
-
-    private static func restore(_ url: URL, home: URL, previous: Data?, attempted: Data) throws {
-        try validate(url, home: home)
-        let current = try read(url)
+    private static func restore(
+        _ directory: ManagedDirectory, name: String, previous: ManagedFile?, attempted: ManagedFile?
+    ) throws {
+        let current = try directory.read(name)
         guard current == previous || current == attempted else {
             throw CocoaError(.fileWriteUnknown)
         }
         guard current != previous else { return }
         if let previous {
-            try previous.write(to: url, options: .atomic)
+            var replacement: ManagedFile?
+            try directory.replace(
+                name, data: previous.data, expected: attempted, replacement: &replacement)
         } else {
-            try FileManager.default.removeItem(at: url)
+            try directory.remove(name, expected: attempted)
         }
     }
 
@@ -116,100 +339,116 @@ public enum AgentSetup {
         resources: URL = URL(
             fileURLWithPath: "/Applications/Limitless.app/Contents/Resources/limitless-skill")
     ) throws {
+        try configure(
+            provider, remove: remove, home: home, resources: resources, beforeMutation: {})
+    }
+
+    static func configure(
+        _ provider: String, remove: Bool,
+        home: URL,
+        resources: URL,
+        beforeMutation: () throws -> Void
+    ) throws {
+        guard geteuid() != 0 else { throw CocoaError(.fileWriteNoPermission) }
         let home = home.standardizedFileURL.resolvingSymlinksInPath()
         let paths = try locations(provider)
-        let config = home.appendingPathComponent(paths.config)
-        let skill = home.appendingPathComponent(paths.skill)
-        let fileManager = FileManager.default
-        let marker = skill.appendingPathComponent(".limitless-managed")
-        if remove, !fileManager.fileExists(atPath: marker.path) { return }
-        try validate(config, home: home)
-        try validate(skill, home: home)
-        let old = try read(config)
-        try validate(marker, home: home)
-        let existingMarker = try read(marker)
+        let configParts = paths.config.split(separator: "/").map(String.init)
+        let skillParts = paths.skill.split(separator: "/").map(String.init)
+        guard let configName = configParts.last else {
+            throw CocoaError(.fileReadInvalidFileName)
+        }
+        let owner = geteuid()
+        var skillDirectory = try ManagedDirectory.open(
+            home: home, components: skillParts, create: false, owner: owner)
+        var configDirectory = try ManagedDirectory.open(
+            home: home, components: Array(configParts.dropLast()), create: false, owner: owner)
+        let skillExisted = skillDirectory != nil
+        let old = try configDirectory?.read(configName)
+        let existingMarker = try skillDirectory?.read(".limitless-managed")
+        if remove, existingMarker == nil { return }
         let newConfigMarker = Data("Limitless:new-config\n".utf8)
         let savedMarker =
-            existingMarker ?? (old == nil ? newConfigMarker : Data("Limitless\n".utf8))
+            existingMarker?.data ?? (old == nil ? newConfigMarker : Data("Limitless\n".utf8))
         let template = try Data(
             contentsOf: resources.appendingPathComponent("hooks/\(provider).json"))
-        let updated = try merged(old, template: template, provider: provider, remove: remove)
+        let updated = try merged(
+            old?.data, template: template, provider: provider, remove: remove)
         let skillText = try Data(contentsOf: resources.appendingPathComponent("SKILL.md"))
-        let skillExisted = fileManager.fileExists(atPath: skill.path)
         if skillExisted {
-            try validate(skill.appendingPathComponent("SKILL.md"), home: home)
-            try validate(marker, home: home)
-            let names = try fileManager.contentsOfDirectory(atPath: skill.path)
-            guard Set(names).isSubset(of: ["SKILL.md", ".limitless-managed"]),
-                existingMarker == Data("Limitless\n".utf8) || existingMarker == newConfigMarker
+            let names = try skillDirectory!.names()
+            guard names.isSubset(of: ["SKILL.md", ".limitless-managed"]),
+                existingMarker?.data == Data("Limitless\n".utf8)
+                    || existingMarker?.data == newConfigMarker
             else { throw CocoaError(.fileWriteFileExists) }
         }
-        let oldSkill = try read(skill.appendingPathComponent("SKILL.md"))
+        let oldSkill = try skillDirectory?.read("SKILL.md")
         let unchanged =
-            old.flatMap { try? JSONSerialization.jsonObject(with: $0) as? NSDictionary }
+            old.flatMap { try? JSONSerialization.jsonObject(with: $0.data) as? NSDictionary }
             == (try JSONSerialization.jsonObject(with: updated) as? NSDictionary)
-        if unchanged, !remove, oldSkill == skillText { return }
-        try fileManager.createDirectory(
-            at: config.deletingLastPathComponent(), withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700])
-        var backup: URL?
+        if unchanged, !remove, oldSkill?.data == skillText { return }
+        if configDirectory == nil {
+            configDirectory = try ManagedDirectory.open(
+                home: home, components: Array(configParts.dropLast()), create: true, owner: owner)
+        }
+        if skillDirectory == nil {
+            skillDirectory = try ManagedDirectory.open(
+                home: home, components: skillParts, create: true, owner: owner)
+        }
+        let activeConfigDirectory = configDirectory!
+        let activeSkillDirectory = skillDirectory!
+        var backupName: String?
+        var backup: ManagedFile?
+        var writtenConfig: ManagedFile?
+        var writtenSkill: ManagedFile?
+        var writtenMarker: ManagedFile?
         do {
+            try beforeMutation()
             if !unchanged, let old {
-                let path = config.appendingPathExtension("limitless-backup-" + UUID().uuidString)
-                guard
-                    fileManager.createFile(
-                        atPath: path.path, contents: old, attributes: [.posixPermissions: 0o600])
-                else {
-                    throw CocoaError(.fileWriteUnknown)
-                }
-                backup = path
+                let name = configName + ".limitless-backup-" + UUID().uuidString
+                backupName = name
+                backup = try activeConfigDirectory.create(name, data: old.data, mode: 0o600)
             }
             if !remove {
-                try fileManager.createDirectory(
-                    at: skill, withIntermediateDirectories: true,
-                    attributes: [.posixPermissions: 0o700]
+                try activeSkillDirectory.replace(
+                    "SKILL.md", data: skillText, expected: oldSkill,
+                    replacement: &writtenSkill)
+                try activeSkillDirectory.replace(
+                    ".limitless-managed", data: savedMarker, expected: existingMarker,
+                    replacement: &writtenMarker
                 )
-                try skillText.write(to: skill.appendingPathComponent("SKILL.md"), options: .atomic)
-                try savedMarker.write(to: marker, options: .atomic)
             }
             if !unchanged {
-                guard try read(config) == old else { throw CocoaError(.fileWriteUnknown) }
-                try updated.write(to: config, options: .atomic)
-                if old == nil {
-                    try fileManager.setAttributes(
-                        [.posixPermissions: 0o600], ofItemAtPath: config.path)
-                }
+                try activeConfigDirectory.replace(
+                    configName, data: updated, expected: old, replacement: &writtenConfig)
             }
         } catch {
             let setupError = error
-            try restore(config, home: home, previous: old, attempted: updated)
+            try restore(
+                activeConfigDirectory, name: configName, previous: old, attempted: writtenConfig)
             if !remove {
                 try restore(
-                    skill.appendingPathComponent("SKILL.md"), home: home,
-                    previous: oldSkill, attempted: skillText)
+                    activeSkillDirectory, name: "SKILL.md", previous: oldSkill,
+                    attempted: writtenSkill)
                 try restore(
-                    marker, home: home, previous: existingMarker, attempted: savedMarker)
-                if !skillExisted, fileManager.fileExists(atPath: skill.path),
-                    try fileManager.contentsOfDirectory(atPath: skill.path).isEmpty
-                {
-                    try fileManager.removeItem(at: skill)
-                }
+                    activeSkillDirectory, name: ".limitless-managed", previous: existingMarker,
+                    attempted: writtenMarker)
+                if !skillExisted { try activeSkillDirectory.removeIfEmpty() }
             }
-            if let backup {
-                try validate(backup, home: home)
-                guard try read(backup) == old else { throw CocoaError(.fileWriteUnknown) }
-                try fileManager.removeItem(at: backup)
+            if let backupName, let backup {
+                try activeConfigDirectory.remove(backupName, expected: backup)
             }
             throw setupError
         }
         if remove {
             let remaining = try JSONSerialization.jsonObject(with: updated) as? [String: Any] ?? [:]
-            if existingMarker == newConfigMarker,
+            if existingMarker?.data == newConfigMarker,
                 remaining.isEmpty || (provider == "cursor" && Set(remaining.keys) == ["version"])
             {
-                try fileManager.removeItem(at: config)
+                try activeConfigDirectory.remove(configName, expected: writtenConfig ?? old)
             }
-            try fileManager.removeItem(at: skill)
+            try activeSkillDirectory.remove("SKILL.md", expected: oldSkill)
+            try activeSkillDirectory.remove(".limitless-managed", expected: existingMarker)
+            try activeSkillDirectory.removeIfEmpty()
         }
     }
 }

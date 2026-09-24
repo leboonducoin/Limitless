@@ -91,6 +91,33 @@ func agentSetupPreservesSettingsIsRepeatableAndRemovesOnlyItsIntegration(_ provi
     #expect(try Data(contentsOf: outside) == Data("{}".utf8))
 }
 
+@Test func agentSetupRejectsAReplacedConfigurationDirectory() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let directory = root.appendingPathComponent(".codex")
+    let moved = root.appendingPathComponent("moved-codex")
+    let outside = root.appendingPathComponent("outside")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let resources = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+            "skills/limitless")
+    let original = try JSONSerialization.data(withJSONObject: ["theme": "original"])
+    let target = outside.appendingPathComponent("hooks.json")
+    try original.write(to: directory.appendingPathComponent("hooks.json"))
+    try original.write(to: target)
+    #expect(throws: JournalError.unexpectedContents) {
+        try AgentSetup.configure(
+            "codex", remove: false, home: root, resources: resources,
+            beforeMutation: {
+                try FileManager.default.moveItem(at: directory, to: moved)
+                try FileManager.default.createSymbolicLink(
+                    at: directory, withDestinationURL: outside)
+            })
+    }
+    #expect(try Data(contentsOf: target) == original)
+}
+
 @Test(arguments: [false, true])
 func failedAgentSetupRestoresManagedSkillAndAllowsRetry(_ existingSkill: Bool) throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
