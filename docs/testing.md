@@ -81,7 +81,8 @@ If stopping or uninstalling fails, keep the app and report the error before retr
 Both [CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml) and
 [Security](https://github.com/leboonducoin/Limitless/actions/workflows/security.yml)
 must pass for the final commit. They cover tests, sanitizers, CodeQL, workflow
-linting and secret scanning. Pull requests also check dependencies.
+linting and secret scanning. Security also runs every Monday and Friday at 07:29 UTC.
+Pull requests also check dependencies.
 The CLI runs on macOS 14; Intel also runs the full checks. **CI gate** and
 **Security gate** fail if a required job fails, is cancelled or is unexpectedly skipped.
 Automated results do not replace the installed-app checks above.
