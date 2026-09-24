@@ -64,6 +64,7 @@ fastlane/test_output
 # Limitless local artifacts and credentials
 dist/
 build/
+brag-output*/
 .swiftpm/
 graphify-out/
 .DS_Store
