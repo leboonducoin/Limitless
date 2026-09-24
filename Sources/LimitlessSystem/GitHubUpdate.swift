@@ -27,6 +27,12 @@ public struct UpdateSchedule: Codable, Sendable {
                 TimeInterval.self, forKey: .scheduledInterval) ?? 8 * 3_600
         checkFailures = try values.decode(Int.self, forKey: .checkFailures)
         downloadFailures = try values.decode(Int.self, forKey: .downloadFailures)
+        guard [8 * 3_600, Self.interval, 24 * 3_600].contains(previousInterval),
+            (0...6).contains(checkFailures), (0...6).contains(downloadFailures)
+        else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: values.codingPath, debugDescription: "Invalid update schedule"))
+        }
         let checkShift =
             checkFailures == 0
             ? Self.interval - previousInterval : max(0, Self.interval - previousInterval)
@@ -62,11 +68,13 @@ public struct UpdateSchedule: Codable, Sendable {
 
     public mutating func checked() { checkFailures = 0 }
 
+    public mutating func downloaded() { downloadFailures = 0 }
+
     public mutating func failed(download: Bool, retryAfter: Date? = nil, at now: Date = Date()) {
         if download {
-            downloadFailures = min(downloadFailures + 1, 6)
+            downloadFailures = min(downloadFailures, 5) + 1
         } else {
-            checkFailures = min(checkFailures + 1, 6)
+            checkFailures = min(checkFailures, 5) + 1
         }
         let failures = download ? downloadFailures : checkFailures
         let delay = min(Self.interval * pow(2, Double(failures - 1)), 7 * 86_400)

@@ -23,7 +23,7 @@ import Testing
     #expect(try String(contentsOf: link, encoding: .utf8) == "another command")
 }
 
-@Test func cliShortcutRejectsRedirectedAndWorldWritableDirectories() throws {
+@Test func cliShortcutRejectsRedirectedAndSharedWritableDirectories() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(
         at: root, withIntermediateDirectories: false,
@@ -35,6 +35,10 @@ import Testing
         try InstalledCLI.change(root: root, user: getuid(), install: true)
     }
     try FileManager.default.removeItem(at: usr)
+    #expect(chmod(root.path, 0o770) == 0)
+    #expect(throws: JournalError.insecureDirectory) {
+        try InstalledCLI.change(root: root, user: getuid(), install: true)
+    }
     #expect(chmod(root.path, 0o777) == 0)
     #expect(throws: JournalError.insecureDirectory) {
         try InstalledCLI.change(root: root, user: getuid(), install: true)

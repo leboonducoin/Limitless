@@ -8,6 +8,26 @@ import Testing
 
 @testable import LimitlessApp
 
+private final class MockUpdateHelper: @unchecked Sendable, HelperInstallation {
+    var status: SMAppService.Status
+    var registrations = 0
+    var registrationFails = false
+
+    init(status: SMAppService.Status) {
+        self.status = status
+    }
+
+    func register() async throws {
+        registrations += 1
+        if registrationFails { throw CocoaError(.userCancelled) }
+        status = .enabled
+    }
+
+    func unregister() async throws {
+        status = .notRegistered
+    }
+}
+
 @Test @MainActor func systemRestartAndShutdownAreDistinctFromOrdinaryQuit() {
     func quit(reason: OSType?) -> NSAppleEventDescriptor {
         let event = NSAppleEventDescriptor(
@@ -290,6 +310,37 @@ private func status(
         let reopened = AppModel(preferences: preferences)
         reopened.completeUpdateSetup(helperStatus: .enabled)
         #expect(!reopened.automaticUpdates)
+    }
+
+    @Test @MainActor func updateHelperRecoveryRetriesFailuresAndAcceptsPendingApproval()
+        async throws
+    {
+        let suite = "Limitless-update-recovery-test-\(UUID().uuidString)"
+        let preferences = try #require(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let helper = MockUpdateHelper(status: .notRegistered)
+        helper.registrationFails = true
+        preferences.set(true, forKey: AppModel.updateHelperRecoveryKey)
+        let model = AppModel(
+            preferences: preferences, helper: helper, buildTrust: .trusted)
+        await model.restoreUpdateHelperIfNeeded()
+        #expect(helper.registrations == 1)
+        #expect(preferences.bool(forKey: AppModel.updateHelperRecoveryKey))
+        #expect(model.message != nil)
+        helper.registrationFails = false
+        await model.restoreUpdateHelperIfNeeded()
+        #expect(helper.registrations == 2)
+        #expect(helper.status == .enabled)
+        #expect(preferences.object(forKey: AppModel.updateHelperRecoveryKey) == nil)
+
+        let pending = MockUpdateHelper(status: .requiresApproval)
+        preferences.set(true, forKey: AppModel.updateHelperRecoveryKey)
+        let reopened = AppModel(
+            preferences: preferences, helper: pending, buildTrust: .trusted)
+        await reopened.restoreUpdateHelperIfNeeded()
+        #expect(pending.registrations == 0)
+        #expect(reopened.helperStatus == .requiresApproval)
+        #expect(preferences.object(forKey: AppModel.updateHelperRecoveryKey) == nil)
     }
 
     @Test @MainActor func sudoTouchIDPermissionFeedbackPreservesSessionState() throws {

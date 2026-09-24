@@ -33,6 +33,10 @@ enum LimitlessApp {
                     try? FileManager.default.removeItem(at: installed.staging)
                     exit(0)
                 } catch {
+                    let configuration = NSWorkspace.OpenConfiguration()
+                    configuration.createsNewApplicationInstance = true
+                    _ = try? await NSWorkspace.shared.openApplication(
+                        at: Bundle.main.bundleURL, configuration: configuration)
                     let alert = NSAlert()
                     alert.messageText = "Update incomplete"
                     alert.informativeText = error.localizedDescription
@@ -106,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                     Data(output.utf8))
                 exit(success ? 0 : 1)
             }
+            await model.restoreUpdateHelperIfNeeded()
             model.beginMonitoring()
         }
         #if DEBUG

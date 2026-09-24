@@ -234,18 +234,22 @@ public enum AgentSetup {
             var info = stat()
             guard fstat(file, &info) == 0 else { throw JournalError.system(errno) }
             guard info.st_mode & S_IFMT == S_IFREG, info.st_uid == owner,
-                info.st_nlink == 1, info.st_size >= 0,
+                info.st_mode & 0o022 == 0, info.st_nlink == 1, info.st_size >= 0,
                 info.st_size <= off_t(maximumFileSize)
             else { throw CocoaError(.fileReadCorruptFile) }
+            try SecureOwnershipJournal.rejectWriteGrantingAccess(file)
             return info
         }
 
         private static func validateDirectory(_ descriptor: Int32, owner: uid_t) throws {
             var info = stat()
             guard fstat(descriptor, &info) == 0 else { throw JournalError.system(errno) }
-            guard info.st_mode & S_IFMT == S_IFDIR, info.st_uid == owner else {
+            guard info.st_mode & S_IFMT == S_IFDIR, info.st_uid == owner,
+                info.st_mode & 0o022 == 0
+            else {
                 throw CocoaError(.fileWriteNoPermission)
             }
+            try SecureOwnershipJournal.rejectWriteGrantingAccess(descriptor)
         }
 
         private static func validateName(_ name: String) throws {
@@ -266,19 +270,21 @@ public enum AgentSetup {
     }
 
     private static func restore(
-        _ directory: ManagedDirectory, name: String, previous: ManagedFile?, attempted: ManagedFile?
+        _ directory: ManagedDirectory, name: String, previous: ManagedFile?,
+        attempted: ManagedFile?,
+        allowMissing: Bool = false
     ) throws {
         let current = try directory.read(name)
-        guard current == previous || current == attempted else {
+        guard current == previous || current == attempted || (allowMissing && current == nil) else {
             throw CocoaError(.fileWriteUnknown)
         }
         guard current != previous else { return }
         if let previous {
             var replacement: ManagedFile?
             try directory.replace(
-                name, data: previous.data, expected: attempted, replacement: &replacement)
+                name, data: previous.data, expected: current, replacement: &replacement)
         } else {
-            try directory.remove(name, expected: attempted)
+            try directory.remove(name, expected: current)
         }
     }
 
@@ -401,6 +407,16 @@ public enum AgentSetup {
         var writtenConfig: ManagedFile?
         var writtenSkill: ManagedFile?
         var writtenMarker: ManagedFile?
+        let removeConfig: Bool
+        if remove {
+            let remaining = try JSONSerialization.jsonObject(with: updated) as? [String: Any] ?? [:]
+            removeConfig =
+                existingMarker?.data == newConfigMarker
+                && (remaining.isEmpty
+                    || (provider == "cursor" && Set(remaining.keys) == ["version"]))
+        } else {
+            removeConfig = false
+        }
         do {
             try beforeMutation()
             if !unchanged, let old {
@@ -421,6 +437,14 @@ public enum AgentSetup {
                 try activeConfigDirectory.replace(
                     configName, data: updated, expected: old, replacement: &writtenConfig)
             }
+            if remove {
+                if removeConfig {
+                    try activeConfigDirectory.remove(configName, expected: writtenConfig ?? old)
+                }
+                try activeSkillDirectory.remove("SKILL.md", expected: oldSkill)
+                try activeSkillDirectory.remove(".limitless-managed", expected: existingMarker)
+                try activeSkillDirectory.removeIfEmpty()
+            }
         } catch {
             let setupError = error
             var rollbackError: (any Error)?
@@ -431,40 +455,27 @@ public enum AgentSetup {
                     if rollbackError == nil { rollbackError = error }
                 }
             }
-            if !remove {
-                attempt {
-                    try restore(
-                        activeSkillDirectory, name: "SKILL.md", previous: oldSkill,
-                        attempted: writtenSkill)
-                }
-                attempt {
-                    try restore(
-                        activeSkillDirectory, name: ".limitless-managed", previous: existingMarker,
-                        attempted: writtenMarker)
-                }
-                if !skillExisted { attempt { try activeSkillDirectory.removeIfEmpty() } }
+            attempt {
+                try restore(
+                    activeSkillDirectory, name: "SKILL.md", previous: oldSkill,
+                    attempted: writtenSkill, allowMissing: remove)
             }
             attempt {
                 try restore(
+                    activeSkillDirectory, name: ".limitless-managed", previous: existingMarker,
+                    attempted: writtenMarker, allowMissing: remove)
+            }
+            if !remove, !skillExisted { attempt { try activeSkillDirectory.removeIfEmpty() } }
+            attempt {
+                try restore(
                     activeConfigDirectory, name: configName, previous: old,
-                    attempted: writtenConfig)
+                    attempted: writtenConfig, allowMissing: remove && removeConfig)
             }
             if let backupName, let backup {
                 attempt { try activeConfigDirectory.remove(backupName, expected: backup) }
             }
             if let rollbackError { throw rollbackError }
             throw setupError
-        }
-        if remove {
-            let remaining = try JSONSerialization.jsonObject(with: updated) as? [String: Any] ?? [:]
-            if existingMarker?.data == newConfigMarker,
-                remaining.isEmpty || (provider == "cursor" && Set(remaining.keys) == ["version"])
-            {
-                try activeConfigDirectory.remove(configName, expected: writtenConfig ?? old)
-            }
-            try activeSkillDirectory.remove("SKILL.md", expected: oldSkill)
-            try activeSkillDirectory.remove(".limitless-managed", expected: existingMarker)
-            try activeSkillDirectory.removeIfEmpty()
         }
     }
 }

@@ -35,6 +35,8 @@ version is available. Limitless checks every 12 hours. Right-click the menu-bar
 icon → **Check for Updates** to check now and install an available update while
 idle. A manual check resets the 12-hour timer. Checks and downloads use the same
 12-hour interval. Limitless verifies the download, then installs and reopens the app.
+If the helper was enabled, the reopened version restores it; a failed replacement reopens
+the previous app so the same recovery can run.
 
 Right-click the menu-bar icon → **Uninstall Limitless**. This stops sessions and
 removes the app, helper, CLI shortcut, login item, preferences and AI integrations

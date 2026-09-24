@@ -8,6 +8,7 @@ import ServiceManagement
 
 @MainActor @Observable final class AppModel {
     enum BuildTrust { case checking, trusted, untrusted }
+    static let updateHelperRecoveryKey = "restoreHelperAfterUpdate"
 
     private(set) var status: ServiceStatus?
     private(set) var busy = false
@@ -52,9 +53,7 @@ import ServiceManagement
     private(set) var processListError: String?
     private var selectedProcesses: [Int32: ProcessIdentity] = [:]
     private let preferences: UserDefaults
-    private let helper: (any HelperInstallation)? =
-        (Bundle.main.object(forInfoDictionaryKey: "LimitlessHelperInstallation") as? String)
-        .flatMap(HelperInstallationKind.init(rawValue:))?.service
+    private let helper: (any HelperInstallation)?
     private var client: ServiceClient?
     private var restoredAutomationPreference = false
     private var monitoring: Task<Void, Never>?
@@ -77,8 +76,17 @@ import ServiceManagement
     private var baseline = PolicyDraft()
     private(set) var isPreview = false
 
-    init(preferences: UserDefaults = .standard) {
+    init(
+        preferences: UserDefaults = .standard,
+        helper: (any HelperInstallation)? =
+            (Bundle.main.object(
+                forInfoDictionaryKey: "LimitlessHelperInstallation") as? String)
+            .flatMap(HelperInstallationKind.init(rawValue:))?.service,
+        buildTrust: BuildTrust = .checking
+    ) {
         self.preferences = preferences
+        self.helper = helper
+        self.buildTrust = buildTrust
         let authentication = LAContext()
         hasTouchID =
             authentication.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
@@ -105,6 +113,31 @@ import ServiceManagement
         let identity = try? await SignedIdentity.current(
             expectedIdentifier: LimitlessIdentity.application)
         buildTrust = identity == nil ? .untrusted : .trusted
+    }
+
+    func restoreUpdateHelperIfNeeded() async {
+        guard preferences.bool(forKey: Self.updateHelperRecoveryKey), trustedBuild, !isPreview,
+            let helper
+        else { return }
+        do {
+            if [.notRegistered, .notFound].contains(helper.status) {
+                try await helper.register()
+            }
+            helperStatus = helper.status
+            guard helperStatus == .enabled || helperStatus == .requiresApproval else {
+                throw ServiceError.unavailable
+            }
+            clearUpdateHelperRecovery()
+        } catch {
+            helperStatus = helper.status
+            message =
+                "The update finished, but the helper could not be restored. Enable it again to continue."
+        }
+    }
+
+    private func clearUpdateHelperRecovery() {
+        preferences.removeObject(forKey: Self.updateHelperRecoveryKey)
+        _ = preferences.synchronize()
     }
 
     var canControl: Bool {
@@ -275,10 +308,16 @@ import ServiceManagement
             let candidate = try await GitHubUpdate.stage(
                 availableUpdate, identity: identity, installedApp: Bundle.main.bundleURL)
             staged = candidate
+            updateSchedule.downloaded()
             guard !quitting else { return }
             updateMessage = "Installing update…"
+            if helper?.status == .enabled {
+                preferences.set(true, forKey: Self.updateHelperRecoveryKey)
+                guard preferences.synchronize() else { throw ServiceError.unavailable }
+            }
             guard await removeIntegration(forUpdate: true) else {
                 updateMessage = message
+                await restoreUpdateHelperIfNeeded()
                 return
             }
             try GitHubUpdate.launchInstaller(candidate)
@@ -296,8 +335,9 @@ import ServiceManagement
                 quitting = false
                 removalComplete = false
                 monitoring = nil
-                beginMonitoring()
             }
+            await restoreUpdateHelperIfNeeded()
+            beginMonitoring()
         }
     }
 
@@ -587,6 +627,9 @@ import ServiceManagement
                 "The helper could not be enabled. Complete the macOS approval before retrying."
         }
         helperStatus = helper.status
+        if helperStatus == .enabled || helperStatus == .requiresApproval {
+            clearUpdateHelperRecovery()
+        }
         busy = false
         await refresh()
     }

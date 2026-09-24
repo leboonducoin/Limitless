@@ -85,6 +85,41 @@ import Testing
     #expect(download(reset))
 }
 
+@Test func successfulDownloadResetsFailureBackoff() {
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let interval = UpdateSchedule.interval
+    var schedule = UpdateSchedule()
+    func download(_ date: Date) -> Bool { schedule.beginDownload(at: date) }
+    #expect(download(now))
+    schedule.failed(download: true, at: now)
+    #expect(download(now.addingTimeInterval(interval)))
+    schedule.failed(download: true, at: now.addingTimeInterval(interval))
+    let recovered = now.addingTimeInterval(3 * interval)
+    #expect(download(recovered))
+    schedule.downloaded()
+    schedule.failed(download: true, at: recovered)
+    #expect(schedule.nextDownload == recovered.addingTimeInterval(interval))
+}
+
+@Test func persistedUpdateScheduleRejectsInvalidCountersAndIntervals() throws {
+    let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
+    for values: [String: Any] in [
+        ["checkFailures": -1, "downloadFailures": 0, "scheduledInterval": 43_200],
+        ["checkFailures": 0, "downloadFailures": 7, "scheduledInterval": 43_200],
+        ["checkFailures": Int.max, "downloadFailures": 0, "scheduledInterval": 43_200],
+        ["checkFailures": 0, "downloadFailures": 0, "scheduledInterval": 0],
+        ["checkFailures": 0, "downloadFailures": 0, "scheduledInterval": 3_600],
+    ] {
+        var object = values
+        object["nextCheck"] = now.timeIntervalSinceReferenceDate
+        object["nextDownload"] = now.timeIntervalSinceReferenceDate
+        let data = try JSONSerialization.data(withJSONObject: object)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(UpdateSchedule.self, from: data)
+        }
+    }
+}
+
 @Test func manualCheckResetsTwelveHourClockWithoutBypassingCooldownOrRateLimits() throws {
     let now = Date(timeIntervalSince1970: 1_700_000_000)
     var schedule = UpdateSchedule()

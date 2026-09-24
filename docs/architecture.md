@@ -56,20 +56,24 @@ Full Disk Access guidance; it never grants access or retries the write automatic
 
 AI hooks read lifecycle IDs only. Private markers bind a task to its original
 process and file identity. Setup merges only Limitless hooks, backs up existing
-settings and refuses linked or invalid files. Removal preserves other integrations.
+settings and refuses linked, shared-writable or write-ACL-controlled paths. Setup and
+removal roll back the skill, marker and settings together. Removal preserves other integrations.
 
 ## Updates and removal
 
 Checks and download attempts wait 12 hours, persisted across launches.
 A manual check resets the 12-hour clock and has a
 five-minute cooldown. Failures back off to seven days; longer GitHub retry deadlines are
-respected. Background errors stay quiet. No GitHub token is needed or stored.
+respected, and a verified download resets its failure count. Invalid persisted counters are
+discarded. Background errors stay quiet. No GitHub token is needed or stored.
 
 Updates verify archive bounds, SHA-256, source metadata and all five executable
 signatures, including the sudo component and helper. They retain quarantine and a rollback backup. Removal closes admission,
 confirms sleep restoration, removes the helper and owned CLI link, then clears
 preferences and recycles the app. Sudo cleanup runs in its own helper before
-removing its service; updates preserve the setting. Failed cleanup stays visible and retryable.
+removing its service; updates preserve the setting. An update records whether the power helper
+was enabled, restores it after relaunch and retries from the previous app if replacement fails.
+Failed cleanup stays visible and retryable.
 
 ## Apple certificate selector
 

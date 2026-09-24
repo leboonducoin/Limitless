@@ -250,4 +250,33 @@ public final class SecureOwnershipJournal: OwnershipJournal {
         }
         guard errno == EINVAL else { throw JournalError.system(errno) }
     }
+
+    static func rejectWriteGrantingAccess(_ file: Int32) throws {
+        guard let acl = acl_get_fd_np(file, ACL_TYPE_EXTENDED) else {
+            if errno == ENOENT { return }
+            throw JournalError.system(errno)
+        }
+        defer { acl_free(UnsafeMutableRawPointer(acl)) }
+        var entry: acl_entry_t?
+        var selection = Int32(ACL_FIRST_ENTRY.rawValue)
+        let writePermissions: [acl_perm_t] = [
+            ACL_WRITE_DATA, ACL_DELETE, ACL_APPEND_DATA, ACL_DELETE_CHILD,
+            ACL_WRITE_ATTRIBUTES, ACL_WRITE_EXTATTRIBUTES, ACL_WRITE_SECURITY, ACL_CHANGE_OWNER,
+        ]
+        while acl_get_entry(acl, selection, &entry) == 0 {
+            guard let entry else { throw JournalError.extendedAccess }
+            var tag = ACL_UNDEFINED_TAG
+            var permissions: acl_permset_t?
+            guard acl_get_tag_type(entry, &tag) == 0,
+                acl_get_permset(entry, &permissions) == 0, let permissions
+            else { throw JournalError.system(errno) }
+            if tag == ACL_EXTENDED_ALLOW,
+                writePermissions.contains(where: { acl_get_perm_np(permissions, $0) == 1 })
+            {
+                throw JournalError.extendedAccess
+            }
+            selection = Int32(ACL_NEXT_ENTRY.rawValue)
+        }
+        guard errno == EINVAL else { throw JournalError.system(errno) }
+    }
 }

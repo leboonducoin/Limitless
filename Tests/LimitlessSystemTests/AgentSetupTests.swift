@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 
@@ -160,4 +161,86 @@ func failedAgentSetupRestoresManagedSkillAndAllowsRetry(_ existingSkill: Bool) t
     try AgentSetup.configure("codex", home: root, resources: resources)
     #expect(FileManager.default.fileExists(atPath: config.path))
     #expect(FileManager.default.fileExists(atPath: marker.path))
+}
+
+@Test func failedAgentRemovalRestoresConfigurationAndManagedSkill() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let resources = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+            "skills/limitless")
+    let config = root.appendingPathComponent(".codex/hooks.json")
+    let skills = root.appendingPathComponent(".agents/skills")
+    let skill = skills.appendingPathComponent("limitless/SKILL.md")
+    let marker = skills.appendingPathComponent("limitless/.limitless-managed")
+    defer {
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o700], ofItemAtPath: skills.path)
+        try? FileManager.default.removeItem(at: root)
+    }
+    try AgentSetup.configure("codex", home: root, resources: resources)
+    let oldConfig = try Data(contentsOf: config)
+    let oldSkill = try Data(contentsOf: skill)
+    let oldMarker = try Data(contentsOf: marker)
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o500], ofItemAtPath: skills.path)
+    #expect(throws: (any Error).self) {
+        try AgentSetup.configure("codex", remove: true, home: root, resources: resources)
+    }
+    #expect(try Data(contentsOf: config) == oldConfig)
+    #expect(try Data(contentsOf: skill) == oldSkill)
+    #expect(try Data(contentsOf: marker) == oldMarker)
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o700], ofItemAtPath: skills.path)
+    try AgentSetup.configure("codex", remove: true, home: root, resources: resources)
+    #expect(!FileManager.default.fileExists(atPath: skill.deletingLastPathComponent().path))
+}
+
+@Test func agentSetupRejectsSharedWritePermissionsAndAllowsDenyOnlyACLs() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let resources = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+            "skills/limitless")
+    let configDirectory = root.appendingPathComponent(".codex")
+    let config = configDirectory.appendingPathComponent("hooks.json")
+    defer {
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o700], ofItemAtPath: root.path)
+        try? FileManager.default.removeItem(at: root)
+    }
+    try FileManager.default.createDirectory(at: configDirectory, withIntermediateDirectories: true)
+    try Data("{}".utf8).write(to: config)
+    #expect(chmod(config.path, 0o660) == 0)
+    #expect(throws: (any Error).self) {
+        try AgentSetup.configure("codex", home: root, resources: resources)
+    }
+    #expect(try Data(contentsOf: config) == Data("{}".utf8))
+    #expect(chmod(config.path, 0o600) == 0)
+    #expect(chmod(root.path, 0o770) == 0)
+    #expect(throws: (any Error).self) {
+        try AgentSetup.configure("codex", home: root, resources: resources)
+    }
+    #expect(chmod(root.path, 0o700) == 0)
+
+    func setACL(_ tag: acl_tag_t) throws {
+        var acl = acl_init(1)
+        defer { if let acl { acl_free(UnsafeMutableRawPointer(acl)) } }
+        var entry: acl_entry_t?
+        #expect(acl_create_entry(&acl, &entry) == 0)
+        let item = try #require(entry)
+        #expect(acl_set_tag_type(item, tag) == 0)
+        var subject = UUID().uuid
+        #expect(acl_set_qualifier(item, &subject) == 0)
+        var permissions: acl_permset_t?
+        #expect(acl_get_permset(item, &permissions) == 0)
+        let permissionSet = try #require(permissions)
+        let accessList = try #require(acl)
+        #expect(acl_add_perm(permissionSet, ACL_WRITE_DATA) == 0)
+        #expect(acl_set_file(root.path, ACL_TYPE_EXTENDED, accessList) == 0)
+    }
+    try setACL(ACL_EXTENDED_ALLOW)
+    #expect(throws: JournalError.extendedAccess) {
+        try AgentSetup.configure("codex", home: root, resources: resources)
+    }
+    try setACL(ACL_EXTENDED_DENY)
+    try AgentSetup.configure("codex", home: root, resources: resources)
 }

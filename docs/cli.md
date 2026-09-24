@@ -41,8 +41,9 @@ Close your agent, then run its command once:
 Restart the agent and accept its normal hook approval if asked. Setup installs
 the skill and task hooks together. Existing settings are kept, with a private
 `.limitless-backup-*` copy beside the settings file. Invalid or linked files are
-left untouched. Setup also stops if a configuration directory is replaced while
-the change is in progress. A failed setup restores its previous skill files.
+left untouched, as are paths writable by another user through permissions or ACLs.
+Setup also stops if a configuration directory is replaced while the change is in
+progress. A failed setup or removal restores the previous settings and skill files.
 Custom configuration locations need manual setup.
 
 During a task, Limitless uses **both power sources and a 20% battery reserve**,
@@ -51,7 +52,8 @@ to finish releases the hold. A manual **Keep awake** session always takes priori
 
 To remove an integration: `limitless setup codex --remove` (replace the agent name).
 App uninstall also removes integrations installed this way. Backups are retained
-for recovery; other settings and hooks are preserved.
+for recovery; other settings and hooks are preserved. A failed removal is rolled back
+so a retry starts from the prior complete installation.
 
 These integrations need a local agent with lifecycle hooks. If your agent misses
 a cancellation event, click **Stop** in Limitless; exiting the agent also releases

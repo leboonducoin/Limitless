@@ -38,8 +38,7 @@ public enum InstalledCLI {
             var info = stat()
             guard fstat(fd, &info) == 0 else { throw JournalError.system(errno) }
             guard info.st_mode & S_IFMT == S_IFDIR, info.st_uid == 0 || info.st_uid == user,
-                info.st_mode & 0o002 == 0,
-                info.st_mode & 0o020 == 0 || info.st_uid == user
+                info.st_mode & 0o022 == 0
             else { throw JournalError.insecureDirectory }
             try SecureOwnershipJournal.rejectExtendedAccess(fd)
         }
