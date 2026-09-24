@@ -423,20 +423,36 @@ public enum AgentSetup {
             }
         } catch {
             let setupError = error
-            try restore(
-                activeConfigDirectory, name: configName, previous: old, attempted: writtenConfig)
+            var rollbackError: (any Error)?
+            func attempt(_ action: () throws -> Void) {
+                do {
+                    try action()
+                } catch {
+                    if rollbackError == nil { rollbackError = error }
+                }
+            }
             if !remove {
+                attempt {
+                    try restore(
+                        activeSkillDirectory, name: "SKILL.md", previous: oldSkill,
+                        attempted: writtenSkill)
+                }
+                attempt {
+                    try restore(
+                        activeSkillDirectory, name: ".limitless-managed", previous: existingMarker,
+                        attempted: writtenMarker)
+                }
+                if !skillExisted { attempt { try activeSkillDirectory.removeIfEmpty() } }
+            }
+            attempt {
                 try restore(
-                    activeSkillDirectory, name: "SKILL.md", previous: oldSkill,
-                    attempted: writtenSkill)
-                try restore(
-                    activeSkillDirectory, name: ".limitless-managed", previous: existingMarker,
-                    attempted: writtenMarker)
-                if !skillExisted { try activeSkillDirectory.removeIfEmpty() }
+                    activeConfigDirectory, name: configName, previous: old,
+                    attempted: writtenConfig)
             }
             if let backupName, let backup {
-                try activeConfigDirectory.remove(backupName, expected: backup)
+                attempt { try activeConfigDirectory.remove(backupName, expected: backup) }
             }
+            if let rollbackError { throw rollbackError }
             throw setupError
         }
         if remove {

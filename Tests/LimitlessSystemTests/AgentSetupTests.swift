@@ -102,9 +102,8 @@ func agentSetupPreservesSettingsIsRepeatableAndRemovesOnlyItsIntegration(_ provi
     let resources = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
             "skills/limitless")
-    let original = try JSONSerialization.data(withJSONObject: ["theme": "original"])
+    let original = Data("victim".utf8)
     let target = outside.appendingPathComponent("hooks.json")
-    try original.write(to: directory.appendingPathComponent("hooks.json"))
     try original.write(to: target)
     #expect(throws: JournalError.unexpectedContents) {
         try AgentSetup.configure(
@@ -116,6 +115,9 @@ func agentSetupPreservesSettingsIsRepeatableAndRemovesOnlyItsIntegration(_ provi
             })
     }
     #expect(try Data(contentsOf: target) == original)
+    #expect(
+        !FileManager.default.fileExists(
+            atPath: root.appendingPathComponent(".agents/skills/limitless").path))
 }
 
 @Test(arguments: [false, true])
