@@ -72,7 +72,9 @@ is needed or stored.
 Updates verify archive bounds, SHA-256, source metadata and all five executable
 signatures, including the sudo component and helper. They retain quarantine and a rollback backup. Removal closes admission,
 confirms sleep restoration, removes the helper and owned CLI link, then clears
-preferences and recycles the app. Sudo cleanup runs in its own helper before
+preferences and recycles the matching signed app in Applications, even when macOS
+launched a quarantined copy from App Translocation. The installed copy is verified
+before cleanup and again before recycling. Sudo cleanup runs in its own helper before
 removing its service; updates preserve the setting. An update records whether the power helper
 was enabled, restores it after relaunch and retries from the previous app if replacement fails.
 Failed cleanup stays visible and retryable.

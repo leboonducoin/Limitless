@@ -8,6 +8,19 @@ import LimitlessSystem
         let candidate = URL(fileURLWithPath: arguments[1])
         let current = Bundle.main.bundleURL
         let identity = try SignedIdentity(expectedIdentifier: LimitlessIdentity.application)
+        if arguments[0] == "reject-installed-build" {
+            let finishedParent = Process()
+            finishedParent.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+            try finishedParent.run()
+            finishedParent.waitUntilExit()
+            do {
+                _ = try await GitHubUpdate.finish(
+                    app: candidate, parentPID: finishedParent.processIdentifier)
+                exit(1)
+            } catch UpdateError.unsafeLocation {}
+            print("PASS signed update \(arguments[0])")
+            return
+        }
         if arguments[0] == "replace" {
             let finishedParent = Process()
             finishedParent.executableURL = URL(fileURLWithPath: "/usr/bin/true")
@@ -15,6 +28,9 @@ import LimitlessSystem
             finishedParent.waitUntilExit()
             let installed = try await GitHubUpdate.finish(
                 app: candidate, parentPID: finishedParent.processIdentifier)
+            let expected = candidate.deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Limitless.app", isDirectory: true)
+            guard installed.app == expected, installed.app != current else { exit(1) }
             let info =
                 try PropertyListSerialization.propertyList(
                     from: Data(

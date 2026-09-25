@@ -76,11 +76,18 @@ macOS version and any steps that fail.
   `api.github.com`. During that delay, verify that the inline **Update** button is absent. Confirm the
   published archive accepts the bundled `Limitless Sudo.app` path. Verify the helper returns after the reopened
   app; if replacement is deliberately failed, verify the previous app reopens and restores it.
+  After approving a quarantined update, verify that CLI opt-in is restored even if macOS
+  starts the app from a randomized path; the next update must still target the signed app
+  in Applications. Do not remove quarantine to make this pass.
 - Command-drag the Limitless icon farther right, relaunch the app and verify that macOS restores
   its position.
 - Then uninstall: the app should close and its integrations disappear.
   Cancel the sudo component's administrator prompt, retry removal, and verify both
   helpers disappear. An existing external sudo setting must remain unchanged.
+  Repeat after a quarantined update that launches through App Translocation: the
+  signed app in Applications must move to the Trash, not the temporary running copy.
+  If that installed copy is missing or has a different version, removal must stop
+  before changing the helpers or preferences.
 
 For long runs, keep the Mac ventilated and leave battery protection enabled.
 If stopping or uninstalling fails, keep the app and report the error before retrying.

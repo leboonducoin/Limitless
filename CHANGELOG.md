@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5 — 2026-09-25
+
+- Resolve the installed app from its verified `/Applications/Limitless.app` copy when macOS launches a quarantined update from a read-only translocated path. Update recovery and uninstall no longer target the translocated copy.
+- Verify the installed app's signed build record before removing integrations, and recheck it before moving the app to Trash. If Trash fails, select the installed app in Finder for manual removal.
+- Add signed update fixtures for an altered build record and a translocated running copy.
+
 ## 1.0.4 — 2026-09-25
 
 - Read the public `release.json` asset instead of GitHub's rate-limited releases API. Update checks no longer consume the anonymous REST API quota or require a GitHub token.

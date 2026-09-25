@@ -112,7 +112,9 @@ func main() throws {
     try JSONSerialization.data(withJSONObject: record).write(to: recordURL)
     try sign(current, certificate: certificate)
     try sign(candidate, certificate: certificate)
-    let executable = current.appendingPathComponent("Contents/MacOS/LimitlessApp").path
+    let launched = root.appendingPathComponent("LaunchedElsewhere.app")
+    try files.copyItem(at: current, to: launched)
+    let executable = launched.appendingPathComponent("Contents/MacOS/LimitlessApp").path
     try run(executable, ["accept", candidate.path])
     try run(executable, ["reject-revision", candidate.path])
     try Data("tampered".utf8).write(to: recordURL)
@@ -125,6 +127,15 @@ func main() throws {
     try run(executable, ["reject", candidate.path])
     try setVersion(candidate, "0.2.0")
     try sign(candidate, certificate: certificate)
+    let currentRecordURL = current.appendingPathComponent("Contents/Resources/Build.json")
+    let currentRecord = try Data(contentsOf: currentRecordURL)
+    let changedRecord = try Data(contentsOf: recordURL)
+    guard currentRecord != changedRecord else { throw CocoaError(.fileReadCorruptFile) }
+    try changedRecord.write(to: currentRecordURL)
+    try sign(current, certificate: certificate)
+    try run(executable, ["reject-installed-build", candidate.path])
+    try currentRecord.write(to: currentRecordURL)
+    try sign(current, certificate: certificate)
     try run(executable, ["replace", candidate.path])
     print(
         "Signed upgrade acceptance, revision mismatch/tampering/ad-hoc/downgrade refusal and atomic replacement passed. No installed app was changed."
