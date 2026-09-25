@@ -76,6 +76,9 @@ macOS version and any steps that fail.
   `api.github.com`. During that delay, verify that the inline **Update** button is absent. Confirm the
   published archive accepts the bundled `Limitless Sudo.app` path. Verify the helper returns after the reopened
   app; if replacement is deliberately failed, verify the previous app reopens and restores it.
+  After approving a quarantined update, verify that CLI opt-in is restored even if macOS
+  starts the app from a randomized path; the next update must still target the signed app
+  in Applications. Do not remove quarantine to make this pass.
 - Command-drag the Limitless icon farther right, relaunch the app and verify that macOS restores
   its position.
 - Then uninstall: the app should close and its integrations disappear.

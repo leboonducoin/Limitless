@@ -332,8 +332,10 @@ import ServiceManagement
         do {
             let identity = try await SignedIdentity.current(
                 expectedIdentifier: LimitlessIdentity.application)
+            let installedApp = try await GitHubUpdate.currentInstalledApplication(
+                identity: identity)
             let candidate = try await GitHubUpdate.stage(
-                availableUpdate, identity: identity, installedApp: Bundle.main.bundleURL)
+                availableUpdate, identity: identity, installedApp: installedApp)
             staged = candidate
             updateSchedule.downloaded()
             guard !quitting else { return }
@@ -425,7 +427,9 @@ import ServiceManagement
             if !restoredAutomationPreference {
                 restoredAutomationPreference = true
                 if let received = reply.status, preferences.bool(forKey: "allowsAutomation"),
-                    Bundle.main.bundleURL.standardizedFileURL.path == "/Applications/Limitless.app"
+                    let identity = try? await SignedIdentity.current(
+                        expectedIdentifier: LimitlessIdentity.application),
+                    (try? await GitHubUpdate.currentInstalledApplication(identity: identity)) != nil
                 {
                     let saved =
                         preferences.data(forKey: "userPolicy").flatMap {
@@ -597,7 +601,10 @@ import ServiceManagement
     func setAutomation(_ enabled: Bool) async {
         guard let policy = status?.policy else { return }
         if enabled {
-            guard Bundle.main.bundleURL.standardizedFileURL.path == "/Applications/Limitless.app"
+            guard
+                let identity = try? await SignedIdentity.current(
+                    expectedIdentifier: LimitlessIdentity.application),
+                (try? await GitHubUpdate.currentInstalledApplication(identity: identity)) != nil
             else {
                 message = "Move Limitless to Applications to enable the CLI."
                 return

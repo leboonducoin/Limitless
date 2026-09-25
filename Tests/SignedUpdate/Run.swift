@@ -112,7 +112,9 @@ func main() throws {
     try JSONSerialization.data(withJSONObject: record).write(to: recordURL)
     try sign(current, certificate: certificate)
     try sign(candidate, certificate: certificate)
-    let executable = current.appendingPathComponent("Contents/MacOS/LimitlessApp").path
+    let launched = root.appendingPathComponent("LaunchedElsewhere.app")
+    try files.copyItem(at: current, to: launched)
+    let executable = launched.appendingPathComponent("Contents/MacOS/LimitlessApp").path
     try run(executable, ["accept", candidate.path])
     try run(executable, ["reject-revision", candidate.path])
     try Data("tampered".utf8).write(to: recordURL)

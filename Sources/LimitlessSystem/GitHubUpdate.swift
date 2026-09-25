@@ -130,6 +130,8 @@ public enum UpdateError: Error, LocalizedError, Equatable, Sendable {
 
 public enum GitHubUpdate {
     public static let repository = URL(string: "https://github.com/leboonducoin/Limitless")!
+    private static let installedApplication = URL(
+        fileURLWithPath: "/Applications/Limitless.app", isDirectory: true)
     static let latestURL = repository.appendingPathComponent(
         "releases/latest/download/release.json")
     static let maximumArchiveSize = 64 * 1_024 * 1_024
@@ -402,6 +404,28 @@ public enum GitHubUpdate {
         return URL(fileURLWithPath: String(cString: path), isDirectory: true)
     }
 
+    @concurrent public static func currentInstalledApplication(identity: SignedIdentity)
+        async throws
+        -> URL
+    {
+        guard try canonical(installedApplication) == installedApplication else {
+            throw UpdateError.unsafeLocation
+        }
+        try requireCurrentApplication(installedApplication, identity: identity)
+        return installedApplication
+    }
+
+    private static func requireCurrentApplication(_ app: URL, identity: SignedIdentity) throws {
+        let details = try identity.verifyExecutable(
+            at: app, identifier: LimitlessIdentity.application)
+        guard let info = details[kSecCodeInfoPList as String] as? [String: Any],
+            info["CFBundleVersion"] as? String
+                == Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+            info["CFBundleShortVersionString"] as? String
+                == Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        else { throw UpdateError.unsafeLocation }
+    }
+
     public static func verify(
         _ app: URL, identity: SignedIdentity, newerThan current: URL,
         expectedVersion: String? = nil, expectedSourceRevision: String? = nil
@@ -485,15 +509,18 @@ public enum GitHubUpdate {
     @concurrent public static func finish(app: URL, parentPID: Int32) async throws -> (
         app: URL, backup: URL, staging: URL
     ) {
-        let current = try canonical(Bundle.main.bundleURL)
         let identity = try SignedIdentity(expectedIdentifier: LimitlessIdentity.application)
-        try requireWritableApp(current)
         guard try app.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == false,
             try app.deletingLastPathComponent().resourceValues(forKeys: [.isSymbolicLinkKey])
                 .isSymbolicLink == false
         else { throw UpdateError.unsafeLocation }
         let app = try canonical(app)
         let directory = app.deletingLastPathComponent()
+        let current = directory.deletingLastPathComponent().appendingPathComponent(
+            "Limitless.app", isDirectory: true)
+        guard try canonical(current) == current else { throw UpdateError.unsafeLocation }
+        try requireCurrentApplication(current, identity: identity)
+        try requireWritableApp(current)
         guard app.lastPathComponent == "Limitless.app",
             directory.deletingLastPathComponent() == current.deletingLastPathComponent(),
             directory.lastPathComponent.hasPrefix(".Limitless-update-"),
