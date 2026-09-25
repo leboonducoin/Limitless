@@ -35,10 +35,14 @@ hours and starts installing a detected update immediately while idle. Otherwise,
 button appears when a version is available and disappears during the retry delay. Right-click
 the menu-bar icon → **Check for Updates** to perform a fresh check and install an available
 update while idle. A manual check resets the eight-hour timer and can retry a delayed download
-after five minutes; GitHub retry deadlines still apply. Limitless verifies the download, then
-installs and reopens the app.
+after five minutes; server retry deadlines still apply. Checks read the published `release.json`
+asset instead of GitHub's rate-limited REST API. Limitless verifies the download, then installs
+and reopens the app.
 If the helper was enabled, the reopened version restores it; a failed replacement reopens
 the previous app so the same recovery can run.
+
+To move Limitless farther right in the menu bar, hold Command and drag its icon. macOS remembers
+that position for later launches.
 
 Right-click the menu-bar icon → **Uninstall Limitless**. This stops sessions and
 removes the app, helper, CLI shortcut, login item, preferences and AI integrations

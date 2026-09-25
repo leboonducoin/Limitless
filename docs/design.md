@@ -5,6 +5,7 @@ separate preferences window. Content sets the height; long lists scroll.
 
 - 21-point title. Battery and remaining time share the callout size.
 - Standard square menu-bar item: 21-point loop, 5-point orange dot below/right.
+- macOS restores the menu-bar position after the user moves the item with Command-drag.
 - Small footer: version, blue author link, MIT and GitHub.
 - Immediate settings, one Stop button, outside-click dismissal.
 - Right-click Check for Updates/Quit/Uninstall follows the app's light/dark appearance; red destructive confirmation.
@@ -24,6 +25,7 @@ Only process mode shows the session ceiling; wait for all selected PIDs.
 
 CLI opt-in is remembered without restarting a session. Updates start enabled
 after helper approval and install only while idle; background check failures do not add text to the menu.
+Manual checks distinguish an up-to-date app, an active cooldown and a network failure.
 Uninstall shows progress and keeps a retryable error if cleanup fails.
 
 Touch ID for sudo appears on supported Macs after helper approval. Confirm its

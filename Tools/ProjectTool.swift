@@ -171,6 +171,11 @@ func communityMetadata(info: [String: Any], certificate: String?, sudo: Bool = f
     try require(
         daemon["Program"] == nil && daemon["Label"] as? String == identifier + ".helper",
         "SMJobBless must assign the installed program itself.")
+    if !sudo {
+        try require(
+            daemon["ProcessType"] as? String == "Adaptive",
+            "The power helper must become responsive while serving XPC requests.")
+    }
     return (app, helper, daemon)
 }
 

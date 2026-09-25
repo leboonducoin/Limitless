@@ -53,6 +53,8 @@ macOS version and any steps that fail.
 
 - Enable the helper; verify launch at login turns on. Turn it off and reopen the
   app: it must stay off. Login must never start a session.
+- Restart the Mac and record how long the adaptive helper takes to reconnect after login.
+  It must become responsive without manual intervention or weakened client validation.
 - Start a short timer, then try Stop, a date and multiple PIDs.
 - On a laptop, test lid open/closed, switching power and the battery limit.
 - Type a battery limit, press Return or leave the field, then try the arrows.
@@ -68,10 +70,13 @@ macOS version and any steps that fail.
   verify that a later change fails.
 - Right-click **Check for Updates**. An available update installs immediately while idle;
   a manual check resets the eight-hour clock and can retry a delayed download after five
-  minutes. During that delay, verify that the inline **Update** button is absent. Confirm the
+  minutes. The current release must report that it is up to date without contacting
+  `api.github.com`. During that delay, verify that the inline **Update** button is absent. Confirm the
   published archive accepts the bundled `Limitless Sudo.app` path. Verify the helper returns after the reopened
   app; if replacement is deliberately failed, verify the previous app reopens and restores it.
-  Then uninstall: the app should close and its integrations disappear.
+- Command-drag the Limitless icon farther right, relaunch the app and verify that macOS restores
+  its position.
+- Then uninstall: the app should close and its integrations disappear.
   Cancel the sudo component's administrator prompt, retry removal, and verify both
   helpers disappear. An existing external sudo setting must remain unchanged.
 

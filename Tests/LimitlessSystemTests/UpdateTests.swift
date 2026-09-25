@@ -9,7 +9,9 @@ import Testing
         try #require(
             HTTPURLResponse(
                 url: URL(
-                    string: "https://api.github.com/repos/leboonducoin/Limitless/releases/latest")!,
+                    string:
+                        "https://github.com/leboonducoin/Limitless/releases/latest/download/release.json"
+                )!,
                 statusCode: status, httpVersion: "HTTP/2", headerFields: headers))
     }
     #expect(try GitHubUpdate.validateResponse(response(200), limit: 100))
@@ -127,14 +129,17 @@ import Testing
         schedule.beginCheck(manual: manual, at: date)
     }
     #expect(check(now))
+    #expect(schedule.nextManualCheck(at: now) == now.addingTimeInterval(300))
     #expect(!check(now.addingTimeInterval(299), manual: true))
     let manual = now.addingTimeInterval(300)
     #expect(check(manual, manual: true))
     #expect(schedule.nextCheck == manual.addingTimeInterval(UpdateSchedule.interval))
     schedule.failed(download: false, retryAfter: manual.addingTimeInterval(86_400), at: manual)
     schedule = try JSONDecoder().decode(UpdateSchedule.self, from: JSONEncoder().encode(schedule))
+    #expect(schedule.nextManualCheck(at: manual) == manual.addingTimeInterval(86_400))
     #expect(!check(manual.addingTimeInterval(600), manual: true))
     #expect(check(manual.addingTimeInterval(86_400), manual: true))
+    #expect(schedule.nextManualCheck(at: manual.addingTimeInterval(86_700)) == nil)
 }
 
 @Test func manualDownloadBypassesNormalDelayAndHonorsCooldownAndRateLimits() throws {
@@ -195,33 +200,44 @@ import Testing
 }
 
 private func releaseData(
-    tag: String = "v0.2.0", digest: String? = "sha256:" + String(repeating: "a", count: 64),
-    url: String? = nil, size: Int = 100, prerelease: Bool = false
+    version: String = "0.2.0", digest: String? = String(repeating: "a", count: 64),
+    archive: String? = nil, sourceRevision: String = String(repeating: "b", count: 40),
+    channel: String = "community", notarized: Bool = false
 ) throws -> Data {
-    var asset: [String: Any] = [
-        "name": "Limitless-0.2.0-universal.zip", "size": size,
-        "browser_download_url": url
-            ?? "https://github.com/leboonducoin/Limitless/releases/download/v0.2.0/Limitless-0.2.0-universal.zip",
+    var manifest: [String: Any] = [
+        "version": version,
+        "sourceRevision": sourceRevision,
+        "archive": archive ?? "Limitless-0.2.0-universal.zip",
+        "channel": channel,
+        "notarized": notarized,
     ]
-    if let digest { asset["digest"] = digest }
-    return try JSONSerialization.data(withJSONObject: [
-        "tag_name": tag, "draft": false, "prerelease": prerelease, "assets": [asset],
-    ])
+    if let digest { manifest["sha256"] = digest }
+    return try JSONSerialization.data(withJSONObject: manifest)
 }
 
-@Test func updatesRequireANewerStableReleaseFromTheExactRepositoryWithADigest() throws {
+@Test func updatesUseThePublishedManifestWithoutTheRateLimitedAPI() throws {
+    #expect(GitHubUpdate.latestURL.host == "github.com")
+    #expect(
+        GitHubUpdate.latestURL.path
+            == "/leboonducoin/Limitless/releases/latest/download/release.json")
     let data = try releaseData()
-    #expect(try GitHubUpdate.release(from: data, currentVersion: "0.1.0")?.version == "0.2.0")
+    let parsed = try GitHubUpdate.release(from: data, currentVersion: "0.1.0")
+    let release = try #require(parsed)
+    #expect(release.version == "0.2.0")
+    #expect(
+        release.url.absoluteString
+            == "https://github.com/leboonducoin/Limitless/releases/download/v0.2.0/Limitless-0.2.0-universal.zip"
+    )
     #expect(try GitHubUpdate.release(from: data, currentVersion: "0.2.0") == nil)
     #expect(try GitHubUpdate.release(from: data, currentVersion: "0.10.0") == nil)
-    #expect(
-        try GitHubUpdate.release(from: releaseData(prerelease: true), currentVersion: "0.1.0")
-            == nil)
     for invalid in [
-        try releaseData(digest: nil), try releaseData(digest: "sha256:wrong"),
-        try releaseData(url: "https://github.com/other/Limitless/update.zip"),
-        try releaseData(size: GitHubUpdate.maximumArchiveSize + 1),
-        try releaseData(size: -1), try releaseData(tag: "v0.2.0-beta"),
+        try releaseData(digest: nil), try releaseData(digest: "wrong"),
+        try releaseData(archive: "another.zip"),
+        try releaseData(sourceRevision: "wrong"),
+        try releaseData(channel: "other"),
+        try releaseData(notarized: true),
+        try releaseData(channel: "developer-id"),
+        try releaseData(version: "0.2.0-beta"),
     ] {
         #expect(throws: UpdateError.invalidRelease) {
             try GitHubUpdate.release(from: invalid, currentVersion: "0.1.0")

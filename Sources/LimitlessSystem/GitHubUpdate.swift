@@ -66,6 +66,11 @@ public struct UpdateSchedule: Codable, Sendable {
         return true
     }
 
+    public func nextManualCheck(at now: Date = Date()) -> Date? {
+        let next = max(manualCheckAfter, rateLimitUntil)
+        return next > now ? next : nil
+    }
+
     public func canBeginDownload(manual: Bool = false, at now: Date = Date()) -> Bool {
         now >= rateLimitUntil && (manual ? now >= manualDownloadAfter : now >= nextDownload)
     }
@@ -125,14 +130,13 @@ public enum UpdateError: Error, LocalizedError, Equatable, Sendable {
 
 public enum GitHubUpdate {
     public static let repository = URL(string: "https://github.com/leboonducoin/Limitless")!
-    private static let latestURL = URL(
-        string: "https://api.github.com/repos/leboonducoin/Limitless/releases/latest")!
+    static let latestURL = repository.appendingPathComponent(
+        "releases/latest/download/release.json")
     static let maximumArchiveSize = 64 * 1_024 * 1_024
 
     public struct Release: Equatable, Sendable {
         public let version: String
         let url: URL
-        let size: Int
         let digest: String
     }
 
@@ -141,17 +145,13 @@ public enum GitHubUpdate {
         public let directory: URL
     }
 
-    private struct Response: Decodable {
-        let tagName: String
-        let draft: Bool
-        let prerelease: Bool
-        let assets: [Asset]
-        struct Asset: Decodable {
-            let name: String
-            let browserDownloadUrl: URL
-            let size: Int
-            let digest: String?
-        }
+    private struct Manifest: Decodable {
+        let version: String
+        let sourceRevision: String
+        let archive: String
+        let sha256: String
+        let channel: String
+        let notarized: Bool
     }
 
     static func version(_ text: String) throws -> [Int] {
@@ -167,29 +167,30 @@ public enum GitHubUpdate {
     }
 
     static func release(from data: Data, currentVersion: String) throws -> Release? {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let response = try decoder.decode(Response.self, from: data)
-        guard !response.draft, !response.prerelease else { return nil }
-        let name = response.tagName
-        let candidate = name.hasPrefix("v") ? String(name.dropFirst()) : name
+        guard let manifest = try? JSONDecoder().decode(Manifest.self, from: data) else {
+            throw UpdateError.invalidRelease
+        }
+        let candidate = manifest.version
         guard try version(currentVersion).lexicographicallyPrecedes(version(candidate)) else {
             return nil
         }
         let archive = "Limitless-\(candidate)-universal.zip"
-        let assets = response.assets.filter { $0.name == archive }
-        guard assets.count == 1, let asset = assets.first,
-            asset.size > 0, asset.size <= maximumArchiveSize,
-            asset.browserDownloadUrl.absoluteString == repository.absoluteString
-                + "/releases/download/\(name)/\(archive)",
-            let digest = asset.digest, digest.hasPrefix("sha256:"), digest.count == 71,
-            digest.dropFirst(7).utf8.allSatisfy({
+        guard manifest.archive == archive,
+            manifest.sourceRevision.utf8.count == 40,
+            manifest.sourceRevision.utf8.allSatisfy({
                 (48...57).contains($0) || (97...102).contains($0)
-            })
+            }),
+            manifest.sha256.utf8.count == 64,
+            manifest.sha256.utf8.allSatisfy({
+                (48...57).contains($0) || (97...102).contains($0)
+            }),
+            (manifest.channel == "community" && !manifest.notarized)
+                || (manifest.channel == "developer-id" && manifest.notarized),
+            let url = URL(
+                string: repository.absoluteString
+                    + "/releases/download/v\(candidate)/\(archive)")
         else { throw UpdateError.invalidRelease }
-        return Release(
-            version: candidate, url: asset.browserDownloadUrl, size: asset.size,
-            digest: String(digest.dropFirst(7)))
+        return Release(version: candidate, url: url, digest: manifest.sha256)
     }
 
     @concurrent public static func latest(currentVersion: String) async throws -> Release? {
@@ -268,8 +269,7 @@ public enum GitHubUpdate {
             attributes: [.posixPermissions: 0o700])
         var staged = false
         defer { if !staged { try? FileManager.default.removeItem(at: directory) } }
-        guard let data = try await download(release.url, limit: release.size),
-            data.count == release.size,
+        guard let data = try await download(release.url, limit: maximumArchiveSize),
             SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == release.digest
         else { throw UpdateError.invalidArchive }
         let archive = directory.appendingPathComponent("update.zip")
@@ -536,7 +536,7 @@ private final class GitHubRedirects: NSObject, URLSessionTaskDelegate, Sendable 
         url.scheme == "https" && url.user == nil && url.password == nil
             && (url.port == nil || url.port == 443)
             && [
-                "api.github.com", "github.com", "release-assets.githubusercontent.com",
+                "github.com", "release-assets.githubusercontent.com",
                 "objects.githubusercontent.com",
             ].contains(url.host ?? "")
     }

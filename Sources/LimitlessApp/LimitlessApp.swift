@@ -136,6 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
 
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item.autosaveName = LimitlessIdentity.application
         statusItem = item
         item.button?.image = BrandArt.menuIdle
         item.button?.setAccessibilityLabel("Limitless: Setup required")

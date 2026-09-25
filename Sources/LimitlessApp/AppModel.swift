@@ -258,22 +258,39 @@ import ServiceManagement
     }
 
     func checkForUpdates(manual: Bool = false) async -> Bool? {
-        guard trustedBuild, !isPreview, !quitting, !updating, !checkingUpdates else { return nil }
-        guard updateSchedule.beginCheck(manual: manual) else { return nil }
+        if manual { updateMessage = nil }
+        guard trustedBuild, !isPreview, !quitting, !updating else { return nil }
+        guard !checkingUpdates else {
+            if manual { updateMessage = "An update check is already in progress." }
+            return nil
+        }
+        guard updateSchedule.beginCheck(manual: manual) else {
+            if manual, let next = updateSchedule.nextManualCheck() {
+                updateMessage =
+                    "The next update check is available after \(next.formatted(date: .omitted, time: .shortened))."
+            }
+            return nil
+        }
         checkingUpdates = true
         defer { checkingUpdates = false }
-        if manual { updateMessage = nil }
         do {
             let update = try await GitHubUpdate.latest(
                 currentVersion: LimitlessIdentity.version)
             recordDetectedUpdate(update, manual: manual)
             return update != nil
-        } catch UpdateError.rateLimited(let until) {
-            updateSchedule.failed(download: false, retryAfter: until)
+        } catch let error as UpdateError {
+            if case .rateLimited(let until) = error {
+                updateSchedule.failed(download: false, retryAfter: until)
+            } else {
+                updateSchedule.failed(download: false)
+            }
+            if manual { updateMessage = error.localizedDescription }
         } catch {
             updateSchedule.failed(download: false)
+            if manual {
+                updateMessage = "Could not reach GitHub. Check your connection and try again."
+            }
         }
-        if manual { updateMessage = "Update check failed. Please try again later." }
         return nil
     }
 

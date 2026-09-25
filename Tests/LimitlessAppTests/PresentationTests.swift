@@ -396,7 +396,7 @@ private func status(
             url: URL(
                 string:
                     "https://github.com/leboonducoin/Limitless/releases/download/v1.0.3/Limitless-1.0.3-universal.zip"
-            )!, size: 1, digest: String(repeating: "a", count: 64))
+            )!, digest: String(repeating: "a", count: 64))
         let automatic = AppModel.preview("inactive")
         automatic.automaticUpdates = true
         #expect(automatic.recordDetectedUpdate(update, manual: false))
@@ -413,5 +413,19 @@ private func status(
         #expect(!manual.recordDetectedUpdate(update, manual: true))
         #expect(!manual.showsUpdateButton)
         #expect(!manual.canInstallAvailableUpdate(manual: true))
+    }
+
+    @Test @MainActor func manualUpdateCooldownExplainsWhenCheckingResumes() async throws {
+        let suite = "Limitless-update-cooldown-\(UUID().uuidString)"
+        let preferences = try #require(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        var schedule = UpdateSchedule()
+        let beganCheck = schedule.beginCheck()
+        #expect(beganCheck)
+        preferences.set(try JSONEncoder().encode(schedule), forKey: "updateSchedule")
+        let model = AppModel(preferences: preferences, helper: nil, buildTrust: .trusted)
+        let update = await model.checkForUpdates(manual: true)
+        #expect(update == nil)
+        #expect(model.updateMessage?.hasPrefix("The next update check is available after ") == true)
     }
 #endif
