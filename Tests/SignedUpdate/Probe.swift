@@ -33,7 +33,10 @@ import LimitlessSystem
         } else {
             var accepted = false
             do {
-                try GitHubUpdate.verify(candidate, identity: identity, newerThan: current)
+                try GitHubUpdate.verify(
+                    candidate, identity: identity, newerThan: current,
+                    expectedSourceRevision: String(
+                        repeating: arguments[0] == "reject-revision" ? "1" : "0", count: 40))
                 accepted = true
             } catch {}
             guard accepted == (arguments[0] == "accept") else { exit(1) }

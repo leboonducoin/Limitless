@@ -224,6 +224,7 @@ private func releaseData(
     let parsed = try GitHubUpdate.release(from: data, currentVersion: "0.1.0")
     let release = try #require(parsed)
     #expect(release.version == "0.2.0")
+    #expect(release.sourceRevision == String(repeating: "b", count: 40))
     #expect(
         release.url.absoluteString
             == "https://github.com/leboonducoin/Limitless/releases/download/v0.2.0/Limitless-0.2.0-universal.zip"

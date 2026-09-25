@@ -396,7 +396,8 @@ private func status(
             url: URL(
                 string:
                     "https://github.com/leboonducoin/Limitless/releases/download/v1.0.3/Limitless-1.0.3-universal.zip"
-            )!, digest: String(repeating: "a", count: 64))
+            )!, digest: String(repeating: "a", count: 64),
+            sourceRevision: String(repeating: "b", count: 40))
         let automatic = AppModel.preview("inactive")
         automatic.automaticUpdates = true
         #expect(automatic.recordDetectedUpdate(update, manual: false))

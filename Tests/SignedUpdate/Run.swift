@@ -114,6 +114,7 @@ func main() throws {
     try sign(candidate, certificate: certificate)
     let executable = current.appendingPathComponent("Contents/MacOS/LimitlessApp").path
     try run(executable, ["accept", candidate.path])
+    try run(executable, ["reject-revision", candidate.path])
     try Data("tampered".utf8).write(to: recordURL)
     try run(executable, ["reject", candidate.path])
     try JSONSerialization.data(withJSONObject: record).write(to: recordURL)
@@ -126,7 +127,7 @@ func main() throws {
     try sign(candidate, certificate: certificate)
     try run(executable, ["replace", candidate.path])
     print(
-        "Signed upgrade acceptance, tampering/ad-hoc/downgrade refusal and atomic replacement passed. No installed app was changed."
+        "Signed upgrade acceptance, revision mismatch/tampering/ad-hoc/downgrade refusal and atomic replacement passed. No installed app was changed."
     )
 }
 

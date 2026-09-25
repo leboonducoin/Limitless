@@ -36,8 +36,8 @@ button appears when a version is available and disappears during the retry delay
 the menu-bar icon → **Check for Updates** to perform a fresh check and install an available
 update while idle. A manual check resets the eight-hour timer and can retry a delayed download
 after five minutes; server retry deadlines still apply. Checks read the published `release.json`
-asset instead of GitHub's rate-limited REST API. Limitless verifies the download, then installs
-and reopens the app.
+asset instead of GitHub's rate-limited REST API. Limitless requires its source revision to match
+the signed app's `Build.json`, verifies the download, then installs and reopens the app.
 If the helper was enabled, the reopened version restores it; a failed replacement reopens
 the previous app so the same recovery can run.
 

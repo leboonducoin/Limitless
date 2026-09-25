@@ -138,6 +138,7 @@ public enum GitHubUpdate {
         public let version: String
         let url: URL
         let digest: String
+        let sourceRevision: String
     }
 
     public struct Staged: Sendable {
@@ -190,7 +191,9 @@ public enum GitHubUpdate {
                 string: repository.absoluteString
                     + "/releases/download/v\(candidate)/\(archive)")
         else { throw UpdateError.invalidRelease }
-        return Release(version: candidate, url: url, digest: manifest.sha256)
+        return Release(
+            version: candidate, url: url, digest: manifest.sha256,
+            sourceRevision: manifest.sourceRevision)
     }
 
     @concurrent public static func latest(currentVersion: String) async throws -> Release? {
@@ -276,7 +279,9 @@ public enum GitHubUpdate {
         try data.write(to: archive, options: .withoutOverwriting)
         try await extract(archive, to: directory)
         let app = directory.appendingPathComponent("Limitless.app")
-        try verify(app, identity: identity, newerThan: target, expectedVersion: release.version)
+        try verify(
+            app, identity: identity, newerThan: target, expectedVersion: release.version,
+            expectedSourceRevision: release.sourceRevision)
         try quarantine(app, downloadedFrom: release.url)
         staged = true
         return Staged(app: app, directory: directory)
@@ -398,7 +403,8 @@ public enum GitHubUpdate {
     }
 
     public static func verify(
-        _ app: URL, identity: SignedIdentity, newerThan current: URL, expectedVersion: String? = nil
+        _ app: URL, identity: SignedIdentity, newerThan current: URL,
+        expectedVersion: String? = nil, expectedSourceRevision: String? = nil
     ) throws {
         let info = try identity.verifyExecutable(at: app, identifier: LimitlessIdentity.application)
         guard let plist = info[kSecCodeInfoPList as String] as? [String: Any],
@@ -449,7 +455,7 @@ public enum GitHubUpdate {
             record.sourceRevision.count == 40,
             record.sourceRevision.utf8.allSatisfy({
                 (48...57).contains($0) || (97...102).contains($0)
-            })
+            }), expectedSourceRevision == nil || record.sourceRevision == expectedSourceRevision
         else { throw UpdateError.untrustedBuild }
         if kind == .blessed {
             guard let embedded = helperInfo[kSecCodeInfoPList as String] as? [String: Any],
