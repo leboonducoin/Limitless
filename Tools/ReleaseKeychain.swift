@@ -4,7 +4,7 @@ import Security
 let home = FileManager.default.homeDirectoryForCurrentUser
 let loginPath = home.appendingPathComponent("Library/Keychains/login.keychain-db").path
 let releasePath = home.appendingPathComponent(
-    "Library/Keychains/limitless-release-verified.keychain-db"
+    "Library/Keychains/limitless-release-signing.keychain-db"
 ).path
 let service = "io.github.leboonducoin.Limitless.release-keychain.native"
 let account = "Limitless Release Native"
