@@ -3,6 +3,7 @@ import Carbon
 import Foundation
 import LimitlessCore
 import ServiceManagement
+import SwiftUI
 import Testing
 
 @testable import LimitlessApp
@@ -414,6 +415,24 @@ private func status(
         #expect(!manual.recordDetectedUpdate(update, manual: true))
         #expect(!manual.showsUpdateButton)
         #expect(!manual.canInstallAvailableUpdate(manual: true))
+    }
+
+    @Test @MainActor func settingsFitTheMenuBeforeAndAfterAutomaticUpdatesChange() {
+        let model = AppModel.preview("inactive")
+        model.automaticUpdates = false
+        func width() -> CGFloat {
+            NSHostingView(rootView: SettingsView(model: model)).fittingSize.width
+        }
+        #expect(width() <= 300)
+        model.recordDetectedUpdate(
+            GitHubUpdate.Release(
+                version: "1.0.4", url: URL(string: "https://example.com/Limitless.zip")!,
+                digest: String(repeating: "a", count: 64),
+                sourceRevision: String(repeating: "b", count: 40)), manual: true)
+        #expect(model.showsUpdateButton)
+        #expect(width() <= 300)
+        model.automaticUpdates = true
+        #expect(width() <= 300)
     }
 
     @Test @MainActor func manualUpdateCooldownExplainsWhenCheckingResumes() async throws {

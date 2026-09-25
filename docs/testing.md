@@ -44,7 +44,9 @@ env LIMITLESS_PREVIEW_STATE=setup swift Tools/ProjectTool.swift bundle
 
 Other previews: `inactive`, `process`, `desktop`, `external`, `battery-unknown`, `battery-low`,
 `touch-id-external` and `touch-id-permission`. Check light/dark mode, Tab navigation, VoiceOver and
-Reduce Motion/Transparency. Keyboard input must follow the Mac's layout and locale.
+Reduce Motion/Transparency. Check that content stays within the menu on first opening and when
+Automatic updates changes or an Update button appears. Keyboard input must follow the Mac's
+layout and locale.
 
 ## Test the installed app
 

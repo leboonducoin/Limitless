@@ -18,6 +18,7 @@ separate preferences window. Content sets the height; long lists scroll.
 Hide unavailable controls before helper approval. Enable launch at login after helper
 activation, then respect the user's choice. Login never starts a keep-awake session.
 Hide power controls on desktops and the battery limit in adapter mode. Zero warns.
+Keep the power-source label above its segmented control so it fits the fixed menu width.
 Battery limit accepts digits only, with the one-percent arrows beside the field.
 Values above 80 become 80. Return or leaving the field applies it.
 Explain a blocked start or battery cutoff beside the session controls, with a red warning symbol.

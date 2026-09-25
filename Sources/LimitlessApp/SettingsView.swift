@@ -24,9 +24,8 @@ struct SettingsView: View {
             if model.showsPowerControls {
                 Group {
                     if model.showsPowerSource {
-                        HStack {
-                            Text("Power source").fixedSize(horizontal: true, vertical: false)
-                            Spacer(minLength: 8)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Power source")
                             Picker("", selection: $model.draft.mode) {
                                 ForEach(PowerMode.allCases, id: \.self) { mode in
                                     Text(mode.label).tag(mode)
@@ -34,6 +33,7 @@ struct SettingsView: View {
                             }
                             .labelsHidden()
                             .pickerStyle(.segmented)
+                            .frame(maxWidth: .infinity)
                             .accessibilityLabel("Power source")
                         }
                     }
