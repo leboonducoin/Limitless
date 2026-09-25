@@ -999,6 +999,9 @@ do {
                 ["swiftc", "-typecheck", "-swift-version", "6", "-warnings-as-errors"] + sources)
         }
         _ = try run(
+            "/usr/bin/xcrun",
+            ["swiftc", "-typecheck", "-swift-version", "6", "Tools/ReleaseKeychain.swift"])
+        _ = try run(
             "/usr/bin/xcrun", ["swift", "build", "-c", "release"] + buildPath + compilerFlags,
             environment: buildEnvironment)
         let products = try run(

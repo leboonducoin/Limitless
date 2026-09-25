@@ -2,21 +2,13 @@
 
 ## 1.0.4 — 2026-09-25
 
-### Updates
-
 - Read the public `release.json` asset instead of GitHub's rate-limited releases API. Update checks no longer consume the anonymous REST API quota or require a GitHub token.
 - Explain a manual check that is already running, temporarily delayed, or unable to reach the release metadata instead of reporting every case as a generic failure. A delayed check shows when it can run again.
 - Reject a downloaded update if the revision in its signed `Build.json` differs from the revision advertised in `release.json`, in addition to the existing archive hash and signature checks.
-
-### App and helper
-
 - Keep the power-source selector inside the menu's fixed width when the app first opens, an update becomes available, or Automatic updates changes. The selector now sits below its label.
 - Let macOS remember a Command-dragged position for the menu-bar icon across app launches.
 - Run the power helper with launchd's adaptive process type to improve reconnection after login. Client authentication and session policy are unchanged.
-
-### Verification
-
-- Add regression coverage for update-manifest validation, source-revision mismatches, update-check messages, and menu width across update states. The helper's launchd metadata is checked during packaging.
+- Add regression coverage for update checks, archive identity, menu layout, and helper metadata.
 
 If an older copy cannot complete its update check, install 1.0.4 manually from the release archive. Versions 1.0.0–1.0.2 have known updater problems; 1.0.3 can fail its check when GitHub's anonymous API limit is reached.
 
