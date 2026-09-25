@@ -35,8 +35,13 @@ enum LimitlessApp {
                 } catch {
                     let configuration = NSWorkspace.OpenConfiguration()
                     configuration.createsNewApplicationInstance = true
+                    let recoveryApp =
+                        (try? await GitHubUpdate.currentInstalledApplication(
+                            identity: SignedIdentity(
+                                expectedIdentifier: LimitlessIdentity.application)))
+                        ?? Bundle.main.bundleURL
                     _ = try? await NSWorkspace.shared.openApplication(
-                        at: Bundle.main.bundleURL, configuration: configuration)
+                        at: recoveryApp, configuration: configuration)
                     let alert = NSAlert()
                     alert.messageText = "Update incomplete"
                     alert.informativeText = error.localizedDescription
@@ -296,7 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         let alert = NSAlert()
         alert.messageText = "Uninstall Limitless?"
         alert.informativeText =
-            "Ends all sessions and removes the helper, login item and preferences. Then moves Limitless to the Trash. Running commands continue."
+            "Ends all sessions and removes the helpers, login item and preferences. macOS may ask for separate administrator approvals. Then moves Limitless to the Trash. Running commands continue."
         alert.addButton(withTitle: "Uninstall")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true
@@ -318,20 +323,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                 progress.close()
                 removalWindow = nil
             }
+            let identity: SignedIdentity
+            do {
+                identity = try await SignedIdentity.current(
+                    expectedIdentifier: LimitlessIdentity.application)
+                _ = try await GitHubUpdate.currentInstalledApplication(identity: identity)
+            } catch {
+                progress.orderOut(nil)
+                model.message =
+                    "The matching signed Limitless.app could not be verified in Applications. Keep it installed there and retry."
+                showRemovalError()
+                return
+            }
             guard await model.removeIntegration() else {
                 progress.orderOut(nil)
                 showRemovalError()
                 return
             }
+            let installedApp: URL
             do {
-                _ = try await NSWorkspace.shared.recycle([Bundle.main.bundleURL])
+                installedApp = try await GitHubUpdate.currentInstalledApplication(
+                    identity: identity)
+            } catch {
+                progress.orderOut(nil)
+                model.message =
+                    "The helpers were removed, but the matching signed app in Applications could not be verified. Keep Limitless open and inspect the installation."
+                showRemovalError()
+                return
+            }
+            do {
+                _ = try await NSWorkspace.shared.recycle([installedApp])
                 progress.orderOut(nil)
                 NSApp.terminate(nil)
             } catch {
                 progress.orderOut(nil)
                 model.message =
                     "Helper, login item and preferences removed. macOS could not move the app to the Trash: \(error.localizedDescription)"
-                NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+                NSWorkspace.shared.activateFileViewerSelecting([installedApp])
                 showRemovalError()
             }
         }

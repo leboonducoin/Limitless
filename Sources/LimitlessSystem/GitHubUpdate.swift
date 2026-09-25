@@ -418,11 +418,19 @@ public enum GitHubUpdate {
     private static func requireCurrentApplication(_ app: URL, identity: SignedIdentity) throws {
         let details = try identity.verifyExecutable(
             at: app, identifier: LimitlessIdentity.application)
+        let runningRecord = try? Data(
+            contentsOf: Bundle.main.bundleURL.appendingPathComponent(
+                "Contents/Resources/Build.json"))
+        let installedRecord = try? Data(
+            contentsOf: app.appendingPathComponent("Contents/Resources/Build.json"))
         guard let info = details[kSecCodeInfoPList as String] as? [String: Any],
             info["CFBundleVersion"] as? String
                 == Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
             info["CFBundleShortVersionString"] as? String
-                == Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                == Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+                as? String,
+            let runningRecord, runningRecord.count <= 4_096,
+            let installedRecord, installedRecord == runningRecord
         else { throw UpdateError.unsafeLocation }
     }
 

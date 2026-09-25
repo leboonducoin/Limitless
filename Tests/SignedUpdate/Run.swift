@@ -127,6 +127,15 @@ func main() throws {
     try run(executable, ["reject", candidate.path])
     try setVersion(candidate, "0.2.0")
     try sign(candidate, certificate: certificate)
+    let currentRecordURL = current.appendingPathComponent("Contents/Resources/Build.json")
+    let currentRecord = try Data(contentsOf: currentRecordURL)
+    let changedRecord = try Data(contentsOf: recordURL)
+    guard currentRecord != changedRecord else { throw CocoaError(.fileReadCorruptFile) }
+    try changedRecord.write(to: currentRecordURL)
+    try sign(current, certificate: certificate)
+    try run(executable, ["reject-installed-build", candidate.path])
+    try currentRecord.write(to: currentRecordURL)
+    try sign(current, certificate: certificate)
     try run(executable, ["replace", candidate.path])
     print(
         "Signed upgrade acceptance, revision mismatch/tampering/ad-hoc/downgrade refusal and atomic replacement passed. No installed app was changed."

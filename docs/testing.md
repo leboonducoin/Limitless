@@ -84,6 +84,10 @@ macOS version and any steps that fail.
 - Then uninstall: the app should close and its integrations disappear.
   Cancel the sudo component's administrator prompt, retry removal, and verify both
   helpers disappear. An existing external sudo setting must remain unchanged.
+  Repeat after a quarantined update that launches through App Translocation: the
+  signed app in Applications must move to the Trash, not the temporary running copy.
+  If that installed copy is missing or has a different version, removal must stop
+  before changing the helpers or preferences.
 
 For long runs, keep the Mac ventilated and leave battery protection enabled.
 If stopping or uninstalling fails, keep the app and report the error before retrying.

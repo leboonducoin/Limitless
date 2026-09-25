@@ -41,7 +41,10 @@ the signed app's `Build.json`, verifies the download, then installs and reopens 
 If the helper was enabled, the reopened version restores it; a failed replacement reopens
 the previous app so the same recovery can run. macOS may run a quarantined update from a
 temporary, randomized location. Limitless verifies the matching signed copy in
-Applications before restoring CLI access or replacing it on the next update.
+Applications before restoring CLI access, replacing it on the next update or moving it
+to the Trash. If macOS asks for administrator approval during removal, the power and
+Touch ID helpers have separate approvals; a missing Touch ID helper may first need
+to be restored to remove a Limitless-owned Touch ID rule.
 
 To move Limitless farther right in the menu bar, hold Command and drag its icon. macOS remembers
 that position for later launches.
