@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+      - uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -107,7 +107,7 @@ jobs:
           swiftc -swift-version 6 Tests/SignedUpdate/Run.swift -o "$RUNNER_TEMP/limitless-update-test-runner"
           swiftc -swift-version 6 -parse-as-library -I "$(swift build --show-bin-path)/Modules" -c Tests/SignedUpdate/Probe.swift -o "$RUNNER_TEMP/limitless-update-probe.o"
           swiftc -swift-version 6 Tests/NativeMac/ObserveHelperRestart.swift -o "$RUNNER_TEMP/limitless-helper-restart-observer"
-      - uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+      - uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
         id: analyze
         with:
           category: /language:${{ matrix.language }}
