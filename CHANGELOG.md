@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.6 — Unreleased
+## 1.1.0 — Unreleased
 
 - Keep the display awake during eligible sessions to prevent automatic idle locking, and verify both display and system assertions. Manual locking remains available.
 - Add a small circular + beside Stop to extend an owned timer or date by 15 minutes per click. Rapid clicks accumulate; Stop discards pending additions. Existing policy ceilings and cutoff protection remain in force.
