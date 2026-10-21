@@ -58,6 +58,13 @@ macOS version and any steps that fail.
 - Restart the Mac and record how long the adaptive helper takes to reconnect after login.
   It must become responsive without manual intervention or weakened client validation.
 - Start a short timer, then try Stop, a date and multiple PIDs.
+- Click the circular + beside Stop repeatedly: each confirmed click adds 15 minutes to
+  the same timer/date session. Stop must discard queued additions. Unlimited and process
+  sessions cannot be extended; duration ceilings and battery protection still apply.
+- With a short automatic screen-lock delay, leave an active session idle past that delay.
+  Check that the display stays awake and unlocked, then Stop and verify normal idle
+  locking returns. Repeat after expiry, battery cutoff and power-source suspension.
+  Manual lock must still work. Record managed-policy restrictions separately.
 - On a laptop, test lid open/closed, switching power and the battery limit.
 - Type a battery limit, press Return or leave the field, then try the arrows.
   Letters are refused; 81 becomes 80. A blocked start or battery cutoff explains why.
@@ -102,3 +109,10 @@ Pull requests also check dependencies.
 The CLI runs on macOS 14; Intel also runs the full checks. **CI gate** and
 **Security gate** fail if a required job fails, is cancelled or is unexpectedly skipped.
 Automated results do not replace the installed-app checks above.
+
+Signed XPC/update fixtures pin the exact leaf certificate and executable identifier.
+This supports Developer ID chains as well as the community certificate; the fixture
+signature does not claim notarization or qualify installation.
+The signed update replacement fixture also requires a Mac with no installed Limitless
+helpers or ownership journal. Its refusal on an installed Mac is a separate manual gate;
+do not remove those services merely to make a fixture pass.

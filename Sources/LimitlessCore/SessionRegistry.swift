@@ -58,6 +58,40 @@ public struct SessionRegistry: Sendable {
         return true
     }
 
+    public mutating func extend(_ id: UUID, owner: UUID, now: ClockSnapshot) throws {
+        guard let session = sessions[id], session.owner == owner, session.kind == .manual else {
+            throw ServiceError.unauthorized
+        }
+        guard !session.hasExpired(at: now, policy: policy) else {
+            throw ServiceError.sessionRejected
+        }
+        let end: SessionEnd
+        let remaining: TimeInterval
+        let elapsed = now.continuous - session.started.continuous
+        switch session.request.end {
+        case .unlimited: throw ServiceError.sessionRejected
+        case .after(let seconds):
+            let extended = seconds + 15 * 60
+            guard extended > seconds else { throw PolicyError.invalidDuration }
+            end = .after(seconds: extended)
+            remaining = extended - elapsed
+        case .at(let date):
+            let extended = date.addingTimeInterval(15 * 60)
+            guard extended > date else { throw PolicyError.invalidDate }
+            end = .at(extended)
+            remaining = extended.timeIntervalSince(now.wall)
+        }
+        for maximum in [session.authorizedDuration, policy.maximumDuration].compactMap({ $0 }) {
+            guard remaining <= maximum - elapsed else { throw ServiceError.sessionRejected }
+        }
+        let request = SessionRequest(
+            mode: session.request.mode, batteryFloor: session.request.batteryFloor, end: end)
+        try request.validate(policy: policy, kind: session.kind, now: now)
+        sessions[id] = Session(
+            id: id, owner: owner, kind: session.kind, request: request,
+            started: session.started, authorizedDuration: session.authorizedDuration)
+    }
+
     public mutating func releaseOwner(_ owner: UUID) {
         sessions = sessions.filter { $0.value.owner != owner }
     }

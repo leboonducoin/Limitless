@@ -6,20 +6,23 @@ import Testing
 
 @testable import LimitlessSystem
 
-@Test func caffeinateRequiresAnActiveIdleAssertionNotJustAProcessOrOtherAssertion() {
+@Test func caffeinateRequiresBothActiveSystemAndDisplayAssertions() {
     let active: [String: Any] = [
         kIOPMAssertionTypeKey: kIOPMAssertionTypePreventUserIdleSystemSleep,
         kIOPMAssertionLevelKey: NSNumber(value: kIOPMAssertionLevelOn),
     ]
-    #expect(CaffeinateAssertion.containsIdleAssertion([active]))
+    var display = active
+    display[kIOPMAssertionTypeKey] = kIOPMAssertionTypePreventUserIdleDisplaySleep
+    #expect(CaffeinateAssertion.containsIdleAssertion([active, display]))
+    #expect(!CaffeinateAssertion.containsIdleAssertion([active]))
+    #expect(!CaffeinateAssertion.containsIdleAssertion([display]))
     #expect(!CaffeinateAssertion.containsIdleAssertion(nil))
     #expect(!CaffeinateAssertion.containsIdleAssertion([]))
     var inactive = active
     inactive[kIOPMAssertionLevelKey] = NSNumber(value: kIOPMAssertionLevelOff)
-    #expect(!CaffeinateAssertion.containsIdleAssertion([inactive]))
-    var displayOnly = active
-    displayOnly[kIOPMAssertionTypeKey] = kIOPMAssertionTypePreventUserIdleDisplaySleep
-    #expect(!CaffeinateAssertion.containsIdleAssertion([displayOnly]))
+    #expect(!CaffeinateAssertion.containsIdleAssertion([inactive, display]))
+    display[kIOPMAssertionLevelKey] = NSNumber(value: kIOPMAssertionLevelOff)
+    #expect(!CaffeinateAssertion.containsIdleAssertion([active, display]))
 }
 
 @Test func assertionChildCleanupConfirmsExitWithoutChangingPowerSettings() throws {

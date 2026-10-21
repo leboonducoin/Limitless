@@ -147,15 +147,34 @@ struct MenuPanel: View {
                         || model.status?.sleep.fault != nil)
             }
             if (model.status?.sessions.count ?? 0) > 0 {
-                Button {
-                    Task { await model.stopAll() }
-                } label: {
-                    Label(model.busy ? "Updating…" : "Stop", systemImage: "stop.fill")
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 8) {
+                    Button {
+                        Task { await model.stopAll() }
+                    } label: {
+                        Label(
+                            model.busy && !model.extendingSession ? "Updating…" : "Stop",
+                            systemImage: "stop.fill"
+                        ).frame(maxWidth: .infinity)
+                    }
+                    .help("End all Limitless sessions; running commands continue.")
+                    .controlSize(.large).buttonStyle(.bordered)
+                    .disabled(
+                        (!model.canControl && !model.isPreview) || model.stoppingSessions
+                            || (model.busy && !model.extendingSession))
+                    if model.ownSession != nil {
+                        Button {
+                            Task { await model.extendSession() }
+                        } label: {
+                            Image(systemName: "plus").font(.body.weight(.semibold))
+                                .frame(width: 28, height: 28).contentShape(Circle())
+                        }
+                        .buttonStyle(.bordered).buttonBorderShape(.circle)
+                        .accessibilityLabel("Add 15 minutes").help("Add 15 minutes")
+                        .disabled(
+                            (!model.canControl && !model.isPreview) || !model.canExtendSession
+                                || (model.busy && !model.extendingSession))
+                    }
                 }
-                .help("End all Limitless sessions; running commands continue.")
-                .controlSize(.large).buttonStyle(.bordered)
-                .disabled((!model.canControl && !model.isPreview) || model.busy)
             }
             if model.showsTaskCount {
                 Label(

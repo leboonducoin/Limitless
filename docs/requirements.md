@@ -8,6 +8,8 @@ how to verify them.
 - Keep awake with battery/adapter/both modes; closed-lid use where supported.
 - Battery limit: 0–80%, typed or adjusted in one-percent steps. Zero disables custom protection.
 - Timers, dates, unlimited sessions and waiting for all selected processes.
+- Active sessions keep the display awake to prevent automatic idle locking. Manual lock remains available.
+- A small + button beside Stop adds 15 minutes per click to an owned timer or date session.
 - CLI and whole-task AI tracking that respect limits and manual sessions.
 - Helper activation enables launch at login. Users can disable it independently.
 - Updates default on after helper approval: check every 8 hours and install immediately while idle.

@@ -69,11 +69,15 @@ struct CaffeinateAssertion: Sendable {
 
     static func containsIdleAssertion(_ value: Any?) -> Bool {
         guard let assertions = value as? [[String: Any]] else { return false }
-        return assertions.contains { assertion in
-            assertion[kIOPMAssertionTypeKey] as? String
-                == kIOPMAssertionTypePreventUserIdleSystemSleep
-                && (assertion[kIOPMAssertionLevelKey] as? NSNumber)?.intValue
-                    == kIOPMAssertionLevelOn
+        return [
+            kIOPMAssertionTypePreventUserIdleSystemSleep,
+            kIOPMAssertionTypePreventUserIdleDisplaySleep,
+        ].allSatisfy { type in
+            assertions.contains { assertion in
+                assertion[kIOPMAssertionTypeKey] as? String == type
+                    && (assertion[kIOPMAssertionLevelKey] as? NSNumber)?.intValue
+                        == kIOPMAssertionLevelOn
+            }
         }
     }
 
@@ -82,7 +86,7 @@ struct CaffeinateAssertion: Sendable {
         try stop()
         let child = Process()
         child.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
-        child.arguments = ["-i", "-w", String(getpid())]
+        child.arguments = ["-d", "-i", "-w", String(getpid())]
         child.currentDirectoryURL = URL(fileURLWithPath: "/")
         child.environment = ["PATH": "/usr/bin:/bin", "LC_ALL": "C"]
         child.standardInput = FileHandle.nullDevice

@@ -368,6 +368,26 @@ private func status(
         #expect(model.status == before && model.connectionError == nil)
     }
 
+    @Test @MainActor func sessionExtensionOnlyAppearsForOwnedFiniteManualSessions() throws {
+        let model = AppModel.preview("active")
+        #expect(model.canExtendSession)
+        #expect(!AppModel.preview("process").canExtendSession)
+        #expect(!AppModel.preview("inactive").canExtendSession)
+        let before = try #require(model.status)
+        for end in [SessionEnd.unlimited, .after(seconds: 60)] {
+            let session = SessionSummary(
+                id: UUID(), kind: .manual, end: end, startedAt: Date(),
+                remainingSeconds: end == .unlimited ? nil : 0,
+                suspension: nil, belongsToClient: true)
+            try model.accept(
+                ServiceReply(
+                    status: ServiceStatus(
+                        policy: before.policy, power: before.power, sleep: before.sleep,
+                        sessions: [session], sampledAt: Date())))
+            #expect(!model.canExtendSession)
+        }
+    }
+
     @Test @MainActor func previewCannotControlPowerOrAuthorizeAutomation() async {
         let model = AppModel.preview("active")
         let before = model.status
@@ -375,6 +395,8 @@ private func status(
         await model.prepareForLaunch()
         #expect(model.buildTrust == .untrusted)
         await model.stopAll()
+        await model.extendSession()
+        #expect(!model.extendingSession && !model.stoppingSessions)
         await model.setAutomation(false)
         await model.setSudoTouchID(true)
         await model.setSudoTouchID(false)

@@ -62,7 +62,7 @@ public struct ServiceSessions: Sendable {
         }
         if isRemoving {
             switch operation {
-            case .configure, .start, .startAgent, .rearm, .installCLI, .setSudoTouchID:
+            case .configure, .start, .startAgent, .extend, .rearm, .installCLI, .setSudoTouchID:
                 throw ServiceError.removalInProgress
             case .status, .stop, .stopAll, .heartbeat, .retryRestoration, .prepareRemoval,
                 .prepareUpdate, .finishRemoval:
@@ -102,6 +102,7 @@ public struct ServiceSessions: Sendable {
             return id
         case .stop(let id):
             guard registry.stop(id, owner: owner) else { throw ServiceError.unauthorized }
+        case .extend(let id): try registry.extend(id, owner: owner, now: now)
         case .stopAll: registry.stopAll()
         case .prepareRemoval, .prepareUpdate:
             if operation == .prepareUpdate, !registry.sessions.isEmpty {

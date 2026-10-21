@@ -47,7 +47,7 @@ func main() throws {
                 ? []
                 : [
                     "--requirements",
-                    "=designated => identifier \"\(identifier)\" and anchor = H\"\(certificate)\"",
+                    "=designated => identifier \"\(identifier)\" and certificate leaf = H\"\(certificate)\"",
                 ]
         }
         let plist =

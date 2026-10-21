@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 — Unreleased
+
+- Keep the display awake during eligible sessions to prevent automatic idle locking, and verify both display and system assertions. Manual locking remains available.
+- Add a small circular + beside Stop to extend an owned timer or date by 15 minutes per click. Rapid clicks accumulate; Stop discards pending additions. Existing policy ceilings and cutoff protection remain in force.
+- Require protocol 11 across the app, CLI and helpers. Moving to an Apple Developer ID signature requires manual removal with the previous app before installing the new archive.
+
 ## 1.0.5 — 2026-09-25
 
 - Resolve the installed app from its verified `/Applications/Limitless.app` copy when macOS launches a quarantined update from a read-only translocated path. Update recovery and uninstall no longer target the translocated copy.

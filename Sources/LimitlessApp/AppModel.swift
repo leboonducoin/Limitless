@@ -12,6 +12,9 @@ import ServiceManagement
 
     private(set) var status: ServiceStatus?
     private(set) var busy = false
+    private(set) var extendingSession = false
+    private(set) var stoppingSessions = false
+    private var pendingExtensions = 0
     private(set) var sudoTouchIDBusy = false
     private(set) var connectionError: String?
     private(set) var helperStatus: SMAppService.Status = .notRegistered
@@ -156,6 +159,13 @@ import ServiceManagement
     var removalInProgress: Bool { status.map { $0.removal != .none } ?? false }
     var ownSession: SessionSummary? {
         status?.sessions.first(where: { $0.belongsToClient && $0.kind == .manual })
+    }
+    var canExtendSession: Bool {
+        guard let session = ownSession, !stoppingSessions, watchedProcesses == nil,
+            status?.sleep.fault == nil, remainingSeconds(session).map({ $0 > 0 }) == true
+        else { return false }
+        if case .unlimited = session.end { return false }
+        return true
     }
     var taskCount: Int {
         (status?.sessions.filter { $0.kind != .manual }.count ?? 0)
@@ -561,7 +571,29 @@ import ServiceManagement
         if await perform(.stop(session.id)) { watchedProcesses = nil }
     }
 
-    func stopAll() async { _ = await perform(.stopAll) }
+    func extendSession() async {
+        guard canControl, canExtendSession, !busy || extendingSession else { return }
+        pendingExtensions += 1
+        guard !extendingSession, let id = ownSession?.id else { return }
+        extendingSession = true
+        defer {
+            extendingSession = false
+            pendingExtensions = 0
+        }
+        while pendingExtensions > 0, ownSession?.id == id, !quitting {
+            pendingExtensions -= 1
+            guard await perform(.extend(id)) else { return }
+        }
+    }
+
+    func stopAll() async {
+        guard !stoppingSessions else { return }
+        stoppingSessions = true
+        defer { stoppingSessions = false }
+        pendingExtensions = 0
+        while extendingSession { try? await Task.sleep(for: .milliseconds(20)) }
+        _ = await perform(.stopAll)
+    }
     func rearm() async { _ = await perform(.rearm) }
     func retryRestoration() async { _ = await perform(.retryRestoration) }
 

@@ -10,6 +10,7 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
     case start(SessionRequest)
     case startAgent
     case stop(UUID)
+    case extend(UUID)
     case stopAll
     case heartbeat
     case rearm
@@ -22,7 +23,8 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
 
     public var requiresApplication: Bool {
         switch self {
-        case .configure, .stopAll, .rearm, .retryRestoration, .prepareRemoval, .prepareUpdate,
+        case .configure, .extend, .stopAll, .rearm, .retryRestoration, .prepareRemoval,
+            .prepareUpdate,
             .finishRemoval, .installCLI, .setSudoTouchID:
             true
         case .status, .start, .startAgent, .stop, .heartbeat: false
@@ -140,7 +142,7 @@ public struct ServiceReply: Codable, Sendable {
 }
 
 public enum ServiceWire {
-    public static let version = 10
+    public static let version = 11
     public static let maximumMessageBytes = 131_072
 
     public static func decodeRequest(_ data: Data) throws -> ServiceRequest {
