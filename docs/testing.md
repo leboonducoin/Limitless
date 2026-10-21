@@ -58,6 +58,13 @@ macOS version and any steps that fail.
 - Restart the Mac and record how long the adaptive helper takes to reconnect after login.
   It must become responsive without manual intervention or weakened client validation.
 - Start a short timer, then try Stop, a date and multiple PIDs.
+- Click the circular + beside Stop repeatedly: each confirmed click adds 15 minutes to
+  the same timer/date session. Stop must discard queued additions. Unlimited and process
+  sessions cannot be extended; duration ceilings and battery protection still apply.
+- With a short automatic screen-lock delay, leave an active session idle past that delay.
+  Check that the display stays awake and unlocked, then Stop and verify normal idle
+  locking returns. Repeat after expiry, battery cutoff and power-source suspension.
+  Manual lock must still work. Record managed-policy restrictions separately.
 - On a laptop, test lid open/closed, switching power and the battery limit.
 - Type a battery limit, press Return or leave the field, then try the arrows.
   Letters are refused; 81 becomes 80. A blocked start or battery cutoff explains why.

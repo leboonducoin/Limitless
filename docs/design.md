@@ -8,6 +8,9 @@ separate preferences window. Content sets the height; long lists scroll.
 - macOS restores the menu-bar position after the user moves the item with Command-drag.
 - Small footer: version, blue author link, MIT and GitHub.
 - Immediate settings, one Stop button, outside-click dismissal.
+- Small circular + button to the right of Stop for owned manual sessions. Each click adds
+  15 minutes to a timer or date; rapid clicks accumulate without disabling the button.
+  No extension for unlimited/process sessions. Stop discards queued additions.
 - Right-click Check for Updates/Quit/Uninstall follows the app's light/dark appearance; red destructive confirmation.
 - Timer and remaining PIDs refresh each second without animation.
 - Native opening motion; immediate keyboard and Reduce Motion opening.

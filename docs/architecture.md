@@ -22,12 +22,20 @@ never resume after login or reboot. CLI permission is remembered; faults revoke 
 AI uses both sources and at least 20% battery, within user limits. Manual sessions
 reject or end AI holds. A stopped task cannot reacquire protection.
 
+Only the authenticated app owning a manual session can extend its timer or date by
+15 minutes. Extensions preserve the session ID, start time, power limits and original
+duration ceiling. Expired/stopped sessions cannot be extended. Protocol 11 requires
+matching app, CLI and helpers; older helpers cannot provide display protection or extensions.
+
 ## Power
 
 `MacSleepBackend` isolates the undocumented global `pmset disablesleep` flag.
 Battery/adapter modes are policies, not independent macOS flags. Unknown readings
-suspend protection. The helper also runs Apple’s `caffeinate` and checks its
-assertion every two seconds. Recovery and restoration each allow three attempts.
+suspend protection. The helper also runs Apple’s `caffeinate -d -i` and checks both
+system and display assertions every two seconds. Keeping the display awake prevents
+automatic idle locking while protection is active; manual locking and managed security
+policies remain under macOS control. Assertions are released with the session, including
+suspension or battery cutoff. Recovery and restoration each allow three attempts.
 
 Only owned state is restored. A protected root journal records ownership before
 changes and survives interruption; invalid files fail closed. Competing privileged

@@ -13,6 +13,12 @@ Enable **Allow CLI & AI tasks** to use the [terminal and AI integrations](cli.md
 If macOS blocks opening, use **System Settings → Privacy & Security → Open Anyway**
 when offered. [Apple's instructions](https://support.apple.com/en-gb/102445).
 
+Developer ID releases use Apple's app signature and a stapled notarization ticket.
+GitHub remains the download location. Moving from the community certificate to Developer ID
+requires manual installation: first uninstall the old app using its own menu, then install
+the new archive and approve its helpers. Automatic updates never cross signing identities.
+Do not remove the old app if its cleanup has not completed.
+
 ## Touch ID for sudo
 
 Enable it in the menu to use your fingerprint for `sudo`. Your password still

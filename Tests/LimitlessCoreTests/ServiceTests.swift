@@ -50,7 +50,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
         .stopAll, .rearm, .retryRestoration, .prepareRemoval, .prepareUpdate, .finishRemoval,
-        .installCLI, .setSudoTouchID(true), .setSudoTouchID(false),
+        .installCLI, .extend(UUID()), .setSudoTouchID(true), .setSudoTouchID(false),
     ] {
         #expect(throws: ServiceError.unauthorized) {
             try value.apply(operation, owner: task, now: now)
@@ -80,6 +80,69 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     let next = UUID()
     try value.connect(owner: next, user: 501, role: .task, now: now)
     #expect(try value.apply(.start(SessionRequest()), owner: next, now: now) != nil)
+}
+
+@Test(arguments: [SessionEnd.after(seconds: 60), .at(Date(timeIntervalSince1970: 1_060))])
+func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: SessionEnd) throws {
+    var (value, app, task) = try service()
+    let id = try #require(
+        try value.apply(.start(.init(end: end)), owner: app, now: serviceClock(0)))
+    for _ in 0..<100 {
+        _ = try value.apply(.extend(id), owner: app, now: serviceClock(10))
+    }
+    let evaluation = value.evaluate(
+        power: .init(source: .external, battery: .notPresent), now: try serviceClock(10))
+    let summary = try #require(
+        value.summaries(for: app, evaluation: evaluation, now: try serviceClock(10)).first)
+    #expect(summary.id == id && summary.remainingSeconds == 90_050)
+    #expect(value.registry.sessions[id]?.started == (try serviceClock(0)))
+    #expect(value.registry.sessions[id]?.kind == .manual)
+    #expect(throws: ServiceError.unauthorized) {
+        try value.apply(.extend(id), owner: task, now: serviceClock(10))
+    }
+    let other = UUID()
+    try value.connect(owner: other, user: 501, role: .application, now: serviceClock(10))
+    #expect(throws: ServiceError.unauthorized) {
+        try value.apply(.extend(id), owner: other, now: serviceClock(10))
+    }
+    _ = try value.apply(.stopAll, owner: app, now: serviceClock(10))
+    #expect(throws: ServiceError.unauthorized) {
+        try value.apply(.extend(id), owner: app, now: serviceClock(10))
+    }
+    #expect(value.registry.sessions.isEmpty)
+}
+
+@Test func extensionsCannotReviveExpiredSessionsOrExceedEitherPolicyCeiling() throws {
+    var (value, app, _) = try service()
+    _ = try value.apply(
+        .configure(try UserPolicy(maximumDuration: 1_000)), owner: app, now: serviceClock(0))
+    let id = try #require(
+        try value.apply(.start(.init(end: .after(seconds: 60))), owner: app, now: serviceClock(0)))
+    _ = try value.apply(.extend(id), owner: app, now: serviceClock(1))
+    #expect(throws: ServiceError.sessionRejected) {
+        try value.apply(.extend(id), owner: app, now: serviceClock(1))
+    }
+    _ = try value.apply(.configure(try UserPolicy()), owner: app, now: serviceClock(1))
+    #expect(throws: ServiceError.sessionRejected) {
+        try value.apply(.extend(id), owner: app, now: serviceClock(1))
+    }
+    _ = try value.apply(
+        .configure(try UserPolicy(maximumDuration: 500)), owner: app, now: serviceClock(1))
+    #expect(throws: ServiceError.sessionRejected) {
+        try value.apply(.extend(id), owner: app, now: serviceClock(1))
+    }
+    _ = try value.apply(.stopAll, owner: app, now: serviceClock(1))
+    let short = try #require(
+        try value.apply(.start(.init(end: .after(seconds: 1))), owner: app, now: serviceClock(1)))
+    #expect(throws: ServiceError.sessionRejected) {
+        try value.apply(.extend(short), owner: app, now: serviceClock(2))
+    }
+    _ = try value.apply(.stopAll, owner: app, now: serviceClock(2))
+    let unlimited = try #require(
+        try value.apply(.start(.init()), owner: app, now: serviceClock(2)))
+    #expect(throws: ServiceError.sessionRejected) {
+        try value.apply(.extend(unlimited), owner: app, now: serviceClock(2))
+    }
 }
 
 @Test func agentsShareAwakeTimeAndYieldPermanentlyToManualSessions() throws {
@@ -214,7 +277,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     for data in [
         Data(), Data("{}".utf8), Data(repeating: 32, count: ServiceWire.maximumMessageBytes + 1),
         Data(
-            #"{"version":10,"operation":{"configure":{"_0":{"mode":"all","batteryFloor":81,"allowsAutomation":true}}}}"#
+            #"{"version":11,"operation":{"configure":{"_0":{"mode":"all","batteryFloor":81,"allowsAutomation":true}}}}"#
                 .utf8),
     ] {
         #expect(throws: ServiceError.invalidMessage) { try ServiceWire.decodeRequest(data) }
@@ -229,8 +292,12 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     #expect(throws: ServiceError.incompatibleVersion) {
         try ServiceWire.decodeRequest(Data(#"{"version":8,"operation":{"status":{}}}"#.utf8))
     }
+    #expect(throws: ServiceError.incompatibleVersion) {
+        try ServiceWire.decodeRequest(Data(#"{"version":10,"operation":{"status":{}}}"#.utf8))
+    }
     for operation in [
-        ServiceOperation.status, .heartbeat, .stop(UUID()), .rearm, .retryRestoration,
+        ServiceOperation.status, .heartbeat, .stop(UUID()), .extend(UUID()), .rearm,
+        .retryRestoration,
         .stopAll, .prepareRemoval, .prepareUpdate, .finishRemoval,
         .configure(try UserPolicy(batteryFloor: 80)),
         .start(SessionRequest(end: .after(seconds: 60))), .setSudoTouchID(true),
@@ -256,7 +323,8 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     #expect(!value.registry.policy.allowsAutomation)
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
-        .start(SessionRequest()), .rearm, .setSudoTouchID(true), .setSudoTouchID(false),
+        .start(SessionRequest()), .extend(UUID()), .rearm, .setSudoTouchID(true),
+        .setSudoTouchID(false),
     ] {
         #expect(throws: ServiceError.removalInProgress) {
             try value.apply(operation, owner: app, now: now)
