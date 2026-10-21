@@ -109,3 +109,10 @@ Pull requests also check dependencies.
 The CLI runs on macOS 14; Intel also runs the full checks. **CI gate** and
 **Security gate** fail if a required job fails, is cancelled or is unexpectedly skipped.
 Automated results do not replace the installed-app checks above.
+
+Signed XPC/update fixtures pin the exact leaf certificate and executable identifier.
+This supports Developer ID chains as well as the community certificate; the fixture
+signature does not claim notarization or qualify installation.
+The signed update replacement fixture also requires a Mac with no installed Limitless
+helpers or ownership journal. Its refusal on an installed Mac is a separate manual gate;
+do not remove those services merely to make a fixture pass.

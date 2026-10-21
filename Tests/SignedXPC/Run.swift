@@ -78,7 +78,7 @@ func main() throws {
                 [
                     "--force", "--sign", certificate, "--options", "runtime", "--timestamp=none",
                     "--requirements",
-                    "=designated => identifier \"\(identifier)\" and anchor = H\"\(certificate)\"",
+                    "=designated => identifier \"\(identifier)\" and certificate leaf = H\"\(certificate)\"",
                     bundle.path,
                 ])
         }
