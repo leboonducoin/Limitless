@@ -54,7 +54,7 @@ before replacing the app and keeps the backup until the replacement starts and, 
 confirms its helper. On an installation your account cannot
 replace automatically, use **Download update** in Options. macOS may run a quarantined update from a
 temporary, randomized location. Limitless verifies the matching signed copy in
-Applications before restoring CLI access, replacing it on the next update or moving it
+Applications before granting CLI access again, replacing it on the next update or moving it
 to the Trash. If macOS asks for administrator approval during removal, the power and
 Touch ID helpers have separate approvals; a missing Touch ID helper may first need
 to be restored to remove a Limitless-owned Touch ID rule.

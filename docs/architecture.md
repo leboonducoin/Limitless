@@ -31,9 +31,9 @@ Only the authenticated app owning a manual session can extend its timer or date 
 15 minutes. Extensions preserve the session ID, start time, power limits and original
 duration ceiling. Expired or stopped sessions cannot be extended. Protocol 14 requires
 matching app, CLI and helpers. A fresh helper rejects starts until the app reapplies
-the saved power policy. The helper remembers CLI consent and its power limits in
-root-owned preferences keyed by the console account's directory identity. App
-preferences cannot grant access. Existing installations need one new approval.
+the saved power policy. Root-owned preferences store power limits under the
+console account's directory identity. The helper requires fresh CLI approval
+after a helper restart or console account change.
 
 ## Power
 
