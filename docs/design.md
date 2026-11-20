@@ -28,8 +28,9 @@ separate preferences window. Content sets the height; long lists scroll.
 - Opaque backgrounds for Reduce Transparency/increased contrast.
 - Text and symbols accompany color. Controls have accessibility labels.
 
-Hide unavailable controls before helper approval. Enable launch at login after helper
-activation, then respect the user's choice. Login never starts a keep-awake session.
+Hide unavailable controls before helper approval. Enable launch at login if the helper is
+approved during the same onboarding run, then respect the user's choice.
+Login never starts a keep-awake session.
 Hide power controls on desktops and the battery limit in adapter mode. Zero warns.
 Keep the power-source selector first in Power, with its label above the segmented control.
 Battery limit accepts digits only, with the one-percent arrows beside the field.

@@ -59,8 +59,9 @@ layout and locale.
 Use a real installation, not the preview. Record the app version, Mac model,
 macOS version and any steps that fail.
 
-- Enable the helper; verify launch at login turns on. Turn it off and reopen the
-  app: it must stay off. Login must never start a session.
+- Enable the helper and keep Limitless open through approval. Verify launch at
+  login turns on. Turn it off, reopen the app, and verify it stays off. Login
+  must never start a session.
 - With CLI access off, configure adapter-only mode and a custom battery reserve.
   Restart the helper and confirm those limits before starting another session.
 - Restart the Mac and record how long the adaptive helper takes to reconnect after login.

@@ -33,17 +33,15 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     _ = try value.apply(.status, owner: app, now: now)
 }
 
-@Test func theAuthorizedPolicyTakesPriorityOverTheAppPreferences() throws {
+@Test func aFreshHelperUsesDefaultsUntilTheUserSavesPowerLimits() throws {
     var (value, app, _) = try service()
     let now = try serviceClock(0)
-    let preferences = try UserPolicy(batteryFloor: 0, allowsAutomation: true)
     let approved = try UserPolicy(
         mode: .external, batteryFloor: 35, maximumDuration: 60, allowsAutomation: true)
-    _ = try value.apply(
-        .restorePolicy(preferences), owner: app, now: now, authorizedPolicy: approved)
-    #expect(value.registry.policy == approved)
-    _ = try value.apply(.restorePolicy(preferences), owner: app, now: now)
-    #expect(value.registry.policy == approved)
+    _ = try value.apply(.restorePolicy, owner: app, now: now)
+    #expect(value.registry.policy == (try UserPolicy()))
+    _ = try value.apply(.restorePolicy, owner: app, now: now, savedPolicy: approved)
+    #expect(value.registry.policy == (try UserPolicy()))
 }
 
 @Test func aFreshHelperRestoresManualLimitsBeforeEnablingAutomation() throws {
@@ -54,11 +52,11 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     #expect(throws: ServiceError.sessionRejected) {
         try value.apply(.start(.init()), owner: app, now: now)
     }
-    _ = try value.apply(.restorePolicy(try saved.withAutomation(true)), owner: app, now: now)
+    _ = try value.apply(.restorePolicy, owner: app, now: now, savedPolicy: saved)
     #expect(value.policyConfigured && value.registry.policy == saved)
     let second = UUID()
     try value.connect(owner: second, user: 501, role: .application, now: now)
-    _ = try value.apply(.restorePolicy(try UserPolicy()), owner: second, now: now)
+    _ = try value.apply(.restorePolicy, owner: second, now: now)
     #expect(value.registry.policy == saved)
     _ = try value.apply(.start(.init()), owner: app, now: now)
     let battery = PowerSnapshot(
@@ -86,7 +84,7 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     let now = try serviceClock(0)
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),
-        .restorePolicy(try UserPolicy()),
+        .restorePolicy,
         .stopAll, .rearm, .retryRestoration, .prepareRemoval, .prepareUpdate, .finishRemoval,
         .installCLI, .extend(UUID()), .setSudoTouchID(true), .setSudoTouchID(false),
         .setAutomation(true), .cancelUpdate,
@@ -105,19 +103,23 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     #expect(throws: ServiceError.unauthorized) { try value.apply(.stop(id), owner: app, now: now) }
 }
 
-@Test func stopKeepsCLIEnabledButCannotRestartExistingWork() throws {
+@Test func stoppingAutomatedWorkRequiresApprovalBeforeNewTaskConnectionsCanStart() throws {
     var (value, app, task) = try service()
     let now = try serviceClock(0)
     _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
     _ = try value.apply(.start(SessionRequest()), owner: task, now: now)
     _ = try value.apply(.stopAll, owner: app, now: now)
-    #expect(value.registry.policy.allowsAutomation)
+    #expect(!value.registry.policy.allowsAutomation)
     #expect(value.registry.sessions.isEmpty)
     #expect(throws: ServiceError.ownerExpired) {
         try value.apply(.start(SessionRequest()), owner: task, now: now)
     }
     let next = UUID()
     try value.connect(owner: next, user: 501, role: .task, now: now)
+    #expect(throws: PolicyError.automationNotAuthorized) {
+        try value.apply(.start(SessionRequest()), owner: next, now: now)
+    }
+    _ = try value.apply(.setAutomation(true), owner: app, now: now)
     #expect(try value.apply(.start(SessionRequest()), owner: next, now: now) != nil)
 }
 
@@ -368,7 +370,7 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
         .retryRestoration,
         .stopAll, .prepareRemoval, .prepareUpdate, .cancelUpdate, .finishRemoval,
         .configure(try UserPolicy(batteryFloor: 80)),
-        .restorePolicy(try UserPolicy(batteryFloor: 80)),
+        .restorePolicy,
         .start(SessionRequest(end: .after(seconds: 60))), .startAgent(.codex),
         .setSudoTouchID(true), .setAutomation(true),
     ] {
@@ -424,7 +426,7 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
     #expect(value.registry.sessions.count == 2 && !value.isRemoving)
     _ = try value.apply(.stopAll, owner: app, now: now)
     _ = try value.apply(.prepareUpdate, owner: app, now: now)
-    #expect(value.isPreparingUpdate && value.registry.policy.allowsAutomation)
+    #expect(value.isPreparingUpdate && !value.registry.policy.allowsAutomation)
     #expect(throws: ServiceError.removalInProgress) {
         try value.apply(.start(SessionRequest()), owner: app, now: now)
     }

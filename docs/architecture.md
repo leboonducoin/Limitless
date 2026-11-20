@@ -19,10 +19,12 @@ Disconnect or a missed lease releases them. Heartbeats run every
 5 seconds with a 30-second lease. Relative deadlines use a continuous clock.
 
 Stop, deadlines, battery protection, critical thermal load and owner loss outrank recovery. Sessions
-never resume after login or reboot. CLI permission is remembered; faults revoke it.
+never resume after login or reboot. The root helper remembers power limits and CLI
+permission for each approved account. Faults revoke CLI permission and preserve the limits.
 AI uses the selected power sources and at least 20% battery. Manual sessions
 reject or end AI holds. A second app owner cannot create another manual session.
-A stopped task cannot reacquire protection. The latest authorized deadline
+A stopped task cannot reacquire protection. If Stop ended automated work,
+enable CLI access again before accepting new automated requests. The latest authorized deadline
 determines the shared countdown when every request is bounded.
 
 Only the authenticated app owning a manual session can extend its timer or date by

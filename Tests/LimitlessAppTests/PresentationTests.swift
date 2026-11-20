@@ -272,45 +272,27 @@ private func status(
         #expect(model.status == nil && !model.removalComplete)
     }
 
-    @Test @MainActor func helperApprovalEnablesLoginOnceWithoutOverridingLaterChoices() throws {
+    @Test @MainActor func oldPreferencesCannotReenableLaunchAtLogin() throws {
         let suite = "Limitless-login-test-\(UUID().uuidString)"
         let preferences = try #require(UserDefaults(suiteName: suite))
         defer { preferences.removePersistentDomain(forName: suite) }
         preferences.set(true, forKey: "enableLoginAfterHelperApproval")
         let model = AppModel(preferences: preferences)
         var registrations = 0
-        for status: SMAppService.Status in [.notRegistered, .requiresApproval, .notFound] {
+        for status: SMAppService.Status in [.notRegistered, .requiresApproval, .notFound, .enabled]
+        {
             try model.completeLoginSetup(helperStatus: status) { registrations += 1 }
         }
         #expect(registrations == 0)
-        let reopened = AppModel(preferences: preferences)
-        try reopened.completeLoginSetup(helperStatus: .enabled) { registrations += 1 }
-        try reopened.completeLoginSetup(helperStatus: .enabled) { registrations += 1 }
-        #expect(registrations == 1)
-        #expect(reopened.status == nil)
-        preferences.set(true, forKey: "enableLoginAfterHelperApproval")
-        #expect(throws: CocoaError.self) {
-            try reopened.completeLoginSetup(helperStatus: .enabled) {
-                throw CocoaError(.userCancelled)
-            }
-        }
-        try reopened.completeLoginSetup(helperStatus: .enabled) { registrations += 1 }
-        #expect(registrations == 1)
     }
 
-    @Test @MainActor func helperApprovalEnablesUpdatesOnlyWhenNoChoiceWasSaved() throws {
+    @Test @MainActor func generalPreferencesCannotEnableAutomaticUpdates() throws {
         let suite = "Limitless-updates-test-\(UUID().uuidString)"
         let preferences = try #require(UserDefaults(suiteName: suite))
         defer { preferences.removePersistentDomain(forName: suite) }
+        preferences.set(true, forKey: "automaticUpdates")
         let model = AppModel(preferences: preferences)
-        model.completeUpdateSetup(helperStatus: .requiresApproval)
         #expect(!model.automaticUpdates)
-        model.completeUpdateSetup(helperStatus: .enabled)
-        #expect(model.automaticUpdates)
-        model.automaticUpdates = false
-        let reopened = AppModel(preferences: preferences)
-        reopened.completeUpdateSetup(helperStatus: .enabled)
-        #expect(!reopened.automaticUpdates)
     }
 
     @Test @MainActor func updateHelperRecoveryRetriesFailuresAndAcceptsPendingApproval()
@@ -432,8 +414,8 @@ private func status(
         var schedule = UpdateSchedule()
         let beganDownload = schedule.beginDownload()
         #expect(beganDownload)
-        preferences.set(try JSONEncoder().encode(schedule), forKey: "updateSchedule")
-        let manual = AppModel(preferences: preferences, helper: nil, buildTrust: .trusted)
+        let manual = AppModel(
+            preferences: preferences, helper: nil, buildTrust: .trusted, updateSchedule: schedule)
         #expect(!manual.recordDetectedUpdate(update, manual: true))
         #expect(!manual.showsUpdateButton)
         #expect(!manual.canInstallAvailableUpdate(manual: true))
@@ -464,8 +446,8 @@ private func status(
         var schedule = UpdateSchedule()
         let beganCheck = schedule.beginCheck()
         #expect(beganCheck)
-        preferences.set(try JSONEncoder().encode(schedule), forKey: "updateSchedule")
-        let model = AppModel(preferences: preferences, helper: nil, buildTrust: .trusted)
+        let model = AppModel(
+            preferences: preferences, helper: nil, buildTrust: .trusted, updateSchedule: schedule)
         let update = await model.checkForUpdates(manual: true)
         #expect(update == nil)
         #expect(model.updateMessage?.hasPrefix("The next update check is available after ") == true)

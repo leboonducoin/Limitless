@@ -8,7 +8,7 @@ import os
 
 final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private let queue = DispatchQueue(label: "io.github.leboonducoin.Limitless.helper")
-    private let pending = OSAllocatedUnfairLock(initialState: (total: 0, tasks: 0))
+    private let pending = OSAllocatedUnfairLock(initialState: (total: 0, tasks: 0, admissions: 0))
     private let logger = Logger(subsystem: LimitlessIdentity.helper, category: "service")
     private let identity: SignedIdentity
     private let control = NSXPCListener(machServiceName: LimitlessIdentity.controlService)
@@ -72,6 +72,17 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
         -> Bool
     {
         let role: ClientRole = listener === control ? .application : .task
+        if role == .task {
+            let admitted = pending.withLock { count in
+                guard count.admissions < 4 else { return false }
+                count.admissions += 1
+                return true
+            }
+            guard admitted else { return false }
+        }
+        defer {
+            if role == .task { pending.withLock { $0.admissions -= 1 } }
+        }
         let identifier =
             role == .application ? LimitlessIdentity.application : LimitlessIdentity.commandLine
         guard let requirement = try? identity.requirement(for: identifier),

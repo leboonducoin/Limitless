@@ -50,11 +50,11 @@ import UserNotifications
     private(set) var hasTouchID = false
     var automaticUpdates: Bool {
         didSet {
-            guard !isPreview else { return }
-            preferences.set(automaticUpdates, forKey: "automaticUpdates")
-            if automaticUpdates { requestAutomaticUpdateIfReady() }
+            if !isPreview, automaticUpdates { requestAutomaticUpdateIfReady() }
         }
     }
+    private var updatesConsentRecorded = false
+    private var pendingLoginSetup = false
     var message: String?
     private(set) var batteryNotice: String?
     private(set) var sudoTouchIDError: ServiceError?
@@ -80,6 +80,7 @@ import UserNotifications
     private(set) var hotspotMessage: String?
     private(set) var hotspotConfigured: Bool
     private(set) var hotspotEnabled: Bool
+    private var hotspotWithdrawalPending = false
     var muteWhenScreenSleeps: Bool {
         didSet {
             if !isPreview {
@@ -124,14 +125,15 @@ import UserNotifications
     private(set) var watchedProcesses: [ProcessIdentity]?
     private var policyApplication: Task<Void, Never>?
     private var verifiedPrivateCLI = false
+    private(set) var cliMigrationRequired = false
     private var updateMonitoring: Task<Void, Never>?
     private var updateInstallation: Task<Void, Never>?
     private var retiringUpdateBackup = false
     private var checkingUpdates = false
+    private var persistsUpdateSchedule = false
     private var updateSchedule: UpdateSchedule {
         didSet {
-            guard !isPreview, let data = try? JSONEncoder().encode(updateSchedule) else { return }
-            preferences.set(data, forKey: "updateSchedule")
+            if persistsUpdateSchedule { UpdatePreferences.saveSchedule(updateSchedule) }
         }
     }
     private var statusReceivedAt = ContinuousClock.now
@@ -147,7 +149,8 @@ import UserNotifications
             (Bundle.main.object(
                 forInfoDictionaryKey: "LimitlessHelperInstallation") as? String)
             .flatMap(HelperInstallationKind.init(rawValue:))?.service,
-        buildTrust: BuildTrust = .checking
+        buildTrust: BuildTrust = .checking,
+        updateSchedule: UpdateSchedule = UpdateSchedule()
     ) {
         self.preferences = preferences
         self.helper = helper
@@ -170,17 +173,8 @@ import UserNotifications
         hasTouchID =
             authentication.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
             && authentication.biometryType == .touchID
-        updateSchedule =
-            preferences.data(forKey: "updateSchedule").flatMap {
-                try? JSONDecoder().decode(UpdateSchedule.self, from: $0)
-            } ?? UpdateSchedule()
-        automaticUpdates = preferences.bool(forKey: "automaticUpdates")
-        if let data = preferences.data(forKey: "userPolicy"),
-            let policy = try? JSONDecoder().decode(UserPolicy.self, from: data)
-        {
-            draft = PolicyDraft(policy)
-            baseline = draft
-        }
+        self.updateSchedule = updateSchedule
+        automaticUpdates = false
     }
 
     func prepareForLaunch() async {
@@ -195,6 +189,23 @@ import UserNotifications
         if trustedBuild, let network = HotspotCredentials.read() {
             hotspotConfigured = true
             hotspotEnabled = network.automaticJoin == true
+        }
+        if trustedBuild {
+            if let enabled = UpdatePreferences.readConsent() {
+                updatesConsentRecorded = true
+                automaticUpdates = enabled
+            }
+            if let schedule = UpdatePreferences.readSchedule() { updateSchedule = schedule }
+            persistsUpdateSchedule = true
+        }
+        if trustedBuild, !InstalledCLI.sharedPathIsProtected {
+            do {
+                cliMigrationRequired =
+                    try InstalledCLI.isAppOwnedLinkPresent()
+                    || !AgentSetup.legacyProviders().isEmpty
+            } catch {
+                cliMigrationRequired = true
+            }
         }
     }
 
@@ -333,7 +344,7 @@ import UserNotifications
     }
     var draftChanged: Bool { draft != baseline }
     private var readyToUpdate: Bool {
-        guard connectionError == nil, !removalComplete,
+        guard connectionError == nil, !removalComplete, !cliMigrationRequired,
             preferences.object(forKey: Self.updateBackupKey) == nil
         else { return false }
         guard let status else { return helperStatus == .notRegistered }
@@ -353,6 +364,7 @@ import UserNotifications
             && updateSchedule.canBeginDownload()
     }
     func updateInstallBlockMessage(manual: Bool = false) -> String {
+        if cliMigrationRequired { return "Finish CLI migration before updating again." }
         if needsManualUpdate { return "Download the update and replace Limitless in Applications." }
         if preferences.object(forKey: Self.updateBackupKey) != nil {
             return "Waiting for the previous update to be confirmed."
@@ -590,7 +602,6 @@ import UserNotifications
             watchedProcesses = nil
             return
         }
-        completeUpdateSetup(helperStatus: helperStatus)
         do {
             try completeLoginSetup(helperStatus: helperStatus) {
                 if loginStatus != .enabled && loginStatus != .requiresApproval {
@@ -617,10 +628,7 @@ import UserNotifications
             var reply = try await client.send(.status)
             guard currentRevision == revision, !busy, !quitting else { return }
             if let received = reply.status, !received.policyConfigured, received.removal == .none {
-                let saved = preferences.data(forKey: "userPolicy").flatMap {
-                    try? JSONDecoder().decode(UserPolicy.self, from: $0)
-                }
-                reply = try await client.send(.restorePolicy(saved ?? received.policy))
+                reply = try await client.send(.restorePolicy)
             }
             guard currentRevision == revision, !busy, !quitting else { return }
             if let received = reply.status, received.power.battery == .notPresent,
@@ -705,18 +713,22 @@ import UserNotifications
             shouldMute: lidDisplayState.shouldMuteAudio(
                 active: active, screenAsleep: screensAsleep, muteOnSleep: muteWhenScreenSleeps,
                 muteOnLidClose: muteWithClosedLid))
-        hotspot.update(eligible: active && !stoppingSessions && hotspotEnabled) { [weak self] in
+        hotspot.update(
+            eligible: active && !stoppingSessions && hotspotEnabled && !hotspotWithdrawalPending
+        ) { [weak self] in
             await self?.canJoinHotspot() ?? false
         }
         hotspotMessage = hotspot.message
     }
 
     private func canJoinHotspot() async -> Bool {
-        guard hotspotEnabled, canControl, !busy, !quitting, !stoppingSessions, let client
+        guard hotspotEnabled, !hotspotWithdrawalPending, canControl, !busy, !quitting,
+            !stoppingSessions, let client
         else { return false }
         let startingRevision = revision
         let reading = try? await client.send(.status).status
-        guard startingRevision == revision, hotspotEnabled, canControl, !quitting,
+        guard startingRevision == revision, hotspotEnabled, !hotspotWithdrawalPending,
+            canControl, !quitting,
             !stoppingSessions, let reading
         else { return false }
         return PowerPresentation(reading) == .active
@@ -736,6 +748,7 @@ import UserNotifications
             return false
         }
         hotspotConfigured = true
+        hotspotWithdrawalPending = false
         hotspot.update(eligible: false)
         updateEnvironment()
         message = "Hotspot details saved in Keychain."
@@ -745,16 +758,20 @@ import UserNotifications
     func setHotspotEnabled(_ enabled: Bool) {
         guard trustedBuild, !isPreview, hotspotConfigured else { return }
         if !enabled {
-            hotspotEnabled = false
+            hotspotWithdrawalPending = true
             hotspot.update(eligible: false)
         }
         guard let network = HotspotCredentials.read(),
             HotspotCredentials.save(
                 .init(ssid: network.ssid, password: network.password, automaticJoin: enabled))
         else {
-            message = "The hotspot setting could not be saved. Unlock Keychain and try again."
+            message =
+                enabled
+                ? "Hotspot fallback could not be enabled. Unlock Keychain and try again."
+                : "Hotspot fallback is paused. Unlock Keychain and retry to turn it off."
             return
         }
+        hotspotWithdrawalPending = false
         hotspotEnabled = enabled
         if enabled { hotspot.requestLocationAccess() }
         updateEnvironment()
@@ -762,7 +779,7 @@ import UserNotifications
 
     func forgetHotspot() {
         guard trustedBuild, !isPreview else { return }
-        hotspotEnabled = false
+        hotspotWithdrawalPending = true
         hotspot.update(eligible: false)
         guard removeHotspotConfiguration() else {
             message = "The hotspot details could not be removed from Keychain."
@@ -775,6 +792,7 @@ import UserNotifications
         guard HotspotCredentials.remove() else { return false }
         hotspotConfigured = false
         hotspotEnabled = false
+        hotspotWithdrawalPending = false
         return true
     }
 
@@ -963,7 +981,10 @@ import UserNotifications
         }
         pendingExtensions = 0
         while extendingSession { try? await Task.sleep(for: .milliseconds(20)) }
-        _ = await perform(.stopAll)
+        let allowedAutomation = status?.policy.allowsAutomation == true
+        if await perform(.stopAll), allowedAutomation, status?.policy.allowsAutomation == false {
+            message = "Work stopped. Re-enable CLI & AI tasks to start new automated work."
+        }
     }
     func rearm() async {
         if await perform(.rearm), status?.policyConfigured == false { await refresh() }
@@ -978,8 +999,6 @@ import UserNotifications
             if await perform(.configure(policy)) {
                 let applied = PolicyDraft(status?.policy ?? policy)
                 if draft == submitted { draft = applied }
-                let saved = try applied.policy(allowsAutomation: false)
-                preferences.set(try JSONEncoder().encode(saved), forKey: "userPolicy")
                 message = nil
             }
         } catch { message = "Use a battery floor from 0 to 80% and a positive, finite duration." }
@@ -1004,12 +1023,13 @@ import UserNotifications
         }
     }
 
-    func setAutomation(_ enabled: Bool) async {
+    func setAutomation(_ enabled: Bool, migrateLegacy: Bool = false) async {
         guard canControl, status?.policyConfigured == true else { return }
         guard enabled else {
             _ = await perform(.setAutomation(false))
             return
         }
+        guard !cliMigrationRequired || migrateLegacy else { return }
         guard
             let identity = try? await SignedIdentity.current(
                 expectedIdentifier: LimitlessIdentity.application),
@@ -1020,8 +1040,9 @@ import UserNotifications
         }
         do {
             try await AdministratorAuthorization.withGrant { grant in
+                var privateResources: URL?
                 if !InstalledCLI.sharedPathIsProtected {
-                    try await InstalledCLI.refreshPrivateCopy()
+                    privateResources = try await InstalledCLI.refreshPrivateCopy()
                     self.verifiedPrivateCLI = true
                 }
                 guard await self.perform(.installCLI, authorization: grant) else {
@@ -1029,13 +1050,30 @@ import UserNotifications
                         "The limitless command could not be installed. An existing command was left unchanged."
                     return
                 }
+                if migrateLegacy {
+                    if let privateResources {
+                        guard try !InstalledCLI.isAppOwnedLinkPresent()
+                        else { throw ServiceError.restorationRequired }
+                        for provider in try AgentSetup.legacyProviders() {
+                            try AgentSetup.configure(provider, resources: privateResources)
+                        }
+                        guard try AgentSetup.legacyProviders().isEmpty
+                        else { throw ServiceError.restorationRequired }
+                    } else if !InstalledCLI.sharedPathIsProtected {
+                        throw ServiceError.restorationRequired
+                    }
+                    self.cliMigrationRequired = false
+                }
+                guard !self.cliMigrationRequired else { return }
                 _ = await self.perform(.setAutomation(true), authorization: grant)
             }
         } catch {
             message =
                 error as? ServiceError == .unauthorized
                 ? "Administrator approval is needed to enable CLI and AI tasks."
-                : "The private CLI could not be verified. Keep the signed app in Applications."
+                : migrateLegacy
+                    ? "CLI migration could not finish. Check your agent settings and retry."
+                    : "The private CLI could not be verified. Keep the signed app in Applications."
         }
     }
 
@@ -1079,7 +1117,8 @@ import UserNotifications
         busy = true
         do {
             try await helper.register()
-            preferences.set(true, forKey: "enableLoginAfterHelperApproval")
+            pendingLoginSetup = true
+            if !updatesConsentRecorded { setAutomaticUpdates(true) }
         } catch {
             message =
                 "The helper could not be enabled. Complete the macOS approval before retrying."
@@ -1094,7 +1133,7 @@ import UserNotifications
 
     func setLaunchAtLogin(_ enabled: Bool) async {
         guard trustedBuild, !isPreview, !busy, !removalComplete else { return }
-        preferences.removeObject(forKey: "enableLoginAfterHelperApproval")
+        pendingLoginSetup = false
         busy = true
         do {
             if enabled {
@@ -1110,20 +1149,27 @@ import UserNotifications
     }
 
     func completeLoginSetup(
-        helperStatus: SMAppService.Status, register: () throws -> Void
+        helperStatus: SMAppService.Status,
+        register: () throws -> Void
     ) throws {
-        guard helperStatus == .enabled,
-            preferences.bool(forKey: "enableLoginAfterHelperApproval")
-        else { return }
-        preferences.removeObject(forKey: "enableLoginAfterHelperApproval")
+        guard helperStatus == .enabled, pendingLoginSetup else { return }
+        pendingLoginSetup = false
         try register()
     }
 
-    func completeUpdateSetup(helperStatus: SMAppService.Status) {
-        guard helperStatus == .enabled,
-            preferences.object(forKey: "automaticUpdates") == nil
-        else { return }
-        automaticUpdates = true
+    func setAutomaticUpdates(_ enabled: Bool) {
+        if isPreview {
+            automaticUpdates = enabled
+            return
+        }
+        guard trustedBuild else { return }
+        guard UpdatePreferences.saveConsent(enabled) else {
+            if !enabled { automaticUpdates = false }
+            updateMessage = "The update setting could not be saved. Unlock Keychain and try again."
+            return
+        }
+        updatesConsentRecorded = true
+        automaticUpdates = enabled
     }
 
     func openLoginSettings() {
@@ -1220,6 +1266,11 @@ import UserNotifications
                     quitting = false
                     message =
                         "The hotspot details could not be removed from Keychain. Unlock it and retry."
+                    return false
+                }
+                guard UpdatePreferences.remove() else {
+                    quitting = false
+                    message = "The saved update settings could not be removed from Keychain."
                     return false
                 }
             }

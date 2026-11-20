@@ -253,6 +253,45 @@ enum LidDisplayState: Equatable {
     }
 }
 
+private enum AppKeychain {
+    private static func query(_ service: String, account: String) -> [String: Any] {
+        let authentication = LAContext()
+        authentication.interactionNotAllowed = true
+        return [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: LimitlessIdentity.application + "." + service,
+            kSecAttrAccount as String: account, kSecAttrSynchronizable as String: false,
+            kSecUseAuthenticationContext as String: authentication,
+        ]
+    }
+
+    static func save(_ data: Data, service: String, account: String) -> Bool {
+        let request = query(service, account: account)
+        let attributes = [kSecValueData as String: data]
+        let status = SecItemUpdate(request as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            return SecItemAdd(
+                request.merging(attributes) { _, value in value } as CFDictionary, nil)
+                == errSecSuccess
+        }
+        return status == errSecSuccess
+    }
+
+    static func read(service: String, account: String) -> Data? {
+        var request = query(service, account: account)
+        request[kSecReturnData as String] = true
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(request as CFDictionary, &result) == errSecSuccess
+        else { return nil }
+        return result as? Data
+    }
+
+    static func remove(service: String, account: String) -> Bool {
+        let status = SecItemDelete(query(service, account: account) as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
+}
+
 enum HotspotCredentials {
     struct Network: Codable, Sendable {
         let ssid: String
@@ -272,43 +311,50 @@ enum HotspotCredentials {
         }
     }
 
-    private static func query() -> [String: Any] {
-        let authentication = LAContext()
-        authentication.interactionNotAllowed = true
-        return [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: LimitlessIdentity.application + ".hotspot",
-            kSecAttrAccount as String: "fallback", kSecAttrSynchronizable as String: false,
-            kSecUseAuthenticationContext as String: authentication,
-        ]
-    }
-
     static func save(_ network: Network) -> Bool {
         guard network.isValid, let data = try? JSONEncoder().encode(network) else { return false }
-        let attributes = [kSecValueData as String: data]
-        let status = SecItemUpdate(query() as CFDictionary, attributes as CFDictionary)
-        if status == errSecItemNotFound {
-            return SecItemAdd(
-                query().merging(attributes) { _, value in value } as CFDictionary, nil)
-                == errSecSuccess
-        }
-        return status == errSecSuccess
+        return AppKeychain.save(data, service: "hotspot", account: "fallback")
     }
 
     static func read() -> Network? {
-        var request = query()
-        request[kSecReturnData as String] = true
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(request as CFDictionary, &result) == errSecSuccess,
-            let data = result as? Data, data.count <= 1_024,
+        guard let data = AppKeychain.read(service: "hotspot", account: "fallback"),
+            data.count <= 1_024,
             let network = try? JSONDecoder().decode(Network.self, from: data), network.isValid
         else { return nil }
         return network
     }
 
+    static func remove() -> Bool { AppKeychain.remove(service: "hotspot", account: "fallback") }
+}
+
+enum UpdatePreferences {
+    static func readConsent() -> Bool? {
+        switch AppKeychain.read(service: "updates", account: "automatic") {
+        case Data([0]): false
+        case Data([1]): true
+        default: nil
+        }
+    }
+
+    static func saveConsent(_ enabled: Bool) -> Bool {
+        AppKeychain.save(Data([enabled ? 1 : 0]), service: "updates", account: "automatic")
+    }
+
+    static func readSchedule() -> UpdateSchedule? {
+        guard let data = AppKeychain.read(service: "updates", account: "schedule"),
+            data.count <= 1_024
+        else { return nil }
+        return try? JSONDecoder().decode(UpdateSchedule.self, from: data)
+    }
+
+    static func saveSchedule(_ schedule: UpdateSchedule) {
+        guard let data = try? JSONEncoder().encode(schedule) else { return }
+        _ = AppKeychain.save(data, service: "updates", account: "schedule")
+    }
+
     static func remove() -> Bool {
-        let status = SecItemDelete(query() as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
+        let removedConsent = AppKeychain.remove(service: "updates", account: "automatic")
+        return AppKeychain.remove(service: "updates", account: "schedule") && removedConsent
     }
 }
 

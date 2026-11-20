@@ -11,29 +11,84 @@ public enum AgentSetup {
             .appendingPathComponent("Contents/Resources/limitless-skill").path
     }
 
-    @concurrent public static func verifiedResources(forRemoval: Bool = false) async throws -> URL {
+    @concurrent public static func verifiedResources() async throws -> URL {
         let identity = try await SignedIdentity.current(
             expectedIdentifier: LimitlessIdentity.commandLine)
         let app: URL
-        if identity.executableURL.path == InstalledCLI.privateExecutable().path {
-            try InstalledCLI.requirePrivatePath(identity.executableURL, executable: true)
+        let usePrivate = identity.executableURL.path == InstalledCLI.privateExecutable().path
+        if usePrivate {
+            try InstalledCLI.requirePrivatePath(identity.executableURL, regularFile: true)
             app = InstalledCLI.privateApplication()
         } else {
             guard identity.executableURL.path == InstalledCLI.target,
-                forRemoval || InstalledCLI.sharedPathIsProtected
+                InstalledCLI.sharedPathIsProtected
             else { throw SignatureError.untrustedIdentity }
             app = URL(fileURLWithPath: "/Applications/Limitless.app", isDirectory: true)
             guard app.resolvingSymlinksInPath().path == app.path
             else { throw SignatureError.untrustedIdentity }
         }
+        let resources = try protectedResources(in: app, usePrivate: usePrivate)
         try identity.verifyExecutable(at: app, identifier: LimitlessIdentity.application)
-        return app.appendingPathComponent("Contents/Resources/limitless-skill")
+        return resources
+    }
+
+    static func protectedResources(in app: URL, usePrivate: Bool) throws -> URL {
+        let resources = app.appendingPathComponent("Contents/Resources/limitless-skill")
+        for file in ["SKILL.md"] + providers.map({ "hooks/\($0).json" }) {
+            let url = resources.appendingPathComponent(file)
+            if usePrivate {
+                try InstalledCLI.requirePrivatePath(url, regularFile: true)
+            } else {
+                try InstalledCLI.requireProtectedPath(
+                    root: URL(fileURLWithPath: "/"),
+                    components: Array(url.pathComponents.dropFirst()),
+                    regularFile: true, owner: 0)
+            }
+        }
+        return resources
+    }
+
+    public static func legacyProviders(
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) throws -> [String] {
+        guard geteuid() != 0 else { throw CocoaError(.fileReadNoPermission) }
+        let home = home.standardizedFileURL.resolvingSymlinksInPath()
+        return try providers.filter { provider in
+            let paths = try locations(provider)
+            let skill = paths.skill.split(separator: "/").map(String.init)
+            guard
+                let marker = try ManagedDirectory.open(
+                    home: home, components: skill, create: false, owner: geteuid())?
+                    .read(".limitless-managed")?.data,
+                marker == Data("Limitless\n".utf8) || marker == Data("Limitless:new-config\n".utf8)
+            else { return false }
+            let config = paths.config.split(separator: "/").map(String.init)
+            guard let file = config.last,
+                let data = try ManagedDirectory.open(
+                    home: home, components: Array(config.dropLast()), create: false,
+                    owner: geteuid())?
+                    .read(file)?.data
+            else { return false }
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { throw CocoaError(.fileReadCorruptFile) }
+            guard let hooks = parsed["hooks"] else { return false }
+            guard let events = hooks as? [String: [[String: Any]]]
+            else { throw CocoaError(.fileReadCorruptFile) }
+            let legacy = InstalledCLI.target + " hook " + provider
+            return events.values.joined().contains { entry in
+                if entry["command"] as? String == legacy { return true }
+                return (entry["hooks"] as? [[String: Any]])?.contains {
+                    $0["command"] as? String == legacy
+                } == true
+            }
+        }
     }
 
     private struct ManagedFile: Equatable {
         let data: Data
         let device: dev_t
         let inode: ino_t
+        let group: gid_t
         let mode: mode_t
     }
 
@@ -123,7 +178,7 @@ public enum AgentSetup {
             try validate()
             return ManagedFile(
                 data: data, device: final.st_dev, inode: final.st_ino,
-                mode: final.st_mode & 0o777)
+                group: final.st_gid, mode: final.st_mode & 0o777)
         }
 
         func names() throws -> Set<String> {
@@ -190,7 +245,7 @@ public enum AgentSetup {
             created = true
             return ManagedFile(
                 data: data, device: info.st_dev, inode: info.st_ino,
-                mode: info.st_mode & 0o777)
+                group: info.st_gid, mode: info.st_mode & 0o777)
         }
 
         func replace(
@@ -210,7 +265,11 @@ public enum AgentSetup {
                 close(file)
                 unlinkat(descriptor, temporary, 0)
             }
-            _ = try validateFile(file)
+            let initial = try validateFile(file)
+            if let expected, initial.st_gid != expected.group {
+                guard fchown(file, uid_t.max, expected.group) == 0
+                else { throw JournalError.system(errno) }
+            }
             try FileHandle(fileDescriptor: file, closeOnDealloc: false).write(contentsOf: data)
             guard fchmod(file, expected?.mode ?? 0o600) == 0, fsync(file) == 0 else {
                 throw JournalError.system(errno)
@@ -221,7 +280,7 @@ public enum AgentSetup {
             }
             let candidate = ManagedFile(
                 data: data, device: info.st_dev, inode: info.st_ino,
-                mode: info.st_mode & 0o777)
+                group: info.st_gid, mode: info.st_mode & 0o777)
             try validate()
             guard try read(name) == expected else { throw CocoaError(.fileWriteUnknown) }
             replacement = candidate

@@ -12,18 +12,18 @@ import Testing
     defer { try? FileManager.default.removeItem(at: root) }
     try Data().write(to: executable)
     try InstalledCLI.requireProtectedPath(
-        root: root, components: ["bin", "limitless"], executable: true, owner: getuid())
+        root: root, components: ["bin", "limitless"], regularFile: true, owner: getuid())
     #expect(chmod(folder.path, 0o775) == 0)
     #expect(throws: JournalError.insecureDirectory) {
         try InstalledCLI.requireProtectedPath(
-            root: root, components: ["bin", "limitless"], executable: true, owner: getuid())
+            root: root, components: ["bin", "limitless"], regularFile: true, owner: getuid())
     }
     #expect(chmod(folder.path, 0o755) == 0)
     try FileManager.default.removeItem(at: executable)
     try FileManager.default.createSymbolicLink(at: executable, withDestinationURL: root)
     #expect(throws: (any Error).self) {
         try InstalledCLI.requireProtectedPath(
-            root: root, components: ["bin", "limitless"], executable: true, owner: getuid())
+            root: root, components: ["bin", "limitless"], regularFile: true, owner: getuid())
     }
 }
 

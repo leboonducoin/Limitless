@@ -21,7 +21,8 @@ how to verify them.
   at first launch, subject to macOS permission, and can be disabled.
 - A small + button beside Stop adds 15 minutes per click to an owned timer or date session.
 - CLI diagnosis and whole-task AI tracking that identify the provider and respect user limits and manual sessions.
-- Helper activation enables launch at login. Users can disable it independently.
+- Helper approval enables launch at login in the same onboarding run. If the app
+  is reopened before approval, users can enable launch at login in Options.
 - Updates default on after helper approval: check every 8 hours and install immediately while idle.
 - Optional Touch ID for sudo, native administrator consent and complete uninstall.
 

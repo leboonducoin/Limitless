@@ -17,12 +17,12 @@ public enum InstalledCLI {
         privateApplication(in: home).appendingPathComponent("Contents/MacOS/limitless")
     }
 
-    static func requirePrivatePath(_ url: URL, executable: Bool = false) throws {
+    static func requirePrivatePath(_ url: URL, regularFile: Bool = false) throws {
         let user = geteuid()
         guard user != 0 else { throw JournalError.administratorRequired }
         try requireProtectedPath(
             root: URL(fileURLWithPath: "/"), components: Array(url.pathComponents.dropFirst()),
-            executable: executable, owner: user, allowRootAncestors: true)
+            regularFile: regularFile, owner: user, allowRootAncestors: true)
     }
 
     public static var sharedPathIsProtected: Bool {
@@ -31,9 +31,9 @@ public enum InstalledCLI {
             (try? requireProtectedPath(
                 root: root,
                 components: ["Applications", "Limitless.app", "Contents", "MacOS", "limitless"],
-                executable: true, owner: 0)) != nil
+                regularFile: true, owner: 0)) != nil
             && (try? requireProtectedPath(
-                root: root, components: ["usr", "local", "bin"], executable: false, owner: 0))
+                root: root, components: ["usr", "local", "bin"], regularFile: false, owner: 0))
                 != nil
     }
 
@@ -64,7 +64,8 @@ public enum InstalledCLI {
         try change(root: URL(fileURLWithPath: "/"), user: user, install: false)
     }
 
-    @concurrent public static func refreshPrivateCopy() async throws {
+    @discardableResult
+    @concurrent public static func refreshPrivateCopy() async throws -> URL {
         let identity = try await SignedIdentity.current(
             expectedIdentifier: LimitlessIdentity.application)
         let source = try await GitHubUpdate.currentInstalledApplication(identity: identity)
@@ -85,7 +86,8 @@ public enum InstalledCLI {
             try identity.verifyExecutable(
                 at: destination, identifier: LimitlessIdentity.application)
             if try Data(contentsOf: destination.appendingPathComponent(record)) == expected {
-                return
+                try requirePrivatePath(privateExecutable(), regularFile: true)
+                return try AgentSetup.protectedResources(in: destination, usePrivate: true)
             }
         }
         let staging = directory.appendingPathComponent(".staging-\(UUID().uuidString)")
@@ -99,6 +101,9 @@ public enum InstalledCLI {
         try identity.verifyExecutable(
             at: copy.appendingPathComponent("Contents/MacOS/limitless"),
             identifier: LimitlessIdentity.commandLine)
+        try requirePrivatePath(
+            copy.appendingPathComponent("Contents/MacOS/limitless"), regularFile: true)
+        _ = try AgentSetup.protectedResources(in: copy, usePrivate: true)
         guard try Data(contentsOf: copy.appendingPathComponent(record)) == expected else {
             throw SignatureError.untrustedIdentity
         }
@@ -108,6 +113,7 @@ public enum InstalledCLI {
         } else {
             try manager.moveItem(at: copy, to: destination)
         }
+        return try AgentSetup.protectedResources(in: destination, usePrivate: true)
     }
 
     @concurrent public static func removePrivateCopy() async throws {
@@ -121,7 +127,7 @@ public enum InstalledCLI {
     }
 
     static func requireProtectedPath(
-        root: URL, components: [String], executable: Bool, owner: uid_t,
+        root: URL, components: [String], regularFile: Bool, owner: uid_t,
         allowRootAncestors: Bool = false
     ) throws {
         var descriptor = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
@@ -138,7 +144,7 @@ public enum InstalledCLI {
         }
         try validate(descriptor, isFile: false)
         for (index, component) in components.enumerated() {
-            let isFile = executable && index == components.count - 1
+            let isFile = regularFile && index == components.count - 1
             let flags = O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC | (isFile ? 0 : O_DIRECTORY)
             let child = openat(descriptor, component, flags)
             guard child >= 0 else { throw JournalError.system(errno) }

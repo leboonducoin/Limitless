@@ -69,7 +69,7 @@ public struct ServiceSessions: Sendable {
 
     public mutating func apply(
         _ operation: ServiceOperation, owner: UUID, now: ClockSnapshot,
-        authorizedPolicy: UserPolicy? = nil
+        savedPolicy: UserPolicy? = nil
     ) throws -> UUID? {
         guard var client = clients[owner] else { throw ServiceError.ownerExpired }
         guard client.user == consoleUser else { throw ServiceError.unauthorized }
@@ -99,9 +99,9 @@ public struct ServiceSessions: Sendable {
         case .configure(let policy):
             registry.updatePolicy(policy)
             policyConfigured = true
-        case .restorePolicy(let policy):
+        case .restorePolicy:
             if !policyConfigured {
-                registry.updatePolicy(try authorizedPolicy ?? policy.withAutomation(false))
+                if let savedPolicy { registry.updatePolicy(savedPolicy) }
                 policyConfigured = true
             }
         case .setAutomation(let allowed):
@@ -149,7 +149,12 @@ public struct ServiceSessions: Sendable {
                     at: now.wall)
             else { throw ServiceError.unauthorized }
         case .extend(let id): try registry.extend(id, owner: owner, now: now)
-        case .stopAll: registry.stopAll(at: now.wall)
+        case .stopAll:
+            if registry.sessions.values.contains(where: { $0.kind != .manual }) {
+                try registry.revokeAutomationAndStop(reason: .requested, at: now.wall)
+            } else {
+                registry.stopAll(at: now.wall)
+            }
         case .prepareRemoval:
             try registry.revokeAutomationAndStop(at: now.wall)
             drain = .removal

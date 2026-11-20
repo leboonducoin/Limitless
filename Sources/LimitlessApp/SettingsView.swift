@@ -9,6 +9,7 @@ struct SettingsView: View {
     private var hotspotName = SwiftUI.State<String>(wrappedValue: "")
     private var hotspotPassword = SwiftUI.State<String>(wrappedValue: "")
     private var hotspotExpanded = SwiftUI.State<Bool>(wrappedValue: false)
+    private var confirmingCLIMigration = SwiftUI.State<Bool>(wrappedValue: false)
     @FocusState private var batteryFocused: Bool
 
     private static let batteryFormatter: NumberFormatter = {
@@ -186,7 +187,7 @@ struct SettingsView: View {
                             get: { model.status?.policy.allowsAutomation ?? false },
                             set: { enabled in Task { await model.setAutomation(enabled) } })
                     )
-                    .disabled(!model.canEditPowerPolicy || model.busy)
+                    .disabled(!model.canEditPowerPolicy || model.busy || model.cliMigrationRequired)
                     Link(
                         destination: URL(
                             string:
@@ -197,6 +198,25 @@ struct SettingsView: View {
                     }
                     .accessibilityLabel("Set up CLI and AI integration")
                     .help("Set up CLI and AI integration")
+                }
+                if model.cliMigrationRequired {
+                    Button("Migrate CLI & agent hooks…") {
+                        confirmingCLIMigration.wrappedValue = true
+                    }
+                    .disabled(!model.canEditPowerPolicy || model.busy)
+                    .alert(
+                        "Migrate CLI & agent hooks?",
+                        isPresented: confirmingCLIMigration.projectedValue
+                    ) {
+                        Button("Cancel", role: .cancel) {}
+                        Button("Migrate and enable") {
+                            Task { await model.setAutomation(true, migrateLegacy: true) }
+                        }
+                    } message: {
+                        Text(
+                            "Close your agent apps first. Limitless will retire its old shared shortcut and update its own hooks for this account."
+                        )
+                    }
                 }
             }
             if model.showsSudoTouchID {
@@ -274,8 +294,13 @@ struct SettingsView: View {
             }
             if model.showsPowerControls {
                 HStack {
-                    Toggle("Automatic updates", isOn: $model.automaticUpdates)
-                        .disabled((!model.trustedBuild && !model.isPreview) || model.updating)
+                    Toggle(
+                        "Automatic updates",
+                        isOn: Binding(
+                            get: { model.automaticUpdates },
+                            set: { model.setAutomaticUpdates($0) })
+                    )
+                    .disabled((!model.trustedBuild && !model.isPreview) || model.updating)
                     if model.needsManualUpdate {
                         Link("Download update", destination: GitHubUpdate.releasesPage)
                     } else if let update = model.availableUpdate, model.showsUpdateButton {

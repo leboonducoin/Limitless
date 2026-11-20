@@ -70,6 +70,34 @@ import Testing
     }
 }
 
+@Test func legacyDetectionRequiresAnOwnedMarkerAndClearsAfterMigration() throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let resources = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+            "skills/limitless")
+    for provider in AgentSetup.providers {
+        try AgentSetup.configure(provider, home: home, resources: resources)
+    }
+    #expect(try AgentSetup.legacyProviders(home: home) == AgentSetup.providers)
+    let marker = home.appendingPathComponent(".agents/skills/limitless/.limitless-managed")
+    let owned = try Data(contentsOf: marker)
+    try Data("Foreign skill\n".utf8).write(to: marker)
+    #expect(try AgentSetup.legacyProviders(home: home) == ["claude", "cursor", "gemini"])
+    try owned.write(to: marker)
+
+    let privateResources = InstalledCLI.privateApplication(in: home)
+        .appendingPathComponent("Contents/Resources/limitless-skill")
+    try FileManager.default.createDirectory(
+        at: privateResources.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try FileManager.default.copyItem(at: resources, to: privateResources)
+    for provider in try AgentSetup.legacyProviders(home: home) {
+        try AgentSetup.configure(provider, home: home, resources: privateResources)
+        #expect(try AgentSetup.isCurrent(provider, home: home, resources: privateResources))
+    }
+    #expect(try AgentSetup.legacyProviders(home: home).isEmpty)
+}
+
 @Test(arguments: AgentSetup.providers)
 func agentSetupPreservesSettingsIsRepeatableAndRemovesOnlyItsIntegration(_ provider: String) throws
 {

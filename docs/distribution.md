@@ -37,12 +37,15 @@ This remains a broad macOS permission, held by the separate sudo helper.
 
 ## Updates and removal
 
-Automatic updates turn on with the helper and can be disabled. Limitless checks every eight
+Automatic updates turn on when you first enable the helper and can be disabled.
+Limitless saves this choice in Keychain. After upgrading from an older release,
+review the automatic-update setting in Options. Limitless checks every eight
 hours and starts installing a detected update immediately while idle. Otherwise, an **Update**
 button appears when a version is available and disappears during the retry delay. Right-click
 the menu-bar icon → **Check for Updates** to perform a fresh check and install an available
 update while idle. A manual check resets the eight-hour timer and can retry a delayed download
-after five minutes; server retry deadlines still apply. Checks read the published `release.json`
+after five minutes; server retry deadlines still apply. The login Keychain stores the retry schedule
+and your automatic-update choice. Checks read the published `release.json`
 asset instead of GitHub's rate-limited REST API. Limitless requires its source revision to match
 the signed app's `Build.json`, verifies the download, then installs and reopens the app.
 If the helper was enabled, the reopened version restores it; a failed replacement reopens

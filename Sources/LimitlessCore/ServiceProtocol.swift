@@ -7,7 +7,7 @@ public enum ClientRole: Sendable {
 public enum ServiceOperation: Codable, Equatable, Sendable {
     case status
     case configure(UserPolicy)
-    case restorePolicy(UserPolicy)
+    case restorePolicy
     case setAutomation(Bool)
     case start(SessionRequest)
     case startAgent(AgentProvider)

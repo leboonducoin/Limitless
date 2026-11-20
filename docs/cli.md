@@ -15,6 +15,11 @@ hooks. Explicit setup migrates Limitless entries to the protected command and
 keeps other settings. Closing your agents during migration prevents them from
 running a legacy hook.
 
+After an upgrade from 1.1 or earlier, close any agents first. If **Migrate
+CLI & agent hooks…** appears in **Options**, use it to retire the unsafe
+shared shortcut and migrate Limitless hooks for the current account.
+Repeat this in each account that uses a Limitless integration.
+
 ## Terminal
 
 ```sh
