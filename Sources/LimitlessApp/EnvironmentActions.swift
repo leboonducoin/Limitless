@@ -322,6 +322,13 @@ private enum AppKeychain {
         return label
     }
 
+    static func replace(_ data: Data, service: String, account: String, label: String) -> Bool {
+        var request = query(service, account: account)
+        request[kSecAttrLabel as String] = label
+        let attributes = [kSecValueData as String: data]
+        return SecItemUpdate(request as CFDictionary, attributes as CFDictionary) == errSecSuccess
+    }
+
     static func remove(service: String, account: String, label: String) -> Bool {
         var request = query(service, account: account)
         request[kSecAttrLabel as String] = label
@@ -413,6 +420,8 @@ enum HotspotCredentials {
 }
 
 enum UpdatePreferences {
+    private static let helperAccount = "helper-recovery"
+
     struct Receipt: Equatable, Sendable {
         fileprivate let account: String
         fileprivate let label: String
@@ -455,7 +464,7 @@ enum UpdatePreferences {
     }
 
     static func helperRecovery() throws -> Receipt? {
-        let account = "helper-recovery"
+        let account = helperAccount
         guard let item = try AppKeychain.item(service: "updates", account: account) else {
             return nil
         }
@@ -467,11 +476,20 @@ enum UpdatePreferences {
     }
 
     static func requestHelperRecovery() throws -> Receipt {
-        let account = "helper-recovery"
+        let account = helperAccount
         let requester = try ProcessIdentity.current()
         let label = try AppKeychain.reserve(
             JSONEncoder().encode(requester), service: "updates", account: account)
         return Receipt(account: account, label: label, requester: requester)
+    }
+
+    static func handOffHelperRecovery(_ prior: Receipt, to installer: ProcessIdentity) throws {
+        guard let current = try helperRecovery(), current.label == prior.label,
+            current.requester == (try ProcessIdentity.current()),
+            AppKeychain.replace(
+                try JSONEncoder().encode(installer), service: "updates", account: helperAccount,
+                label: prior.label)
+        else { throw UpdateError.busy }
     }
 
     static func readBackup() throws -> BackupReceipt? {
@@ -493,7 +511,15 @@ enum UpdatePreferences {
     }
 
     static func clearReceipt(_ reference: Receipt) -> Bool {
-        AppKeychain.remove(service: "updates", account: reference.account, label: reference.label)
+        if reference.account == helperAccount {
+            do {
+                guard let current = try helperRecovery() else { return true }
+                guard current.label == reference.label, !current.requesterIsStillRunning
+                else { return false }
+            } catch { return false }
+        }
+        return AppKeychain.remove(
+            service: "updates", account: reference.account, label: reference.label)
     }
 
     static func remove() -> Bool {

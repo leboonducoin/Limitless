@@ -67,7 +67,8 @@ before association. An association in progress completes under macOS control.
 Only owned state is restored. A protected root journal records ownership before
 changes and survives interruption; invalid files fail closed. Competing privileged
 tools can still change the global flag. Only a manual session can defer an ordinary
-restart or shutdown. Forced restarts remain outside the app's control.
+restart or shutdown. A pending audio restore stays recorded through restart. Forced
+restarts remain outside the app's control.
 
 ## Trust and files
 
@@ -128,8 +129,9 @@ before cleanup and again before recycling. Sudo cleanup runs in its own helper b
 removing its service; updates preserve the setting. Update preparation can be cancelled by the
 same console user while the power helper's recovery record is still intact. An update records
 whether the power helper was enabled, restores it after relaunch and retries from the previous
-app if opening the replacement fails. Another app instance leaves recovery to the recorded
-update process while that process is alive. Uninstall confirms normal sleep before handling audio
+app if opening the replacement fails. The requester hands recovery to the installer before
+exiting. Other instances leave a live recovery record alone. The rollback records whether the
+helper was enabled before the update. Uninstall confirms normal sleep before handling audio
 restoration or Keychain cleanup. A failed power-helper preflight can reopen admission after
 confirmed restoration. Preparation ends on a console user change. Once system removal starts,
 admission stays closed until cleanup completes. Failed cleanup stays visible and retryable.

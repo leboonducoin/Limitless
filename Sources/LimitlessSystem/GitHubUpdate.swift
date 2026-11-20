@@ -509,7 +509,10 @@ public enum GitHubUpdate {
         }
     }
 
-    public static func launchInstaller(_ staged: Staged, identity: SignedIdentity) throws {
+    public static func launchInstaller(
+        _ staged: Staged, identity: SignedIdentity, helperRequired: Bool,
+        handOff: (ProcessIdentity) throws -> Void
+    ) throws {
         let bundle = try PrivateApplicationLaunch.copy(installedApplication)
         var launched = false
         defer {
@@ -522,11 +525,19 @@ public enum GitHubUpdate {
         try InstalledCLI.requirePrivatePath(executable, regularFile: true)
         let child = Process()
         child.executableURL = executable
-        child.arguments = ["--finish-update", staged.app.path, String(getpid())]
+        child.arguments = [
+            "--finish-update", staged.app.path, String(getpid()), helperRequired ? "1" : "0",
+        ]
         child.standardInput = FileHandle.nullDevice
         child.standardOutput = FileHandle.nullDevice
         child.standardError = FileHandle.nullDevice
         try child.run()
+        do {
+            try handOff(ProcessIdentity(pid: child.processIdentifier))
+        } catch {
+            if child.isRunning { child.terminate() }
+            throw error
+        }
         launched = true
     }
 

@@ -12,7 +12,9 @@ enum LimitlessApp {
         guard geteuid() != 0 else { exit(1) }
         if CommandLine.arguments.dropFirst().first == "--finish-update" {
             let args = Array(CommandLine.arguments.dropFirst())
-            guard args.count == 3, let parent = Int32(args[2]) else { exit(64) }
+            guard args.count == 4, let parent = Int32(args[2]), ["0", "1"].contains(args[3])
+            else { exit(64) }
+            let helperRequired = args[3] == "1"
             let app = NSApplication.shared
             app.setActivationPolicy(.accessory)
             Task {
@@ -27,9 +29,10 @@ enum LimitlessApp {
                         guard try UpdatePreferences.readBackup() == nil else {
                             throw UpdateError.busy
                         }
+                        let pendingRecovery = try UpdatePreferences.helperRecovery() != nil
                         let backup = AppModel.UpdateBackup(
                             name: backupURL.lastPathComponent,
-                            helperRequired: try UpdatePreferences.helperRecovery() != nil,
+                            helperRequired: helperRequired || pendingRecovery,
                             installer: installer)
                         return try UpdatePreferences.reserveBackup(backup)
                     }
@@ -501,9 +504,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         if model.removalComplete { return .terminateNow }
         guard !terminating else { return .terminateCancel }
         let quitEvent = NSAppleEventManager.shared().currentAppleEvent
+        let systemRestart = Self.isSystemRestart(quitEvent)
         terminating = true
         Task {
-            if !model.isPreview && Self.isSystemRestart(quitEvent) {
+            if !model.isPreview && systemRestart {
                 await model.refresh()
                 if Self.shouldDeferRestart(
                     presentation: model.presentation, sessions: model.status?.sessions ?? [],
@@ -515,7 +519,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                     return
                 }
             }
-            let restored = await model.prepareToQuit()
+            let restored = await model.prepareToQuit(systemRestart: systemRestart)
             var shouldQuit = restored
             if !restored {
                 let alert = NSAlert()

@@ -232,10 +232,15 @@ import UserNotifications
 
     func restoreUpdateHelperIfNeeded(confirmReady: (() async -> Bool)? = nil) async {
         guard updateRecoveryReadable, updateHelperRecoveryPending, trustedBuild, !isPreview,
-            updateHelperRecoveryReceipt?.requesterIsStillRunning != true,
             let helper
         else { return }
         do {
+            if updateHelperRecoveryReceipt != nil,
+                let recovery = try UpdatePreferences.helperRecovery(),
+                recovery.requesterIsStillRunning
+            {
+                return
+            }
             if [.notRegistered, .notFound].contains(helper.status) {
                 try await helper.register()
             }
@@ -589,7 +594,15 @@ import UserNotifications
                 await refresh()
                 return
             }
-            try GitHubUpdate.launchInstaller(candidate, identity: identity)
+            let recovery = updateHelperRecoveryReceipt
+            try GitHubUpdate.launchInstaller(
+                candidate, identity: identity, helperRequired: recovery != nil
+            ) {
+                installer in
+                if let recovery {
+                    try UpdatePreferences.handOffHelperRecovery(recovery, to: installer)
+                }
+            }
             launched = true
             NSApp.terminate(nil)
         } catch {
@@ -1146,9 +1159,14 @@ import UserNotifications
         guard trustedBuild, !isPreview, !busy, !removalComplete, let helper else { return }
         busy = true
         do {
+            guard (try? UpdatePreferences.helperRecovery()?.requesterIsStillRunning) != true else {
+                throw UpdateError.busy
+            }
             try await helper.register()
             pendingLoginSetup = true
             if !updatesConsentRecorded { setAutomaticUpdates(true) }
+        } catch UpdateError.busy {
+            message = "Another Limitless instance is updating."
         } catch {
             message =
                 "The helper could not be enabled. Complete the macOS approval before retrying."
@@ -1397,7 +1415,7 @@ import UserNotifications
         }
     }
 
-    func prepareToQuit() async -> Bool {
+    func prepareToQuit(systemRestart: Bool) async -> Bool {
         if isPreview { return true }
         quitting = true
         updateEnvironment()
@@ -1407,7 +1425,7 @@ import UserNotifications
         let unresolved =
             (status?.sleep.ownsGlobalHold == true)
             && (connectionError != nil || status?.sleep.fault != nil || ownSession != nil)
-        if unresolved || audioMessage != nil {
+        if unresolved || (!systemRestart && audioMessage != nil) {
             quitting = false
             return false
         }
