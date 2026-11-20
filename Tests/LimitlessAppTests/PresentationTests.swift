@@ -303,30 +303,35 @@ private func status(
         defer { preferences.removePersistentDomain(forName: suite) }
         let helper = MockUpdateHelper(status: .notRegistered)
         helper.registrationFails = true
-        preferences.set(true, forKey: AppModel.updateHelperRecoveryKey)
-        let model = AppModel(
+        preferences.set(true, forKey: "restoreHelperAfterUpdate")
+        let oldPreferences = AppModel(
             preferences: preferences, helper: helper, buildTrust: .trusted)
+        await oldPreferences.restoreUpdateHelperIfNeeded { true }
+        #expect(helper.registrations == 0 && !oldPreferences.updateHelperRecoveryPending)
+        let model = AppModel(
+            preferences: preferences, helper: helper, buildTrust: .trusted,
+            updateHelperRecoveryPending: true)
         await model.restoreUpdateHelperIfNeeded { false }
         #expect(helper.registrations == 1)
-        #expect(preferences.bool(forKey: AppModel.updateHelperRecoveryKey))
+        #expect(model.updateHelperRecoveryPending)
         #expect(model.message != nil)
         helper.registrationFails = false
         await model.restoreUpdateHelperIfNeeded { false }
         #expect(helper.registrations == 2)
         #expect(helper.status == .enabled)
-        #expect(preferences.bool(forKey: AppModel.updateHelperRecoveryKey))
+        #expect(model.updateHelperRecoveryPending)
         await model.restoreUpdateHelperIfNeeded { true }
         #expect(helper.registrations == 2)
-        #expect(preferences.object(forKey: AppModel.updateHelperRecoveryKey) == nil)
+        #expect(!model.updateHelperRecoveryPending)
 
         let pending = MockUpdateHelper(status: .requiresApproval)
-        preferences.set(true, forKey: AppModel.updateHelperRecoveryKey)
         let reopened = AppModel(
-            preferences: preferences, helper: pending, buildTrust: .trusted)
+            preferences: preferences, helper: pending, buildTrust: .trusted,
+            updateHelperRecoveryPending: true)
         await reopened.restoreUpdateHelperIfNeeded()
         #expect(pending.registrations == 0)
         #expect(reopened.helperStatus == .requiresApproval)
-        #expect(preferences.object(forKey: AppModel.updateHelperRecoveryKey) == nil)
+        #expect(!reopened.updateHelperRecoveryPending)
     }
 
     @Test @MainActor func sudoTouchIDPermissionFeedbackPreservesSessionState() throws {

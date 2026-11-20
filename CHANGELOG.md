@@ -13,7 +13,7 @@
 
 ### Sessions, power, and the lid
 
-- Manual use, the CLI, and AI tasks share a single keep-awake session. Each request keeps its own deadline and limits. The global Stop action ends the shared protection.
+- Concurrent CLI and AI requests share one keep-awake session while keeping their own deadlines and limits. A manual session takes priority so automated requests cannot extend it.
 - The helper restores approved power limits after a restart, including when CLI access is off. After upgrading from 1.1 or earlier, review your power limits in Options once.
 - Critical thermal state ends protection and blocks new starts until macOS reports that it has cooled. Battery cutoffs and session deadlines continue to apply.
 - Keep the display awake or let it sleep during a session. Limitless distinguishes a closed lid with an external display from a closed lid without one.
@@ -31,17 +31,19 @@
 ### Updates, cleanup, and verification
 
 - Recover safely from interrupted updates. The previous installation stays available until the new app starts and its power helper is confirmed when required.
+- Keep update recovery state in Keychain and leave backups from the older updater in place. A missing backup clears its protected receipt.
 - Offer a manual download when the installed app cannot be replaced automatically. Automatic updates still require an idle session and a matching signing identity.
 - Restore normal sleep during uninstall before handling audio or Keychain errors. Existing external Touch ID settings are preserved during uninstall.
 - Uninstall requires confirmation in the menu. The helpers verify macOS administrator approval before removing system components, granting CLI access, or changing Touch ID for sudo.
 - Reserve space for app controls even when many CLI or agent tasks connect.
 - Install a protected CLI per account when the shared application or command directories are writable. Use **Migrate CLI & agent hooks…** in Options to retire the old shortcut and update Limitless hooks in that account.
 - Keep hotspot consent with the saved credential in Keychain. Preserve the access restrictions on agent settings and avoid copying extra files into the release.
-- Stop disables further CLI and agent starts if it ended automated work. Re-enable CLI access in Options to start new automated work.
+- Stop ends the session and withdraws CLI and agent approval. Re-enable CLI access in Options to start new automated work.
 - Keep the automatic-update choice and retry schedule in Keychain. Review your automatic-update preference after upgrading from an older release.
 - Respect the choice to disable launch at login. If you quit during helper approval, you can enable launch at login separately in Options.
 - Add regression tests for session ownership and timing, thermal limits, hotspot cancellation, audio restoration, and update recovery. CI checks Swift compilation, sanitizers, dependencies, workflows, and secrets.
 - Add an interactive demo and GitHub workflows that attest inert preview archives and verified distribution packages.
+- Pin release packaging to the project's Apple Developer Team. Reject unsupported PAM file bytes before changing Touch ID for sudo.
 
 ## 1.1.0 — 2026-10-21
 

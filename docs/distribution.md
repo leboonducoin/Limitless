@@ -59,6 +59,10 @@ to the Trash. If macOS asks for administrator approval during removal, the power
 Touch ID helpers have separate approvals; a missing Touch ID helper may first need
 to be restored to remove a Limitless-owned Touch ID rule.
 
+When upgrading from 1.1 or earlier, enable the power helper again if requested
+in Options and review Power. Limitless leaves the older updater's backup in
+place because it has no protected recovery receipt for that transaction.
+
 To move Limitless farther right in the menu bar, hold Command and drag its icon. macOS remembers
 that position for later launches.
 
@@ -93,7 +97,9 @@ signed app's build record supplies the source revision for the local compilation
 2. Create a draft release targeting the full source commit SHA. Prepare a
    `Limitless-Signed-App.zip` with the verified `Limitless.app` at its root.
    Upload that input to the draft and record its SHA-256 on the signing Mac.
-3. Dispatch the workflow with the draft tag, input SHA-256 and Apple Team ID.
+3. Dispatch the workflow with the draft tag and input SHA-256. The workflow
+   checks the signature against Limitless's Apple Developer Team and matches the
+   signed build record to the workflow's source commit.
    Download the `Limitless-distribution` artifact and verify the ZIP before attaching it.
 
 ```sh

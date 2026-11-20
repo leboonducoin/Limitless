@@ -1,5 +1,6 @@
 import Foundation
 import LimitlessCore
+import LimitlessSystem
 import Testing
 
 @testable import LimitlessApp
@@ -117,7 +118,8 @@ private func protection(
 #endif
 
 @Test func aReplacementRetainsItsBackupUntilTheRequiredHelperIsReady() throws {
-    let backup = AppModel.UpdateBackup(name: "test", helperRequired: true)
+    let installer = try ProcessIdentity.current()
+    let backup = AppModel.UpdateBackup(name: "test", helperRequired: true, installer: installer)
     let idle = try protection(nil, [], phase: .recovering)
     let ready = ServiceStatus(
         policy: idle.policy, power: idle.power,
@@ -126,7 +128,9 @@ private func protection(
     #expect(!backup.canRetire(after: nil))
     #expect(!backup.canRetire(after: idle))
     #expect(backup.canRetire(after: ready))
-    #expect(AppModel.UpdateBackup(name: "test", helperRequired: false).canRetire(after: nil))
+    #expect(
+        AppModel.UpdateBackup(name: "test", helperRequired: false, installer: installer)
+            .canRetire(after: nil))
 }
 
 @Test func commandClickRequiresBothEndpointsInsideTheItemAndRejectsDrags() {

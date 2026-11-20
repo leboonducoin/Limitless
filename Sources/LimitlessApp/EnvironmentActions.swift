@@ -270,11 +270,15 @@ private enum AppKeychain {
         let attributes = [kSecValueData as String: data]
         let status = SecItemUpdate(request as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {
-            return SecItemAdd(
-                request.merging(attributes) { _, value in value } as CFDictionary, nil)
-                == errSecSuccess
+            return add(data, service: service, account: account)
         }
         return status == errSecSuccess
+    }
+
+    static func add(_ data: Data, service: String, account: String) -> Bool {
+        var request = query(service, account: account)
+        request[kSecValueData as String] = data
+        return SecItemAdd(request as CFDictionary, nil) == errSecSuccess
     }
 
     static func read(service: String, account: String) -> Data? {
@@ -352,9 +356,37 @@ enum UpdatePreferences {
         _ = AppKeychain.save(data, service: "updates", account: "schedule")
     }
 
+    static var needsHelperRecovery: Bool {
+        AppKeychain.read(service: "updates", account: "helper-recovery") == Data([1])
+    }
+
+    static func requestHelperRecovery() -> Bool {
+        AppKeychain.save(Data([1]), service: "updates", account: "helper-recovery")
+    }
+
+    static func clearHelperRecovery() -> Bool {
+        AppKeychain.remove(service: "updates", account: "helper-recovery")
+    }
+
+    static func readBackup() -> AppModel.UpdateBackup? {
+        guard let data = AppKeychain.read(service: "updates", account: "backup"),
+            data.count <= 1_024
+        else { return nil }
+        return try? JSONDecoder().decode(AppModel.UpdateBackup.self, from: data)
+    }
+
+    static func saveBackup(_ backup: AppModel.UpdateBackup) -> Bool {
+        guard let data = try? JSONEncoder().encode(backup) else { return false }
+        return AppKeychain.add(data, service: "updates", account: "backup")
+    }
+
+    static func clearBackup() -> Bool { AppKeychain.remove(service: "updates", account: "backup") }
+
     static func remove() -> Bool {
         let removedConsent = AppKeychain.remove(service: "updates", account: "automatic")
-        return AppKeychain.remove(service: "updates", account: "schedule") && removedConsent
+        let removedSchedule = AppKeychain.remove(service: "updates", account: "schedule")
+        let removedRecovery = clearHelperRecovery()
+        return clearBackup() && removedRecovery && removedSchedule && removedConsent
     }
 }
 

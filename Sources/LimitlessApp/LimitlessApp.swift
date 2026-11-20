@@ -16,24 +16,21 @@ enum LimitlessApp {
             app.setActivationPolicy(.accessory)
             Task {
                 do {
-                    let preferences = UserDefaults.standard
-                    let backupKey = AppModel.updateBackupKey
-                    guard preferences.object(forKey: backupKey) == nil else {
+                    guard UpdatePreferences.readBackup() == nil else {
                         throw UpdateError.busy
                     }
-                    let helperRequired = preferences.bool(forKey: AppModel.updateHelperRecoveryKey)
+                    let helperRequired = UpdatePreferences.needsHelperRecovery
+                    let installer = try ProcessIdentity.current()
                     let installed = try await GitHubUpdate.finish(
                         app: URL(fileURLWithPath: args[1]), parentPID: parent
                     ) { backupURL in
-                        let preferences = UserDefaults.standard
-                        guard preferences.object(forKey: backupKey) == nil else {
+                        guard UpdatePreferences.readBackup() == nil else {
                             throw UpdateError.busy
                         }
                         let backup = AppModel.UpdateBackup(
-                            name: backupURL.lastPathComponent, helperRequired: helperRequired)
-                        preferences.set(
-                            try JSONEncoder().encode(backup), forKey: backupKey)
-                        guard preferences.synchronize() else { throw UpdateError.failed }
+                            name: backupURL.lastPathComponent, helperRequired: helperRequired,
+                            installer: installer)
+                        guard UpdatePreferences.saveBackup(backup) else { throw UpdateError.failed }
                     }
                     let configuration = NSWorkspace.OpenConfiguration()
                     configuration.createsNewApplicationInstance = true
@@ -44,8 +41,7 @@ enum LimitlessApp {
                         _ = try FileManager.default.replaceItemAt(
                             installed.app, withItemAt: installed.backup,
                             options: .usingNewMetadataOnly)
-                        preferences.removeObject(forKey: backupKey)
-                        _ = preferences.synchronize()
+                        _ = UpdatePreferences.clearBackup()
                         throw error
                     }
                     try? FileManager.default.removeItem(at: installed.staging)

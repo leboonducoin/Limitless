@@ -9,11 +9,10 @@ import UserNotifications
 
 @MainActor @Observable final class AppModel {
     enum BuildTrust { case checking, trusted, untrusted }
-    static let updateHelperRecoveryKey = "restoreHelperAfterUpdate"
-    static let updateBackupKey = "updateBackup"
-    struct UpdateBackup: Codable, Equatable {
+    struct UpdateBackup: Codable, Equatable, Sendable {
         let name: String
         let helperRequired: Bool
+        let installer: ProcessIdentity
 
         func canRetire(after reading: ServiceStatus?) -> Bool {
             if !helperRequired { return true }
@@ -128,11 +127,13 @@ import UserNotifications
     private var updateMonitoring: Task<Void, Never>?
     private var updateInstallation: Task<Void, Never>?
     private var retiringUpdateBackup = false
+    private var updateBackup: UpdateBackup?
+    private(set) var updateHelperRecoveryPending: Bool
     private var checkingUpdates = false
-    private var persistsUpdateSchedule = false
+    private var persistsUpdateState = false
     private var updateSchedule: UpdateSchedule {
         didSet {
-            if persistsUpdateSchedule { UpdatePreferences.saveSchedule(updateSchedule) }
+            if persistsUpdateState { UpdatePreferences.saveSchedule(updateSchedule) }
         }
     }
     private var statusReceivedAt = ContinuousClock.now
@@ -149,7 +150,8 @@ import UserNotifications
                 forInfoDictionaryKey: "LimitlessHelperInstallation") as? String)
             .flatMap(HelperInstallationKind.init(rawValue:))?.service,
         buildTrust: BuildTrust = .checking,
-        updateSchedule: UpdateSchedule = UpdateSchedule()
+        updateSchedule: UpdateSchedule = UpdateSchedule(),
+        updateHelperRecoveryPending: Bool = false
     ) {
         self.preferences = preferences
         self.helper = helper
@@ -173,6 +175,7 @@ import UserNotifications
             authentication.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
             && authentication.biometryType == .touchID
         self.updateSchedule = updateSchedule
+        self.updateHelperRecoveryPending = updateHelperRecoveryPending
         automaticUpdates = false
     }
 
@@ -195,7 +198,9 @@ import UserNotifications
                 automaticUpdates = enabled
             }
             if let schedule = UpdatePreferences.readSchedule() { updateSchedule = schedule }
-            persistsUpdateSchedule = true
+            updateBackup = UpdatePreferences.readBackup()
+            updateHelperRecoveryPending = UpdatePreferences.needsHelperRecovery
+            persistsUpdateState = true
         }
         if trustedBuild, !InstalledCLI.sharedPathIsProtected {
             do {
@@ -209,7 +214,7 @@ import UserNotifications
     }
 
     func restoreUpdateHelperIfNeeded(confirmReady: (() async -> Bool)? = nil) async {
-        guard preferences.bool(forKey: Self.updateHelperRecoveryKey), trustedBuild, !isPreview,
+        guard updateHelperRecoveryPending, trustedBuild, !isPreview,
             let helper
         else { return }
         do {
@@ -246,22 +251,27 @@ import UserNotifications
     }
 
     private func clearUpdateHelperRecovery() {
-        preferences.removeObject(forKey: Self.updateHelperRecoveryKey)
-        _ = preferences.synchronize()
+        guard updateHelperRecoveryPending else { return }
+        guard !persistsUpdateState || UpdatePreferences.clearHelperRecovery() else {
+            updateMessage = "Unlock Keychain to clear the completed helper recovery."
+            return
+        }
+        updateHelperRecoveryPending = false
     }
 
     func retireUpdateBackupIfReady() async {
-        guard trustedBuild, !isPreview, !quitting, !retiringUpdateBackup,
-            let data = preferences.data(forKey: Self.updateBackupKey),
-            let backup = try? JSONDecoder().decode(UpdateBackup.self, from: data),
-            backup.canRetire(after: canControl ? status : nil)
+        guard trustedBuild, !isPreview, !quitting, !retiringUpdateBackup, let backup = updateBackup,
+            !backup.installer.isAlive
         else { return }
         retiringUpdateBackup = true
         defer { retiringUpdateBackup = false }
         do {
-            try await GitHubUpdate.retirePreviousApplication(named: backup.name)
-            if preferences.data(forKey: Self.updateBackupKey) == data {
-                preferences.removeObject(forKey: Self.updateBackupKey)
+            let mayRetire = backup.canRetire(after: canControl ? status : nil)
+            if try await GitHubUpdate.retirePreviousApplication(
+                named: backup.name, mayRetire: mayRetire), updateBackup == backup
+            {
+                guard UpdatePreferences.clearBackup() else { throw ServiceError.unavailable }
+                updateBackup = nil
             }
         } catch {
             updateMessage =
@@ -344,7 +354,7 @@ import UserNotifications
     var draftChanged: Bool { draft != baseline }
     private var readyToUpdate: Bool {
         guard connectionError == nil, !removalComplete, !cliMigrationRequired,
-            preferences.object(forKey: Self.updateBackupKey) == nil
+            updateBackup == nil, !updateHelperRecoveryPending
         else { return false }
         guard let status else { return helperStatus == .notRegistered }
         return status.sessions.isEmpty && !status.sleep.ownsGlobalHold
@@ -365,7 +375,7 @@ import UserNotifications
     func updateInstallBlockMessage(manual: Bool = false) -> String {
         if cliMigrationRequired { return "Finish CLI migration before updating again." }
         if needsManualUpdate { return "Download the update and replace Limitless in Applications." }
-        if preferences.object(forKey: Self.updateBackupKey) != nil {
+        if updateBackup != nil || updateHelperRecoveryPending {
             return "Waiting for the previous update to be confirmed."
         }
         return !updateSchedule.canBeginDownload(manual: manual)
@@ -547,8 +557,10 @@ import UserNotifications
             guard !quitting else { return }
             updateMessage = "Installing update…"
             if helper?.status == .enabled {
-                preferences.set(true, forKey: Self.updateHelperRecoveryKey)
-                guard preferences.synchronize() else { throw ServiceError.unavailable }
+                guard UpdatePreferences.requestHelperRecovery() else {
+                    throw ServiceError.unavailable
+                }
+                updateHelperRecoveryPending = true
             }
             guard await removeIntegration(forUpdate: true) else {
                 updateMessage = message
@@ -589,6 +601,9 @@ import UserNotifications
 
     func refresh() async {
         guard !isPreview, !busy, !refreshing, !quitting else { return }
+        defer {
+            if updateBackup != nil { Task { await retireUpdateBackupIfReady() } }
+        }
         helperStatus = helper?.status ?? .notFound
         loginStatus = SMAppService.mainApp.status
         guard trustedBuild, helperStatus == .enabled else {
@@ -648,12 +663,9 @@ import UserNotifications
             connectionError = nil
             if !updating, reply.status?.removal == RemovalState.none,
                 reply.status?.policyConfigured == true,
-                preferences.bool(forKey: Self.updateHelperRecoveryKey)
+                updateHelperRecoveryPending
             {
                 clearUpdateHelperRecovery()
-            }
-            if preferences.object(forKey: Self.updateBackupKey) != nil {
-                Task { await retireUpdateBackupIfReady() }
             }
         } catch {
             guard currentRevision == revision else { return }

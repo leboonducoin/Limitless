@@ -11,10 +11,6 @@ on:
         description: SHA-256 of the signed input zip, computed on the signing Mac
         required: true
         type: string
-      apple_team:
-        description: Apple Developer Team ID used to sign the app
-        required: true
-        type: string
 
 permissions: {}
 
@@ -70,10 +66,9 @@ jobs:
         env:
           DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
           TAG: ${{ inputs.tag }}
-          TEAM: ${{ inputs.apple_team }}
+          TEAM: 'M6XP489RMK'
           INPUT_SHA256: ${{ inputs.signed_app_sha256 }}
         run: |
-          [[ "$TEAM" =~ ^[A-Z0-9]{10}$ ]]
           [[ "$INPUT_SHA256" =~ ^[a-f0-9]{64}$ ]]
           printf '%s  %s\n' "$INPUT_SHA256" "$RUNNER_TEMP/Limitless-Signed-App.zip" | shasum -a 256 -c
           mkdir "$RUNNER_TEMP/signed-input"

@@ -528,12 +528,15 @@ public enum GitHubUpdate {
         return directory.appendingPathComponent(name, isDirectory: true)
     }
 
-    @concurrent public static func retirePreviousApplication(named name: String) async throws {
+    @concurrent public static func retirePreviousApplication(
+        named name: String, mayRetire: Bool
+    ) async throws -> Bool {
         let identity = try await SignedIdentity.current(
             expectedIdentifier: LimitlessIdentity.application)
         let current = try await currentInstalledApplication(identity: identity)
         let backup = try previousBackupURL(named: name, in: current.deletingLastPathComponent())
-        guard try !SecureOwnershipJournal.directoryIsAbsent(at: backup.path) else { return }
+        if try SecureOwnershipJournal.directoryIsAbsent(at: backup.path) { return true }
+        guard mayRetire else { return false }
         guard try canonical(backup) == backup else { throw UpdateError.unsafeLocation }
         let details = try identity.verifyExecutable(
             at: backup, identifier: LimitlessIdentity.application)
@@ -545,6 +548,7 @@ public enum GitHubUpdate {
             try version(previousVersion).lexicographicallyPrecedes(version(currentVersion))
         else { throw UpdateError.untrustedBuild }
         try FileManager.default.removeItem(at: backup)
+        return true
     }
 
     @concurrent public static func finish(
