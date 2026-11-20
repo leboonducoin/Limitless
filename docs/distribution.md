@@ -101,7 +101,7 @@ Attach the three verified files from the artifact to the draft. Remove the
 signed input ZIP from the draft before publication. The workflow requires no
 signing key. GitHub requires access to draft releases in the fetch job, which
 only downloads and hashes the input. Packaging and attestation run in separate
-jobs with their own permissions.
+jobs with their own permissions. Runs for the same tag cannot overlap.
 
 ## Host the interactive demo
 
