@@ -58,3 +58,16 @@ that position for later launches.
 Right-click the menu-bar icon → **Uninstall Limitless**. This stops sessions and
 removes the app, helper, CLI shortcut, login item, preferences and AI integrations
 installed by Limitless. Existing Touch ID settings and recovery backups are kept.
+The **Attested preview** workflow can build an inert Debug archive from `main`
+on request. The workflow artifact includes `SHA256SUMS` and has a GitHub build
+attestation. Use the full commit SHA from the preview's workflow run as `COMMIT`.
+
+```sh
+shasum -a 256 -c SHA256SUMS
+gh attestation verify Limitless-Preview.zip --repo leboonducoin/Limitless \
+  --signer-workflow leboonducoin/Limitless/.github/workflows/preview-build.yml \
+  --source-ref refs/heads/main --source-digest "$COMMIT"
+```
+
+The preview has a separate identity and cannot enable protection. GitHub Releases
+carries the user-installable signed app.
