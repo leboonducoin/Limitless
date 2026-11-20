@@ -167,12 +167,9 @@ struct MenuBarTime: Equatable {
         if hours >= 100 {
             return Self(top: "\(hours / 24)", bottom: "d", accessibilityLabel: "\(label) remaining")
         }
-        if hours > 0 {
-            return Self(
-                top: "\(hours)h", bottom: String(format: "%02d", minutes % 60),
-                accessibilityLabel: "\(label) remaining")
-        }
-        return Self(top: "\(minutes)m", bottom: "", accessibilityLabel: "\(label) remaining")
+        return Self(
+            top: hours == 0 ? "00h" : "\(hours)h", bottom: String(format: "%02d", minutes % 60),
+            accessibilityLabel: "\(label) remaining")
     }
 
     static func end(at deadline: Date, calendar: Calendar = .current) -> Self {

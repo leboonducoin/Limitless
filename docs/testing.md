@@ -50,8 +50,9 @@ Reduce Motion/Transparency. Check that the Options label, icon, blank space and 
 open Options. Scroll to the App category while the session controls stay visible. Close the
 panel and reopen it to verify Options is collapsed. From a background launch, verify that the
 first click on the item opens the panel and a single click on Options expands it. Verify the
-minute-only display fits on one line with its orange mark. Check that content fits when Automatic
-updates changes or an Update button appears. Keyboard input must follow the Mac's layout and locale.
+minute-only display shows `00h` above the minutes with its orange mark. Check that content fits
+when Automatic updates changes or an Update button appears. Keyboard input must follow the Mac's
+layout and locale.
 
 ## Test the installed app
 

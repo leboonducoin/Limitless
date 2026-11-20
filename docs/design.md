@@ -5,8 +5,9 @@ separate preferences window. Content sets the height; long lists scroll.
 
 - 21-point title. Battery and remaining time share the callout size.
 - The status item stays the same width in all three styles. The default rounds remaining time
-  up to a whole minute and uses one line below an hour, such as `59m`. Longer countdowns and
-  local end times use two lines. Timed styles have a small orange loop at the lower right.
+  up to a whole minute. It stacks the hours above two-digit minutes, including `00h` above
+  `59` for 59 minutes. Local end times also use two lines. Timed styles have a small orange
+  loop at the lower right.
   Icon-only and unlimited sessions use the full orange loop during active protection.
 - macOS restores the menu-bar position after the user moves the item with Command-drag.
 - Command-click starts the configured favorite while idle and adds 15 minutes to an owned active timer. Command-Return starts from the open panel, Command-Plus extends, and Command-Period stops.
