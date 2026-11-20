@@ -34,8 +34,9 @@ Privacy & Security → Open Anyway**. [Apple’s instructions](https://support.a
 
 Choose a duration and click **Keep awake**. The orange mark indicates active protection.
 
-Command-click the menu-bar icon to start your favorite duration. Timed sessions
-can show their end time beside the orange Limitless mark. Open **Options** for display
+Command-click the menu-bar icon to start your favorite duration or add 15 minutes
+to your running timer. The menu bar shows remaining time by default, with options
+for the end time or the icon alone. Open **Options** for display
 sleep, notifications, audio muting, iPhone hotspot fallback and agent setup.
 
 Concurrent eligible requests share one protection session. Each keeps its

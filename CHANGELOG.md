@@ -1,6 +1,42 @@
 # Changelog
 
-## 1.1.0 — Unreleased
+## 1.2.0 — Unreleased
+
+### Menu bar and keyboard
+
+- Use Limitless directly from the menu bar. The popover responds on the first click and keeps session controls visible while Options scrolls beneath them.
+- Open Options from the whole row, including the label and icon. Settings are grouped by purpose, Power source comes first in Power, and Options collapses when the popover closes.
+- Command-click starts your favorite duration when idle or when only AI tasks are active. During your own timer or dated session, it adds 15 minutes within your limits.
+- Use Command-Return to start, Command-Plus to extend, and Command-Period to stop. Tab, Space, and Escape work in the popover.
+- Choose remaining time, end time, or an icon alone. Remaining time is the default and shows `00h` when less than an hour remains. All three modes keep the same menu-bar width and show an orange Limitless mark during protection.
+- Get a reminder in the final five minutes and a notification with the reason when the shared session ends. Notifications default to on at first launch and follow macOS permission and your setting. Short sessions can also report their ending.
+
+### Sessions, power, and the lid
+
+- Manual use, the CLI, and AI tasks share a single keep-awake session. Each request keeps its own deadline and limits. The global Stop action ends the shared protection.
+- Saved power limits are restored after the helper restarts before another session can start, including when CLI access is off.
+- Critical thermal state ends protection and blocks new starts until macOS reports that it has cooled. Battery cutoffs and session deadlines continue to apply.
+- Keep the display awake or let it sleep during a session. Limitless distinguishes a closed lid with an external display from a closed lid without one.
+- Opt in to muting audio when the display sleeps or when the lid closes without an external screen. Limitless restores the mute it applied to the original output and preserves a mute you set yourself.
+- Enable optional iPhone hotspot fallback for a specific password-protected network. Credentials stay in the local Keychain. Limitless checks that the session is still eligible before scanning and again before joining.
+- Out-of-range timer values are rejected before a session starts, and old out-of-range values can be displayed safely.
+
+### CLI and AI integrations
+
+- `limitless doctor` reports the authenticated helper, active protection, power and thermal readings, and protocol. Copy diagnostics from the menu when reporting a problem.
+- See which agent or provider is keeping the Mac awake, alongside any manual request. The bundled skill explains how lifecycle hooks protect Codex, Claude, Cursor, and Gemini tasks and how their protection ends.
+- Recover abandoned task markers while preserving the markers used by active workers. Disabling or removing a Limitless integration leaves unmanaged agent configuration alone.
+- Changing CLI access leaves the current power limits in place. Protocol 13 requires the app, CLI, and helpers from the same release.
+
+### Updates, cleanup, and verification
+
+- Recover safely from interrupted updates. The previous installation stays available until the new app starts and its power helper is confirmed when required.
+- Offer a manual download when the installed app cannot be replaced automatically. Automatic updates still require an idle session and a matching signing identity.
+- Restore normal sleep during uninstall before handling audio or Keychain errors. Existing external Touch ID settings are preserved during uninstall.
+- Add regression tests for session ownership and timing, thermal limits, hotspot cancellation, audio restoration, and update recovery. CI checks Swift compilation, sanitizers, dependencies, workflows, and secrets.
+- Add an interactive demo and GitHub workflows that attest inert preview archives and verified distribution packages.
+
+## 1.1.0 — 2026-10-21
 
 - Keep the display awake during eligible sessions to prevent automatic idle locking, and verify both display and system assertions. Manual locking remains available.
 - Add a small circular + beside Stop to extend an owned timer or date by 15 minutes per click. Rapid clicks accumulate; Stop discards pending additions. Existing policy ceilings and cutoff protection remain in force.
