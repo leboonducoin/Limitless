@@ -97,6 +97,7 @@ Run **Attest distribution archive** manually from the exact release commit on
 `main`. The workflow verifies and packages a locally signed and stapled
 Developer ID input. Its attestation describes the GitHub packaging run. The
 signed app's build record supplies the source revision for the local compilation.
+Signing compiles and verifies the app in a fresh private workspace before export.
 
 1. Pass the release's CI and Security gates and record the
    [physical acceptance results](compatibility.md).

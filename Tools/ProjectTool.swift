@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 import MachO
 import Security
@@ -446,7 +447,28 @@ func archive(_ app: URL, to destination: URL) throws {
         ["-c", "-k", "--sequesterRsrc", "--keepParent", app.path, destination.path])
 }
 
+func privateSigningWorkspace() throws -> URL {
+    var parent = stat()
+    try require(
+        lstat("/private/tmp", &parent) == 0 && parent.st_uid == 0
+            && parent.st_mode & S_IFMT == S_IFDIR && parent.st_mode & S_ISVTX != 0,
+        "Release signing requires the system's sticky temporary directory.")
+    var path = Array("/private/tmp/limitless-signing-XXXXXX".utf8CString)
+    guard path.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress) != nil }) else {
+        throw CocoaError(.fileWriteUnknown)
+    }
+    let workspace = path.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+    return URL(fileURLWithPath: workspace, isDirectory: true)
+}
+
 func selfTest(developmentApp: URL? = nil) throws {
+    let signingWorkspace = try privateSigningWorkspace()
+    defer { try? FileManager.default.removeItem(at: signingWorkspace) }
+    var workspace = stat()
+    try require(
+        lstat(signingWorkspace.path, &workspace) == 0 && workspace.st_uid == geteuid()
+            && workspace.st_mode & 0o777 == 0o700,
+        "Release signing workspace must be private to the current user.")
     func rejects(_ operation: () throws -> Void) throws {
         var accepted = false
         do {
@@ -717,10 +739,16 @@ do {
         ?? run("/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-path"], capture: true)
     let sdkVersion = try run(
         "/usr/bin/xcrun", ["--sdk", sdkPath, "--show-sdk-version"], capture: true)
+    let signingWorkspace = signing ? try privateSigningWorkspace() : nil
+    defer {
+        if let signingWorkspace { try? FileManager.default.removeItem(at: signingWorkspace) }
+    }
+    let scratchDirectory =
+        signingWorkspace?.appendingPathComponent("Build", isDirectory: true).path
+        ?? ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]
     let buildPath =
         ["--sdk", sdkPath]
-        + (ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]
-            .map { ["--scratch-path", $0] } ?? [])
+        + (scratchDirectory.map { ["--scratch-path", $0] } ?? [])
     if URL(fileURLWithPath: developer).lastPathComponent == "CommandLineTools",
         FileManager.default.fileExists(atPath: plugin)
     {
@@ -740,15 +768,18 @@ do {
             ["debug", "release"].contains(configuration),
             "LIMITLESS_CONFIGURATION must be debug or release.")
         let manager = FileManager.default
-        let output =
+        let requestedOutput =
             ProcessInfo.processInfo.environment["LIMITLESS_OUTPUT_DIR"]
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? manager.temporaryDirectory.appendingPathComponent(
                 "Limitless-\(UUID().uuidString)", isDirectory: true)
-        let app = output.appendingPathComponent("Limitless.app", isDirectory: true)
-        guard !manager.fileExists(atPath: output.path) else {
+        guard !manager.fileExists(atPath: requestedOutput.path) else {
             throw CocoaError(.fileWriteFileExists)
         }
+        let output =
+            signingWorkspace?.appendingPathComponent("Bundle", isDirectory: true)
+            ?? requestedOutput
+        let app = output.appendingPathComponent("Limitless.app", isDirectory: true)
         try manager.createDirectory(at: output, withIntermediateDirectories: false)
         var info = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
         if preview { info["LimitlessPreviewState"] = "active" }
@@ -800,6 +831,13 @@ do {
             ["swift", "build", "-c", configuration, "--show-bin-path"] + architectures + buildPath
                 + compilerFlags,
             capture: true, environment: buildEnvironment)
+        if let signingWorkspace {
+            let products = URL(fileURLWithPath: binaryPath).resolvingSymlinksInPath()
+            let build = signingWorkspace.appendingPathComponent("Build", isDirectory: true)
+            try require(
+                products.path.hasPrefix(build.path + "/"),
+                "Release products must be inside the private signing workspace.")
+        }
         let version = info["CFBundleShortVersionString"] as? String ?? ""
         if preview {
             let modules =
@@ -979,9 +1017,14 @@ do {
             try verifyCompatibility(contents, helperPath: identity.helperPath)
         }
         if signing {
-            _ = try verifyRelease(app, identity: identity, notarized: false)
+            let signed = try verifyRelease(app, identity: identity, notarized: false)
+            try manager.moveItem(at: output, to: requestedOutput)
+            let exported = requestedOutput.appendingPathComponent("Limitless.app")
+            try require(
+                try verifyRelease(exported, identity: identity, notarized: false) == signed,
+                "The signed build changed during export.")
             print(
-                "\(community ? "Community" : "Developer ID") bundle: \(app.path)\nNot installed, not notarized, not published."
+                "\(community ? "Community" : "Developer ID") bundle: \(exported.path)\nNot installed, not notarized, not published."
             )
         } else {
             try selfTest(developmentApp: app)
