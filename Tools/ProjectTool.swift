@@ -888,9 +888,17 @@ do {
         try manager.copyItem(
             at: URL(fileURLWithPath: "THIRD_PARTY_NOTICES.md"),
             to: contents.appendingPathComponent("Resources/THIRD_PARTY_NOTICES.md"))
-        try manager.copyItem(
-            at: URL(fileURLWithPath: "skills/limitless"),
-            to: contents.appendingPathComponent("Resources/limitless-skill"))
+        let skillResources = contents.appendingPathComponent("Resources/limitless-skill")
+        try manager.createDirectory(
+            at: skillResources.appendingPathComponent("hooks"), withIntermediateDirectories: true)
+        for file in [
+            "SKILL.md", "hooks/claude.json", "hooks/codex.json", "hooks/cursor.json",
+            "hooks/gemini.json",
+        ] {
+            try manager.copyItem(
+                at: URL(fileURLWithPath: "skills/limitless/\(file)"),
+                to: skillResources.appendingPathComponent(file))
+        }
         let record = BuildRecord(
             sourceRevision: try run(
                 "/usr/bin/git", ["rev-parse", "--verify", "HEAD"], capture: true),
