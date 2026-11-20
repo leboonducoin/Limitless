@@ -12,7 +12,8 @@ public struct ServiceSessions: Sendable {
         case none
         case update(UInt32)
         case committedUpdate(UInt32)
-        case removal
+        case removal(UInt32)
+        case committedRemoval
     }
     private var drain = Drain.none
     public var isRemoving: Bool { drain != .none }
@@ -20,6 +21,11 @@ public struct ServiceSessions: Sendable {
         if case .update = drain { return true }
         return false
     }
+    public var isPreparingRemoval: Bool {
+        if case .removal = drain { return true }
+        return false
+    }
+    public var isUninstalling: Bool { isPreparingRemoval || drain == .committedRemoval }
     private struct Client: Sendable {
         let user: UInt32
         let role: ClientRole
@@ -43,7 +49,7 @@ public struct ServiceSessions: Sendable {
         if changedUser {
             registry = SessionRegistry(policy: try UserPolicy())
             policyConfigured = false
-            if isPreparingUpdate { drain = .none }
+            if isPreparingUpdate || isPreparingRemoval { drain = .none }
         }
         return expired
     }
@@ -153,7 +159,7 @@ public struct ServiceSessions: Sendable {
             try registry.revokeAutomationAndStop(reason: .requested, at: now.wall)
         case .prepareRemoval:
             try registry.revokeAutomationAndStop(at: now.wall)
-            drain = .removal
+            if drain != .committedRemoval { drain = .removal(client.user) }
         case .prepareUpdate:
             guard registry.sessions.isEmpty else { throw ServiceError.sessionRejected }
             if drain == .none {
@@ -166,7 +172,8 @@ public struct ServiceSessions: Sendable {
             drain = .none
         case .finishRemoval:
             guard
-                drain == .removal || drain == .update(client.user)
+                drain == .removal(client.user) || drain == .committedRemoval
+                    || drain == .update(client.user)
                     || drain == .committedUpdate(client.user)
             else {
                 throw ServiceError.restorationRequired
@@ -179,6 +186,11 @@ public struct ServiceSessions: Sendable {
     public mutating func commitRemoval() throws {
         try registry.revokeAutomationAndStop()
         if case .update(let user) = drain { drain = .committedUpdate(user) }
+        if case .removal = drain { drain = .committedRemoval }
+    }
+
+    public mutating func cancelRemovalPreparation() {
+        if isPreparingRemoval { drain = .none }
     }
 
     public mutating func evaluate(

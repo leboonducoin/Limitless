@@ -399,7 +399,34 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
     }
 }
 
-@Test func removalRevokesWorkAndCannotBeUndoneByAnotherClientOrConsoleChange() throws {
+@Test(arguments: [false, true])
+func unfinishedRemovalReopensAdmissionWithoutRevivingWork(_ switchUser: Bool) throws {
+    var (value, app, task) = try service()
+    let now = try serviceClock(0)
+    let policy = try UserPolicy(batteryFloor: 40, allowsAutomation: true)
+    _ = try value.apply(.configure(policy), owner: app, now: now)
+    _ = try value.apply(.start(SessionRequest()), owner: task, now: now)
+    _ = try value.apply(.prepareRemoval, owner: app, now: now)
+    #expect(value.isPreparingRemoval && value.registry.sessions.isEmpty)
+    if switchUser {
+        try value.expire(now: now, consoleUser: 502)
+        app = UUID()
+        try value.connect(owner: app, user: 502, role: .application, now: now)
+        _ = try value.apply(.restorePolicy, owner: app, now: now, savedPolicy: policy)
+    } else {
+        value.cancelRemovalPreparation()
+    }
+    #expect(!value.isRemoving && !value.isUninstalling)
+    #expect(!value.registry.policy.allowsAutomation && value.registry.policy.batteryFloor == 40)
+    #expect(value.registry.sessions.isEmpty)
+    #expect(throws: ServiceError.restorationRequired) {
+        try value.apply(.finishRemoval, owner: app, now: now)
+    }
+    let started = try value.apply(.start(SessionRequest()), owner: app, now: now)
+    #expect(started != nil)
+}
+
+@Test func committedRemovalRevokesWorkAndCannotBeUndoneByAnotherClientOrConsoleChange() throws {
     var (value, app, task) = try service()
     let now = try serviceClock(0)
     #expect(throws: ServiceError.restorationRequired) {
@@ -411,6 +438,9 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
     _ = try value.apply(.prepareRemoval, owner: app, now: now)
     #expect(value.isRemoving && value.registry.sessions.isEmpty)
     _ = try value.apply(.finishRemoval, owner: app, now: now)
+    try value.commitRemoval()
+    value.cancelRemovalPreparation()
+    #expect(value.isRemoving)
     #expect(!value.registry.policy.allowsAutomation)
     for operation in [
         ServiceOperation.configure(try UserPolicy(allowsAutomation: true)),

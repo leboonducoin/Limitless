@@ -150,13 +150,17 @@ public final class SecureOwnershipJournal: OwnershipJournal {
         try synchronizeDirectory()
     }
 
+    public func verifyUnownedForRemoval() throws {
+        if retirement == .active, try loadOwned() { throw JournalError.ownedStatePresent }
+    }
+
     public func removeUnownedDirectory() throws {
         if retirement == .removed { return }
         if retirement != .unlinked {
             try Self.validateDirectory(parentFD, owner: owner, privateOnly: false)
             try Self.validateDirectory(directoryFD, owner: owner, privateOnly: true)
             try Self.requireSameEntry(parentFD, name: directoryName, descriptor: directoryFD)
-            if retirement == .active, try loadOwned() { throw JournalError.ownedStatePresent }
+            try verifyUnownedForRemoval()
             let copy = fcntl(directoryFD, F_DUPFD_CLOEXEC, 0)
             guard copy >= 0 else { throw JournalError.system(errno) }
             guard let entries = fdopendir(copy) else {

@@ -30,6 +30,7 @@ final class HelperRuntime {
         let now = try SystemClock.now()
         expiredOwners.formUnion(
             try sessions.expire(now: now, consoleUser: ConsoleUser.identifier()))
+        if !sessions.isRemoving { removalReady = false }
         let power = powerReader.snapshot()
         let thermal = ThermalCondition(ProcessInfo.processInfo.thermalState)
         var evaluation = sessions.evaluate(power: power, now: now, thermal: thermal)
@@ -65,7 +66,14 @@ final class HelperRuntime {
         return expiredOwners
     }
 
+    private func canRemove(_ status: ServiceStatus) throws -> Bool {
+        guard status.canRemoveService, !backend.hasIdleAssertion else { return false }
+        try journal.verifyUnownedForRemoval()
+        return true
+    }
+
     func request(_ data: Data, owner: UUID) -> ServiceReply {
+        var attemptedPendingRemoval = false
         do {
             let request = try ServiceWire.decodeRequest(data)
             if case .setSudoTouchID = request.operation { throw ServiceError.unauthorized }
@@ -100,6 +108,9 @@ final class HelperRuntime {
                 if case .configure = operation { sessions } else { nil }
             let started = try sessions.apply(
                 operation, owner: owner, now: SystemClock.now(), savedPolicy: savedPolicy)
+            attemptedPendingRemoval =
+                sessions.isPreparingRemoval
+                && (operation == .prepareRemoval || operation == .finishRemoval)
             if let previousSessions, let user {
                 do {
                     try SavedPowerPolicy.store(sessions.registry.policy, for: user)
@@ -121,24 +132,22 @@ final class HelperRuntime {
             if request.operation == .prepareRemoval || request.operation == .prepareUpdate {
                 removalReady = false
                 let status = try status(owner: owner)
-                guard status.canRemoveService, !backend.hasIdleAssertion
-                else { throw ServiceError.restorationRequired }
-                if request.operation == .prepareRemoval {
-                    if let user = sessions.consoleUser { try InstalledCLI.remove(user: user) }
-                    try SavedPowerPolicy.removeAll()
-                }
+                guard try canRemove(status) else { throw ServiceError.restorationRequired }
                 if installedFiles == nil {
                     installedFiles = try InstalledHelperFiles(identity: identity)
                 }
-                if request.operation == .prepareRemoval { try journal.removeUnownedDirectory() }
                 removalReady = true
             }
             if request.operation == .finishRemoval {
                 let status = try status(owner: owner)
-                guard removalReady, status.canRemoveService,
-                    !backend.hasIdleAssertion
-                else { throw ServiceError.restorationRequired }
+                guard removalReady, try canRemove(status) else {
+                    throw ServiceError.restorationRequired
+                }
+                if sessions.isPreparingRemoval, let user {
+                    try InstalledCLI.remove(user: user)
+                }
                 try sessions.commitRemoval()
+                if sessions.isUninstalling { try SavedPowerPolicy.removeAll() }
                 try journal.removeUnownedDirectory()
                 try installedFiles?.remove()
             }
@@ -152,6 +161,13 @@ final class HelperRuntime {
             }
             return ServiceReply(status: after, startedSession: started)
         } catch {
+            if attemptedPendingRemoval, sessions.isPreparingRemoval,
+                let current = try? status(owner: owner),
+                (try? canRemove(current)) == true
+            {
+                sessions.cancelRemovalPreparation()
+                removalReady = false
+            }
             let failure: ServiceError
             switch error {
             case let value as ServiceError: failure = value

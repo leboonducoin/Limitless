@@ -128,7 +128,9 @@ removing its service; updates preserve the setting. Update preparation can be ca
 same console user while the power helper's recovery record is still intact. An update records
 whether the power helper was enabled, restores it after relaunch and retries from the previous
 app if opening the replacement fails. Uninstall confirms normal sleep before handling audio
-restoration or Keychain cleanup. Failed cleanup stays visible and retryable.
+restoration or Keychain cleanup. A failed power-helper preflight can reopen admission after
+confirmed restoration. Preparation ends on a console user change. Once system removal starts,
+admission stays closed until cleanup completes. Failed cleanup stays visible and retryable.
 
 ## Apple certificate selector
 

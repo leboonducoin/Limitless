@@ -1263,8 +1263,7 @@ import UserNotifications
                 try accept(
                     await client.send(
                         forUpdate ? .prepareUpdate : .prepareRemoval, authorization: authorization))
-                guard let status, status.removal == .ready, status.canRemoveService,
-                    try forUpdate || SecureOwnershipJournal.isStateDirectoryAbsent()
+                guard let status, status.removal == .ready, status.canRemoveService
                 else { throw ServiceError.restorationRequired }
             } else {
                 guard try SecureOwnershipJournal.isStateDirectoryAbsent(),
