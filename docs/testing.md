@@ -96,8 +96,8 @@ macOS version and any steps that fail.
 - On a user-owned installation, enable CLI access and confirm setup uses its
   private executable. Rerun setup over existing hooks and verify the legacy
   Limitless command is replaced without changing foreign hooks. Reopen after
-  helper restart and confirm the consent and limits are restored independently
-  of user preferences.
+  helper restart and confirm the approved power limits are restored. CLI access
+  must require fresh administrator approval.
 - Try Touch ID, Cancel and password fallback for sudo.
   Its setup component uses the Limitless icon and **Limitless — Touch ID for sudo**
   name. Full Disk Access can list its helper as **io.github.leboonducoin.Limitless.sudo.helper**.
