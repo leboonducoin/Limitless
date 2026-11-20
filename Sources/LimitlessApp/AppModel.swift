@@ -42,6 +42,7 @@ import UserNotifications
     private(set) var buildTrust = BuildTrust.checking
     var trustedBuild: Bool { buildTrust == .trusted }
     private(set) var removalComplete = false
+    private(set) var removalLeftUpdateSettings = false
     private(set) var removalStep: String?
     private(set) var availableUpdate: GitHubUpdate.Release?
     private(set) var updating = false
@@ -1242,11 +1243,6 @@ import UserNotifications
         guard !busy, !sudoTouchIDBusy else { return false }
         quitting = true
         updateEnvironment()
-        if forUpdate, let audioMessage {
-            quitting = false
-            message = audioMessage
-            return false
-        }
         busy = true
         removalStep = "Restoring normal sleep…"
         revision &+= 1
@@ -1288,11 +1284,6 @@ import UserNotifications
                     quitting = false
                     message =
                         "The hotspot details could not be removed from Keychain. Unlock it and retry."
-                    return false
-                }
-                guard UpdatePreferences.remove() else {
-                    quitting = false
-                    message = "The saved update settings could not be removed from Keychain."
                     return false
                 }
             }
@@ -1355,8 +1346,11 @@ import UserNotifications
             removalComplete = true
             monitoring?.cancel()
             updateMonitoring?.cancel()
+            removalLeftUpdateSettings = !forUpdate && !UpdatePreferences.remove()
             message =
-                "Helper, login item and preferences removed."
+                removalLeftUpdateSettings
+                ? "The helpers and login item were removed. Some update records remain in Keychain."
+                : "Helper, login item and preferences removed."
             return true
         } catch {
             quitting = false

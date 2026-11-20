@@ -305,17 +305,18 @@ struct SettingsView: View {
                             set: { model.setAutomaticUpdates($0) })
                     )
                     .disabled((!model.trustedBuild && !model.isPreview) || model.updating)
-                    if model.needsManualUpdate {
-                        Link("Download update", destination: GitHubUpdate.releasesPage)
-                    } else if let update = model.availableUpdate, model.showsUpdateButton {
+                    if let update = model.availableUpdate, model.showsUpdateButton {
                         Button("Update") { model.requestUpdate() }
                             .help("Install Limitless \(update.version)")
                             .disabled(!model.canInstallAvailableUpdate())
                     }
                 }
-                if let message = model.updateMessage {
-                    Text(message).font(.caption).foregroundStyle(.secondary)
-                }
+            }
+            if model.needsManualUpdate {
+                Link("Download update", destination: GitHubUpdate.releasesPage)
+            }
+            if let message = model.updateMessage {
+                Text(message).font(.caption).foregroundStyle(.secondary)
             }
             Button("Copy diagnostic") { model.copyDiagnostic() }
                 .disabled(model.isPreview)

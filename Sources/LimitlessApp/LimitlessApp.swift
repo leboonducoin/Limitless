@@ -473,11 +473,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
             do {
                 _ = try await NSWorkspace.shared.recycle([installedApp])
                 progress.orderOut(nil)
+                if model.removalLeftUpdateSettings { showRemovalError() }
                 NSApp.terminate(nil)
             } catch {
                 progress.orderOut(nil)
+                let cleanup = model.message ?? "System cleanup finished."
                 model.message =
-                    "Helper, login item and preferences removed. macOS could not move the app to the Trash: \(error.localizedDescription)"
+                    "\(cleanup) macOS could not move the app to the Trash. \(error.localizedDescription)"
                 NSWorkspace.shared.activateFileViewerSelecting([installedApp])
                 showRemovalError()
             }

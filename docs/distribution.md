@@ -61,7 +61,9 @@ to be restored to remove a Limitless-owned Touch ID rule.
 
 If Limitless cannot confirm its Keychain recovery records, an in-app replacement
 waits for Keychain access to return. Use **Download update** to install it manually
-if recovery stays unavailable.
+if recovery stays unavailable. The download is available even when the power
+helper is disabled. Uninstall preserves unreadable update records and reports
+them after removing the system components.
 
 When upgrading from 1.1 or earlier, enable the power helper again if requested
 in Options and review Power. Limitless leaves the older updater's backup in
