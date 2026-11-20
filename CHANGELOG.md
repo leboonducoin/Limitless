@@ -6,7 +6,7 @@
 
 - Use Limitless directly from the menu bar. The popover responds on the first click and keeps session controls visible while Options scrolls beneath them.
 - Open Options from the whole row, including the label and icon. Settings are grouped by purpose, Power source comes first in Power, and Options collapses when the popover closes.
-- Command-click starts your favorite duration when idle or when only AI tasks are active. During your own timer or dated session, it adds 15 minutes within your limits.
+- Command-click starts your favorite duration when idle or when only CLI or AI tasks are active. During your own timer or dated session, it adds 15 minutes within your limits.
 - Use Command-Return to start, Command-Plus to extend, and Command-Period to stop. Tab, Space, and Escape work in the popover.
 - Choose remaining time, end time, or an icon alone. Remaining time is the default and shows `00h` when less than an hour remains. All three modes keep the same menu-bar width and show an orange Limitless mark during protection.
 - Get a reminder in the final five minutes and a notification with the reason when the shared session ends. Notifications default to on at first launch and follow macOS permission and your setting. Short sessions can also report their ending.
@@ -31,7 +31,7 @@
 ### Updates, cleanup, and verification
 
 - Recover safely from interrupted updates. The previous installation stays available until the new app starts and its power helper is confirmed when required.
-- Keep update recovery state in Keychain and leave backups from the older updater in place. A missing backup clears its protected receipt.
+- Keep update recovery state in Keychain. Preserve backups from the older updater and unrelated recovery records. Offer a manual download when Limitless cannot confirm its recovery state.
 - Offer a manual download when the installed app cannot be replaced automatically. Automatic updates still require an idle session and a matching signing identity.
 - Restore normal sleep during uninstall before handling audio or Keychain errors. Existing external Touch ID settings are preserved during uninstall.
 - Uninstall requires confirmation in the menu. The helpers verify macOS administrator approval before removing system components, granting CLI access, or changing Touch ID for sudo.

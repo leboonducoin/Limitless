@@ -551,10 +551,10 @@ public enum GitHubUpdate {
         return true
     }
 
-    @concurrent public static func finish(
-        app: URL, parentPID: Int32, recordBackup: @Sendable (URL) throws -> Void
+    @concurrent public static func finish<Receipt: Sendable>(
+        app: URL, parentPID: Int32, recordBackup: @Sendable (URL) throws -> Receipt
     ) async throws -> (
-        app: URL, backup: URL, staging: URL
+        app: URL, backup: URL, staging: URL, receipt: Receipt
     ) {
         let identity = try SignedIdentity(expectedIdentifier: LimitlessIdentity.application)
         guard try app.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == false,
@@ -595,7 +595,7 @@ public enum GitHubUpdate {
         else { throw UpdateError.busy }
         let backupName = backupPrefix + UUID().uuidString + ".app"
         let backup = current.deletingLastPathComponent().appendingPathComponent(backupName)
-        try recordBackup(backup)
+        let receipt = try recordBackup(backup)
         do {
             _ = try FileManager.default.replaceItemAt(
                 current, withItemAt: app, backupItemName: backupName,
@@ -608,7 +608,7 @@ public enum GitHubUpdate {
             }
             throw UpdateError.failed
         }
-        return (current, backup, directory)
+        return (current, backup, directory, receipt)
     }
 }
 

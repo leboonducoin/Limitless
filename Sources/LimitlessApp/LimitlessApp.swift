@@ -16,21 +16,21 @@ enum LimitlessApp {
             app.setActivationPolicy(.accessory)
             Task {
                 do {
-                    guard UpdatePreferences.readBackup() == nil else {
+                    guard try UpdatePreferences.readBackup() == nil else {
                         throw UpdateError.busy
                     }
-                    let helperRequired = UpdatePreferences.needsHelperRecovery
                     let installer = try ProcessIdentity.current()
                     let installed = try await GitHubUpdate.finish(
                         app: URL(fileURLWithPath: args[1]), parentPID: parent
                     ) { backupURL in
-                        guard UpdatePreferences.readBackup() == nil else {
+                        guard try UpdatePreferences.readBackup() == nil else {
                             throw UpdateError.busy
                         }
                         let backup = AppModel.UpdateBackup(
-                            name: backupURL.lastPathComponent, helperRequired: helperRequired,
+                            name: backupURL.lastPathComponent,
+                            helperRequired: try UpdatePreferences.helperRecovery() != nil,
                             installer: installer)
-                        guard UpdatePreferences.saveBackup(backup) else { throw UpdateError.failed }
+                        return try UpdatePreferences.reserveBackup(backup)
                     }
                     let configuration = NSWorkspace.OpenConfiguration()
                     configuration.createsNewApplicationInstance = true
@@ -41,7 +41,7 @@ enum LimitlessApp {
                         _ = try FileManager.default.replaceItemAt(
                             installed.app, withItemAt: installed.backup,
                             options: .usingNewMetadataOnly)
-                        _ = UpdatePreferences.clearBackup()
+                        _ = UpdatePreferences.clearReceipt(installed.receipt)
                         throw error
                     }
                     try? FileManager.default.removeItem(at: installed.staging)

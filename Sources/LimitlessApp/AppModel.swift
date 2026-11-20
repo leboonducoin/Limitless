@@ -127,8 +127,10 @@ import UserNotifications
     private var updateMonitoring: Task<Void, Never>?
     private var updateInstallation: Task<Void, Never>?
     private var retiringUpdateBackup = false
-    private var updateBackup: UpdateBackup?
+    private var updateBackup: UpdatePreferences.BackupReceipt?
+    private var updateHelperRecoveryReceipt: UpdatePreferences.Receipt?
     private(set) var updateHelperRecoveryPending: Bool
+    private var updateRecoveryReadable = true
     private var checkingUpdates = false
     private var persistsUpdateState = false
     private var updateSchedule: UpdateSchedule {
@@ -198,9 +200,8 @@ import UserNotifications
                 automaticUpdates = enabled
             }
             if let schedule = UpdatePreferences.readSchedule() { updateSchedule = schedule }
-            updateBackup = UpdatePreferences.readBackup()
-            updateHelperRecoveryPending = UpdatePreferences.needsHelperRecovery
             persistsUpdateState = true
+            await readUpdateRecovery()
         }
         if trustedBuild, !InstalledCLI.sharedPathIsProtected {
             do {
@@ -213,8 +214,23 @@ import UserNotifications
         }
     }
 
+    private func readUpdateRecovery() async {
+        do {
+            let (backup, helper) = try await UpdatePreferences.readRecovery()
+            updateBackup = backup
+            updateHelperRecoveryReceipt = helper
+            updateHelperRecoveryPending = helper != nil
+            if !updateRecoveryReadable { updateMessage = nil }
+            updateRecoveryReadable = true
+        } catch {
+            updateRecoveryReadable = false
+            updateMessage =
+                "Update recovery could not be read. Check Keychain before installing in the app."
+        }
+    }
+
     func restoreUpdateHelperIfNeeded(confirmReady: (() async -> Bool)? = nil) async {
-        guard updateHelperRecoveryPending, trustedBuild, !isPreview,
+        guard updateRecoveryReadable, updateHelperRecoveryPending, trustedBuild, !isPreview,
             let helper
         else { return }
         do {
@@ -252,25 +268,28 @@ import UserNotifications
 
     private func clearUpdateHelperRecovery() {
         guard updateHelperRecoveryPending else { return }
-        guard !persistsUpdateState || UpdatePreferences.clearHelperRecovery() else {
+        if let receipt = updateHelperRecoveryReceipt, !UpdatePreferences.clearReceipt(receipt) {
             updateMessage = "Unlock Keychain to clear the completed helper recovery."
             return
         }
+        updateHelperRecoveryReceipt = nil
         updateHelperRecoveryPending = false
     }
 
     func retireUpdateBackupIfReady() async {
-        guard trustedBuild, !isPreview, !quitting, !retiringUpdateBackup, let backup = updateBackup,
-            !backup.installer.isAlive
+        guard trustedBuild, !isPreview, !quitting, !retiringUpdateBackup, updateRecoveryReadable,
+            let receipt = updateBackup, !receipt.backup.installer.isAlive
         else { return }
         retiringUpdateBackup = true
         defer { retiringUpdateBackup = false }
         do {
-            let mayRetire = backup.canRetire(after: canControl ? status : nil)
+            let mayRetire = receipt.backup.canRetire(after: canControl ? status : nil)
             if try await GitHubUpdate.retirePreviousApplication(
-                named: backup.name, mayRetire: mayRetire), updateBackup == backup
+                named: receipt.backup.name, mayRetire: mayRetire), updateBackup == receipt
             {
-                guard UpdatePreferences.clearBackup() else { throw ServiceError.unavailable }
+                guard UpdatePreferences.clearReceipt(receipt.reference) else {
+                    throw ServiceError.unavailable
+                }
                 updateBackup = nil
             }
         } catch {
@@ -308,15 +327,15 @@ import UserNotifications
         guard showsPowerControls, !busy, !updating else { return false }
         return canExtendSession || canStartManualSession
     }
-    var hasOnlyAgentSessions: Bool {
+    var hasOnlyAutomatedSessions: Bool {
         guard let sessions = status?.sessions, !sessions.isEmpty else { return false }
-        return sessions.allSatisfy { $0.kind == .agent }
+        return sessions.allSatisfy { $0.kind != .manual }
     }
     var canStartManualSession: Bool {
         guard showsPowerControls, !busy, !updating, let status, status.policyConfigured,
             status.sleep.fault == nil
         else { return false }
-        return hasOnlyAgentSessions && presentation == .active
+        return hasOnlyAutomatedSessions && presentation == .active
             || (status.sessions.isEmpty && status.sleep.phase == .inactive
                 && status.sleep.observed == .allowed)
     }
@@ -354,6 +373,7 @@ import UserNotifications
     var draftChanged: Bool { draft != baseline }
     private var readyToUpdate: Bool {
         guard connectionError == nil, !removalComplete, !cliMigrationRequired,
+            updateRecoveryReadable,
             updateBackup == nil, !updateHelperRecoveryPending
         else { return false }
         guard let status else { return helperStatus == .notRegistered }
@@ -366,7 +386,8 @@ import UserNotifications
             && updateSchedule.canBeginDownload(manual: manual)
     }
     var needsManualUpdate: Bool {
-        availableUpdate != nil && !isPreview && !GitHubUpdate.canReplaceInstalledApplication
+        availableUpdate != nil && !isPreview
+            && (!updateRecoveryReadable || !GitHubUpdate.canReplaceInstalledApplication)
     }
     var showsUpdateButton: Bool {
         availableUpdate != nil && !needsManualUpdate && !automaticUpdates
@@ -557,9 +578,7 @@ import UserNotifications
             guard !quitting else { return }
             updateMessage = "Installing update…"
             if helper?.status == .enabled {
-                guard UpdatePreferences.requestHelperRecovery() else {
-                    throw ServiceError.unavailable
-                }
+                updateHelperRecoveryReceipt = try UpdatePreferences.requestHelperRecovery()
                 updateHelperRecoveryPending = true
             }
             guard await removeIntegration(forUpdate: true) else {
@@ -601,7 +620,13 @@ import UserNotifications
 
     func refresh() async {
         guard !isPreview, !busy, !refreshing, !quitting else { return }
+        refreshing = true
+        if !updateRecoveryReadable {
+            await readUpdateRecovery()
+            if updateRecoveryReadable { await restoreUpdateHelperIfNeeded() }
+        }
         defer {
+            refreshing = false
             if updateBackup != nil { Task { await retireUpdateBackupIfReady() } }
         }
         helperStatus = helper?.status ?? .notFound
@@ -626,8 +651,6 @@ import UserNotifications
             message = "Launch at login could not be enabled. Check Login Items & Extensions."
         }
         loginStatus = SMAppService.mainApp.status
-        refreshing = true
-        defer { refreshing = false }
         let currentRevision = revision
         do {
             if client == nil {

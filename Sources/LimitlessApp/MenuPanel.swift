@@ -183,7 +183,7 @@ struct MenuPanel: View {
                     }
                 }.font(.callout).foregroundStyle(.secondary)
             }
-            if model.status?.sessions.isEmpty != false || model.hasOnlyAgentSessions {
+            if model.status?.sessions.isEmpty != false || model.hasOnlyAutomatedSessions {
                 StopEditor(model: model)
                 startButton.disabled(!model.canStartManualSession)
                 if model.status?.sessions.isEmpty == true, let outcome = model.lastSessionMessage,

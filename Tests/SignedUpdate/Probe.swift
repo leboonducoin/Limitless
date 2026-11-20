@@ -16,7 +16,7 @@ import LimitlessSystem
             do {
                 _ = try await GitHubUpdate.finish(
                     app: candidate, parentPID: finishedParent.processIdentifier
-                ) { _ in throw UpdateError.failed }
+                ) { _ -> Void in throw UpdateError.failed }
                 exit(1)
             } catch UpdateError.unsafeLocation {}
             print("PASS signed update \(arguments[0])")

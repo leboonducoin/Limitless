@@ -59,6 +59,10 @@ to the Trash. If macOS asks for administrator approval during removal, the power
 Touch ID helpers have separate approvals; a missing Touch ID helper may first need
 to be restored to remove a Limitless-owned Touch ID rule.
 
+If Limitless cannot confirm its Keychain recovery records, an in-app replacement
+waits for Keychain access to return. Use **Download update** to install it manually
+if recovery stays unavailable.
+
 When upgrading from 1.1 or earlier, enable the power helper again if requested
 in Options and review Power. Limitless leaves the older updater's backup in
 place because it has no protected recovery receipt for that transaction.

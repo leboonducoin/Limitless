@@ -85,19 +85,23 @@ private func protection(
 }
 
 #if DEBUG
-    @Test @MainActor func manualControlsAreAvailableDuringAgentOnlyProtection() throws {
+    @Test(arguments: [SessionKind.agent, SessionKind.task])
+    @MainActor func manualControlsAreAvailableDuringAutomatedProtection(_ kind: SessionKind) throws
+    {
         let model = AppModel.preview("inactive")
         let base = try #require(model.status)
         let now = Date.now
-        let agent = SessionSummary(
-            id: UUID(), kind: .agent, end: .unlimited, startedAt: now,
-            remainingSeconds: nil, suspension: nil, belongsToClient: false, agent: .codex)
+        let automated = SessionSummary(
+            id: UUID(), kind: kind, end: .unlimited, startedAt: now,
+            remainingSeconds: nil, suspension: nil, belongsToClient: false,
+            agent: kind == .agent ? .codex : nil)
         let active = ServiceStatus(
             policy: base.policy, power: base.power,
             sleep: .init(phase: .active, observed: .disabled, ownsGlobalHold: true, fault: nil),
-            sessions: [agent], sampledAt: now)
+            sessions: [automated], sampledAt: now)
         try model.accept(ServiceReply(status: active))
-        #expect(model.hasOnlyAgentSessions && model.canStartFavorite && model.canStartManualSession)
+        #expect(
+            model.hasOnlyAutomatedSessions && model.canStartFavorite && model.canStartManualSession)
     }
 
     @Test @MainActor func aShortSessionEndingAppearsEvenWhenTheAppDidNotSeeItStart() throws {

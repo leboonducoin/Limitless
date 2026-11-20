@@ -254,6 +254,11 @@ enum LidDisplayState: Equatable {
 }
 
 private enum AppKeychain {
+    struct Item {
+        let data: Data
+        let label: String
+    }
+
     private static func query(_ service: String, account: String) -> [String: Any] {
         let authentication = LAContext()
         authentication.interactionNotAllowed = true
@@ -288,6 +293,40 @@ private enum AppKeychain {
         guard SecItemCopyMatching(request as CFDictionary, &result) == errSecSuccess
         else { return nil }
         return result as? Data
+    }
+
+    static func item(service: String, account: String) throws -> Item? {
+        var request = query(service, account: account)
+        request[kSecReturnData as String] = true
+        request[kSecReturnAttributes as String] = true
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(request as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw CocoaError(.fileReadNoPermission) }
+        guard let values = result as? [String: Any],
+            let data = values[kSecValueData as String] as? Data,
+            let label = values[kSecAttrLabel as String] as? String,
+            UUID(uuidString: label)?.uuidString == label
+        else { throw CocoaError(.fileReadCorruptFile) }
+        return Item(data: data, label: label)
+    }
+
+    static func reserve(_ data: Data, service: String, account: String) throws -> String {
+        var request = query(service, account: account)
+        let label = UUID().uuidString
+        request[kSecValueData as String] = data
+        request[kSecAttrLabel as String] = label
+        guard SecItemAdd(request as CFDictionary, nil) == errSecSuccess else {
+            throw CocoaError(.fileWriteNoPermission)
+        }
+        return label
+    }
+
+    static func remove(service: String, account: String, label: String) -> Bool {
+        var request = query(service, account: account)
+        request[kSecAttrLabel as String] = label
+        let status = SecItemDelete(request as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
     }
 
     static func remove(service: String, account: String) -> Bool {
@@ -332,6 +371,20 @@ enum HotspotCredentials {
 }
 
 enum UpdatePreferences {
+    struct Receipt: Equatable, Sendable {
+        fileprivate let account: String
+        fileprivate let label: String
+    }
+
+    struct BackupReceipt: Equatable, Sendable {
+        let backup: AppModel.UpdateBackup
+        let reference: Receipt
+    }
+
+    @concurrent static func readRecovery() async throws -> (BackupReceipt?, Receipt?) {
+        try (readBackup(), helperRecovery())
+    }
+
     static func readConsent() -> Bool? {
         switch AppKeychain.read(service: "updates", account: "automatic") {
         case Data([0]): false
@@ -356,37 +409,53 @@ enum UpdatePreferences {
         _ = AppKeychain.save(data, service: "updates", account: "schedule")
     }
 
-    static var needsHelperRecovery: Bool {
-        AppKeychain.read(service: "updates", account: "helper-recovery") == Data([1])
+    static func helperRecovery() throws -> Receipt? {
+        let account = "helper-recovery"
+        guard let item = try AppKeychain.item(service: "updates", account: account) else {
+            return nil
+        }
+        guard item.data == Data([1]) else { throw CocoaError(.fileReadCorruptFile) }
+        return Receipt(account: account, label: item.label)
     }
 
-    static func requestHelperRecovery() -> Bool {
-        AppKeychain.save(Data([1]), service: "updates", account: "helper-recovery")
+    static func requestHelperRecovery() throws -> Receipt {
+        let account = "helper-recovery"
+        let label = try AppKeychain.reserve(Data([1]), service: "updates", account: account)
+        return Receipt(account: account, label: label)
     }
 
-    static func clearHelperRecovery() -> Bool {
-        AppKeychain.remove(service: "updates", account: "helper-recovery")
+    static func readBackup() throws -> BackupReceipt? {
+        let account = "backup"
+        guard let item = try AppKeychain.item(service: "updates", account: account) else {
+            return nil
+        }
+        guard item.data.count <= 1_024 else { throw CocoaError(.fileReadCorruptFile) }
+        let backup = try JSONDecoder().decode(AppModel.UpdateBackup.self, from: item.data)
+        return BackupReceipt(
+            backup: backup, reference: Receipt(account: account, label: item.label))
     }
 
-    static func readBackup() -> AppModel.UpdateBackup? {
-        guard let data = AppKeychain.read(service: "updates", account: "backup"),
-            data.count <= 1_024
-        else { return nil }
-        return try? JSONDecoder().decode(AppModel.UpdateBackup.self, from: data)
+    static func reserveBackup(_ backup: AppModel.UpdateBackup) throws -> Receipt {
+        let account = "backup"
+        let label = try AppKeychain.reserve(
+            JSONEncoder().encode(backup), service: "updates", account: account)
+        return Receipt(account: account, label: label)
     }
 
-    static func saveBackup(_ backup: AppModel.UpdateBackup) -> Bool {
-        guard let data = try? JSONEncoder().encode(backup) else { return false }
-        return AppKeychain.add(data, service: "updates", account: "backup")
+    static func clearReceipt(_ reference: Receipt) -> Bool {
+        AppKeychain.remove(service: "updates", account: reference.account, label: reference.label)
     }
-
-    static func clearBackup() -> Bool { AppKeychain.remove(service: "updates", account: "backup") }
 
     static func remove() -> Bool {
         let removedConsent = AppKeychain.remove(service: "updates", account: "automatic")
         let removedSchedule = AppKeychain.remove(service: "updates", account: "schedule")
-        let removedRecovery = clearHelperRecovery()
-        return clearBackup() && removedRecovery && removedSchedule && removedConsent
+        do {
+            let removedRecovery = try helperRecovery().map(clearReceipt) ?? true
+            let removedBackup = try readBackup().map { clearReceipt($0.reference) } ?? true
+            return removedBackup && removedRecovery && removedSchedule && removedConsent
+        } catch {
+            return false
+        }
     }
 }
 
