@@ -142,6 +142,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                 model.updateEnvironment()
             }
             model.beginMonitoring()
+            if model.shouldRequestInitialSessionNotifications {
+                await model.setSessionNotifications(true)
+            }
         }
     }
 
@@ -276,8 +279,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     func popoverDidShow(_ notification: Notification) {
         model.panelVisible = true
         let window = popover.contentViewController?.view.window
-        window?.makeKey()
+        window?.makeKeyAndOrderFront(nil)
         window?.makeFirstResponder(nil)
+        NSApp.activate()
     }
 
     func popoverDidClose(_ notification: Notification) {
@@ -356,7 +360,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     }
 
     private func showPopover(from button: NSStatusBarButton) {
-        NSApp.activate()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 

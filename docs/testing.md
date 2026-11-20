@@ -48,7 +48,9 @@ Other previews: `inactive`, `process`, `desktop`, `external`, `battery-unknown`,
 `touch-id-external` and `touch-id-permission`. Check light/dark mode, Tab navigation, VoiceOver and
 Reduce Motion/Transparency. Check that the Options label, icon, blank space and chevron all
 open Options. Scroll to the App category while the session controls stay visible. Close the
-panel and reopen it to verify Options is collapsed. Check that content fits when Automatic
+panel and reopen it to verify Options is collapsed. From a background launch, verify that the
+first click on the item opens the panel and a single click on Options expands it. Verify the
+minute-only display fits on one line with its orange mark. Check that content fits when Automatic
 updates changes or an Update button appears. Keyboard input must follow the Mac's layout and locale.
 
 ## Test the installed app
@@ -78,8 +80,10 @@ macOS version and any steps that fail.
   pre-muted output stays muted.
 - Use simulated serious and critical thermal state in the test suite. For native
   qualification observe telemetry during ordinary workload on a ventilated Mac.
-- Check the notification permission flow, one reminder for the last five minutes,
-  a postponed reminder after extension, and the correct end reason.
+- With fresh settings, confirm notifications start enabled and macOS asks for permission on
+  first launch. Deny or disable them, relaunch and check the choice persists. With permission,
+  verify one reminder for the last five minutes, a postponed reminder after extension,
+  and the correct end reason.
 - On an approved iPhone/Mac pair, verify hotspot setup, password retention across
   a same-identity update, recovery after an outage, and cancellation before association.
 - Type a battery limit, press Return or leave the field, then try the arrows.

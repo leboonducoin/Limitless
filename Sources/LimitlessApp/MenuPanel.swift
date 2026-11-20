@@ -14,6 +14,14 @@ struct MenuPanel: View {
     }
 
     var body: some View {
+        if #available(macOS 15, *) {
+            panel.allowsWindowActivationEvents()
+        } else {
+            panel
+        }
+    }
+
+    private var panel: some View {
         VStack(spacing: 0) {
             panelContent.fixedSize(horizontal: false, vertical: true)
             Divider()
@@ -73,35 +81,42 @@ struct MenuPanel: View {
                 Text(message).font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Divider()
-            Button {
-                model.optionsExpanded.toggle()
-            } label: {
-                HStack {
-                    Label("Options", systemImage: "slider.horizontal.3")
-                    Spacer()
-                    Image(systemName: model.optionsExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Divider()
+                Button {
+                    model.optionsExpanded.toggle()
+                } label: {
+                    HStack {
+                        Label("Options", systemImage: "slider.horizontal.3")
+                        Spacer()
+                        Image(systemName: model.optionsExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .accessibilityHidden(true)
+                    }
+                    .font(.callout.weight(.medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                 }
-                .font(.callout.weight(.medium))
-                .padding(8)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(model.optionsExpanded ? "Expanded" : "Collapsed")
-            if model.optionsExpanded {
-                ScrollView {
-                    SettingsView(model: model)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 8)
+                .buttonStyle(.plain)
+                .accessibilityValue(model.optionsExpanded ? "Expanded" : "Collapsed")
+                if model.optionsExpanded {
+                    ScrollView {
+                        SettingsView(model: model)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 8)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(
+                        height: Self.optionsHeight(screenHeight: NSScreen.main?.visibleFrame.height)
+                    )
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(height: Self.optionsHeight(screenHeight: NSScreen.main?.visibleFrame.height))
             }
-        }.padding(18)
-            .onChange(of: model.draft) { model.policyEdited() }
+        }
+        .padding([.top, .horizontal], 18)
+        .padding(.bottom, 8)
+        .onChange(of: model.draft) { model.policyEdited() }
     }
 
     static func optionsHeight(screenHeight: CGFloat?) -> CGFloat {

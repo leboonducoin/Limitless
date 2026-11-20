@@ -37,16 +37,18 @@ import AppKit
 
     static func menuTime(top topText: String, bottom bottomText: String) -> NSImage {
         let image = NSImage(size: NSSize(width: 24, height: 23), flipped: false) { _ in
-            let top = NSAttributedString(
+            let top = NSMutableAttributedString(
                 string: topText,
                 attributes: [
                     .font: NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .semibold)
                 ]
             )
-            let bottom = NSAttributedString(
-                string: bottomText,
-                attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)]
-            )
+            let smallFont = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
+            if bottomText.isEmpty, top.length > 0 {
+                top.addAttribute(
+                    .font, value: smallFont, range: NSRange(location: top.length - 1, length: 1))
+            }
+            let bottom = NSAttributedString(string: bottomText, attributes: [.font: smallFont])
             top.draw(at: NSPoint(x: (24 - top.size().width) / 2, y: 9))
             bottom.draw(at: NSPoint(x: (16 - bottom.size().width) / 2, y: 0))
             return true

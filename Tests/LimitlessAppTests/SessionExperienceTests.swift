@@ -57,7 +57,7 @@ private func protection(
     let model = AppModel(preferences: preferences)
     try model.accept(ServiceReply(status: protection(UUID(), [60, 120])))
     #expect(model.menuBarStyle == .remainingTime)
-    #expect(model.menuBarTime?.top == "2" && model.menuBarTime?.bottom == "min")
+    #expect(model.menuBarTime?.top == "2m" && model.menuBarTime?.bottom == "")
     model.menuBarStyle = .endTime
     #expect(model.menuBarTime?.top.hasSuffix(":") == true)
     #expect(AppModel(preferences: preferences).menuBarStyle == .endTime)
@@ -70,7 +70,9 @@ private func protection(
     #expect(MenuBarTime.remaining(seconds: 0) == nil)
     #expect(MenuBarTime.remaining(seconds: .infinity) == nil)
     let minute = MenuBarTime.remaining(seconds: 0.1)
-    #expect(minute?.top == "1" && minute?.bottom == "min")
+    #expect(minute?.top == "1m" && minute?.bottom == "")
+    #expect(MenuBarTime.remaining(seconds: 3_540)?.top == "59m")
+    #expect(MenuBarTime.remaining(seconds: 3_541)?.top == "1h")
     let hours = MenuBarTime.remaining(seconds: 7_260)
     #expect(hours?.top == "2h" && hours?.bottom == "01")
     let long = MenuBarTime.remaining(seconds: 100 * 24 * 60 * 60)
@@ -108,14 +110,32 @@ private func protection(
     #expect(MenuPanel.optionsHeight(screenHeight: 480) == 160)
 }
 
+@Test @MainActor func sessionNotificationsDefaultOnAndRespectExistingChoices() throws {
+    let domain = "Limitless.notification-test.\(UUID())"
+    let preferences = try #require(UserDefaults(suiteName: domain))
+    defer { preferences.removePersistentDomain(forName: domain) }
+
+    let fresh = AppModel(preferences: preferences, buildTrust: .trusted)
+    #expect(fresh.sessionNotifications && fresh.shouldRequestInitialSessionNotifications)
+    #expect(!AppModel(preferences: preferences).shouldRequestInitialSessionNotifications)
+
+    for enabled in [false, true] {
+        preferences.set(enabled, forKey: "sessionNotifications")
+        let saved = AppModel(preferences: preferences, buildTrust: .trusted)
+        #expect(saved.sessionNotifications == enabled)
+        #expect(!saved.shouldRequestInitialSessionNotifications)
+    }
+}
+
 #if DEBUG
     @Test @MainActor func previewFavoriteStartsAndExtendsOnlyTheSimulatedSession() async throws {
         let model = AppModel.preview("inactive")
+        #expect(!model.shouldRequestInitialSessionNotifications)
         model.favoriteMinutes = 30
         #expect(model.canStartFavorite && !model.canControl)
         await model.startFavorite()
         let session = try #require(model.ownSession)
-        #expect(session.remainingSeconds == 1_800 && model.menuBarTime?.top == "30")
+        #expect(session.remainingSeconds == 1_800 && model.menuBarTime?.top == "30m")
         await model.startFavorite()
         #expect(model.ownSession?.id == session.id && model.ownSession?.remainingSeconds == 2_700)
         await model.stopAll()

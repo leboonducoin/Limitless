@@ -10,6 +10,7 @@ import UserNotifications
 @MainActor @Observable final class AppModel {
     enum BuildTrust { case checking, trusted, untrusted }
     static let updateHelperRecoveryKey = "restoreHelperAfterUpdate"
+    private static let sessionNotificationsKey = "sessionNotifications"
 
     private(set) var status: ServiceStatus?
     private(set) var busy = false
@@ -140,7 +141,8 @@ import UserNotifications
         menuBarStyle =
             preferences.string(forKey: "menuBarStyle").flatMap(MenuBarStyle.init(rawValue:))
             ?? .remainingTime
-        sessionNotifications = preferences.bool(forKey: "sessionNotifications")
+        sessionNotifications =
+            preferences.object(forKey: Self.sessionNotificationsKey) as? Bool ?? true
         let muteWhenScreenSleeps = preferences.bool(forKey: "muteWhenScreenSleeps")
         self.muteWhenScreenSleeps = muteWhenScreenSleeps
         muteWithClosedLid =
@@ -695,17 +697,22 @@ import UserNotifications
         return true
     }
 
+    var shouldRequestInitialSessionNotifications: Bool {
+        trustedBuild && !isPreview && sessionNotifications
+            && preferences.object(forKey: Self.sessionNotificationsKey) == nil
+    }
+
     func setSessionNotifications(_ enabled: Bool) async {
         guard !isPreview, Bundle.main.bundleURL.pathExtension == "app" else { return }
         sessionNotifications = enabled
-        preferences.set(enabled, forKey: "sessionNotifications")
+        preferences.set(enabled, forKey: Self.sessionNotificationsKey)
         guard enabled else { return }
         let outcome = try? await UNUserNotificationCenter.current().requestAuthorization(options: [
             .alert
         ])
         if outcome != true, sessionNotifications {
             sessionNotifications = false
-            preferences.set(false, forKey: "sessionNotifications")
+            preferences.set(false, forKey: Self.sessionNotificationsKey)
             message =
                 "Allow notifications for Limitless in System Settings to receive session alerts."
         }

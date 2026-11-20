@@ -172,7 +172,7 @@ struct MenuBarTime: Equatable {
                 top: "\(hours)h", bottom: String(format: "%02d", minutes % 60),
                 accessibilityLabel: "\(label) remaining")
         }
-        return Self(top: "\(minutes)", bottom: "min", accessibilityLabel: "\(label) remaining")
+        return Self(top: "\(minutes)m", bottom: "", accessibilityLabel: "\(label) remaining")
     }
 
     static func end(at deadline: Date, calendar: Calendar = .current) -> Self {

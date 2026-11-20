@@ -4,10 +4,10 @@ One 340-point menu. Native material, system typography, short labels and no
 separate preferences window. Content sets the height; long lists scroll.
 
 - 21-point title. Battery and remaining time share the callout size.
-- The status item stays the same width in all three styles. The default shows remaining time
-  in whole minutes rounded up. End time shows the local hour and minutes. Both stack the text
-  and use a small orange loop at the lower right. Icon-only and unlimited sessions use the full
-  orange loop during active protection.
+- The status item stays the same width in all three styles. The default rounds remaining time
+  up to a whole minute and uses one line below an hour, such as `59m`. Longer countdowns and
+  local end times use two lines. Timed styles have a small orange loop at the lower right.
+  Icon-only and unlimited sessions use the full orange loop during active protection.
 - macOS restores the menu-bar position after the user moves the item with Command-drag.
 - Command-click starts the configured favorite while idle and adds 15 minutes to an owned active timer. Command-Return starts from the open panel, Command-Plus extends, and Command-Period stops.
   The shortcut requires a press and release over Limitless's item and cancels on a drag.
@@ -23,6 +23,7 @@ separate preferences window. Content sets the height; long lists scroll.
 - The visible panel counts down in seconds. The menu-bar text changes at minute granularity,
   and the panel opens without a transition.
 - No selected control on opening; Tab keeps its native focus indicator.
+- Copy diagnostic is last in the App settings.
 - Opaque backgrounds for Reduce Transparency/increased contrast.
 - Text and symbols accompany color. Controls have accessibility labels.
 

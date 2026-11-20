@@ -259,8 +259,6 @@ struct SettingsView: View {
             }
             if model.showsPowerControls { Divider() }
             Text("App").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            Button("Copy diagnostic") { model.copyDiagnostic() }
-                .disabled(model.isPreview)
             Toggle(
                 "Launch at login",
                 isOn: Binding(
@@ -287,6 +285,8 @@ struct SettingsView: View {
                     Text(message).font(.caption).foregroundStyle(.secondary)
                 }
             }
+            Button("Copy diagnostic") { model.copyDiagnostic() }
+                .disabled(model.isPreview)
         }
         .font(.callout).toggleStyle(.switch).controlSize(.small)
     }

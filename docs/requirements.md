@@ -15,7 +15,8 @@ how to verify them.
 - A Command-click starts the configured favorite when idle or extends the app's current timer by 15 minutes.
   The menu bar offers remaining time by default, end time, and icon only at the same width.
 - Use one shared keep-awake session. Each request keeps its authorization, deadline and limits. A second app owner cannot start a separate manual session.
-- Optional session notifications report approaching expiry and session endings.
+- Session notifications report approaching expiry and session endings. They default on
+  at first launch, subject to macOS permission, and can be disabled.
 - A small + button beside Stop adds 15 minutes per click to an owned timer or date session.
 - CLI diagnosis and whole-task AI tracking that identify the provider and respect user limits and manual sessions.
 - Helper activation enables launch at login. Users can disable it independently.
