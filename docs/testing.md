@@ -141,9 +141,11 @@ Both [CI](https://github.com/leboonducoin/Limitless/actions/workflows/ci.yml) an
 must pass for the final commit. They cover tests, sanitizers, CodeQL, workflow
 linting and secret scanning. Security also runs every Monday and Friday at 07:29 UTC.
 Pull requests also check dependencies.
-The CLI runs on macOS 14; Intel also runs the full checks. **CI gate** and
-**Security gate** fail if a required job fails, is cancelled or is unexpectedly skipped.
-Automated results do not replace the installed-app checks above.
+Both GitHub-hosted macOS 15 jobs run the shipped CLI and verify the macOS 14.0
+deployment target in both slices. The Intel job also runs the full checks.
+GitHub retired its macOS 14 runner. Before release, execute the shipped CLI and
+qualify the installed app on a macOS 14 Mac. **CI gate** and **Security gate**
+fail if a required job fails, is cancelled or is unexpectedly skipped.
 
 Signed XPC/update fixtures pin the exact leaf certificate and executable identifier.
 This supports Developer ID chains as well as the community certificate; the fixture

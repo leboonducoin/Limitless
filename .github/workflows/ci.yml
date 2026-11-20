@@ -72,7 +72,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15-intel]
+        os: [macos-15, macos-15-intel]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,10 +81,16 @@ jobs:
         with:
           name: compatibility-cli
           path: ${{ runner.temp }}/compatibility
-      - name: Run the shipped CLI on older macOS
+      - name: Verify the macOS 14 target and run the shipped CLI
+        shell: bash
         working-directory: ${{ runner.temp }}/compatibility
         run: |
           ditto -x -k limitless-cli.zip .
+          for arch in arm64 x86_64; do
+            minos="$(xcrun vtool -arch "$arch" -show-build ./MacOS/limitless | awk '$1 == "minos" { print $2 }')"
+            printf '%s minimum macOS %s\n' "$arch" "$minos"
+            test "$minos" = 14.0
+          done
           ./MacOS/limitless --version
           ./MacOS/limitless --help
       - name: Run the full checks on Intel
