@@ -92,6 +92,12 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
     public let batteryCutoff: BatteryCutoff?
     public let thermal: ThermalCondition
     public let recentEndings: [SessionEnding]
+    public let protectionID: UUID?
+
+    public var protectionRemainingSeconds: TimeInterval? {
+        let deadlines = sessions.compactMap(\.remainingSeconds)
+        return deadlines.count == sessions.count ? deadlines.max() : nil
+    }
 
     public var canRemoveService: Bool {
         removal != .none && sessions.isEmpty && !sleep.ownsGlobalHold
@@ -107,7 +113,8 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
             Power source: \(power.source.rawValue)
             Thermal state: \(thermal.rawValue)
             Battery reserve: \(policy.batteryFloor)%
-            Active or suspended sessions: \(sessions.count)
+            Shared session: \(sessions.isEmpty ? "none" : "present")
+            Active or suspended requests: \(sessions.count)
             Last stop reason: \(end)
             Power fault: \(sleep.fault?.rawValue ?? "none")
             """
@@ -130,7 +137,8 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
         policy: UserPolicy, power: PowerSnapshot, sleep: SleepReport,
         sessions: [SessionSummary], sampledAt: Date, removal: RemovalState = .none,
         sudoTouchID: SudoTouchIDState = .unavailable, batteryCutoff: BatteryCutoff? = nil,
-        thermal: ThermalCondition = .unknown, recentEndings: [SessionEnding] = []
+        thermal: ThermalCondition = .unknown, recentEndings: [SessionEnding] = [],
+        protectionID: UUID? = nil
     ) {
         self.policy = policy
         self.power = power
@@ -142,6 +150,7 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
         self.batteryCutoff = batteryCutoff
         self.thermal = thermal
         self.recentEndings = recentEndings
+        self.protectionID = protectionID
     }
 }
 

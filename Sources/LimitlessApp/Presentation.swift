@@ -119,6 +119,34 @@ enum StopChoice: Hashable {
     case custom, date, process
 }
 
+enum MenuBarStyle: String, CaseIterable {
+    case icon, timer
+
+    var label: String {
+        switch self {
+        case .icon: "Icon only"
+        case .timer: "End time and icon"
+        }
+    }
+}
+
+struct SessionNotices {
+    private var remindedID: UUID?
+
+    mutating func shouldRemind(_ status: ServiceStatus) -> Bool {
+        guard status.sleep.phase == .active, let id = status.protectionID,
+            let remaining = status.protectionRemainingSeconds, remaining > 0
+        else { return false }
+        if remaining > 5 * 60 {
+            if remindedID == id { remindedID = nil }
+            return false
+        }
+        guard remindedID != id else { return false }
+        remindedID = id
+        return true
+    }
+}
+
 enum DurationUnit: String, CaseIterable, Identifiable {
     case seconds, minutes, hours, days
     var id: Self { self }

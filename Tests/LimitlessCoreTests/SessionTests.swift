@@ -119,11 +119,11 @@ func batteryFloorPermanentlyStopsEvenWhenAdapterCannotKeepUp(_ source: PowerSour
 }
 
 @Test func relativeTimeIgnoresWallClockChangesAndAbsoluteTimeDoesNot() throws {
-    var registry = SessionRegistry(policy: try UserPolicy())
+    var registry = SessionRegistry(policy: try UserPolicy(allowsAutomation: true))
     let relative = try registry.start(
         .init(end: .after(seconds: 60)), owner: UUID(), kind: .manual, now: clock())
     let absolute = try registry.start(
-        .init(end: .at(Date(timeIntervalSince1970: 1060))), owner: UUID(), kind: .manual,
+        .init(end: .at(Date(timeIntervalSince1970: 1060))), owner: UUID(), kind: .task,
         now: clock())
     let jumped = registry.evaluate(power: ac, now: try clock(110, wall: 2000))
     #expect(jumped.eligible == [relative])
@@ -170,7 +170,7 @@ func batteryFloorPermanentlyStopsEvenWhenAdapterCannotKeepUp(_ source: PowerSour
 }
 
 @Test func registryDoesNotRestoreSessionsAndBoundsResources() throws {
-    var registry = SessionRegistry(policy: try UserPolicy())
+    var registry = SessionRegistry(policy: try UserPolicy(allowsAutomation: true))
     #expect(registry.sessions.isEmpty)
     let id = UUID()
     try registry.start(.init(), owner: UUID(), kind: .manual, now: clock(), id: id)
@@ -178,10 +178,10 @@ func batteryFloorPermanentlyStopsEvenWhenAdapterCannotKeepUp(_ source: PowerSour
         try registry.start(.init(), owner: UUID(), kind: .manual, now: clock(), id: id)
     }
     for _ in 1..<SessionRegistry.capacity {
-        try registry.start(.init(), owner: UUID(), kind: .manual, now: clock())
+        try registry.start(.init(), owner: UUID(), kind: .task, now: clock())
     }
     #expect(throws: PolicyError.sessionLimitReached) {
-        try registry.start(.init(), owner: UUID(), kind: .manual, now: clock())
+        try registry.start(.init(), owner: UUID(), kind: .task, now: clock())
     }
 }
 

@@ -42,6 +42,21 @@ enum LidDisplayState: Equatable {
         case .open, .unknown: nil
         }
     }
+
+    func shouldMuteAudio(
+        active: Bool, screenAsleep: Bool, muteOnSleep: Bool, muteOnLidClose: Bool
+    ) -> Bool {
+        active && ((screenAsleep && muteOnSleep) || (self == .closedHeadless && muteOnLidClose))
+    }
+}
+
+@MainActor protocol SessionAudioOutput {
+    func defaultOutput() -> AudioDeviceID?
+    func uid(of device: AudioDeviceID) -> String?
+    func findOutput(uid: String) -> AudioDeviceID?
+    mutating func mute(of device: AudioDeviceID) -> UInt32?
+    mutating func setMute(_ value: UInt32, device: AudioDeviceID, uid: String) -> Bool
+    mutating func canSetMute(on device: AudioDeviceID) -> Bool
 }
 
 @MainActor struct SessionAudioMute {
@@ -50,29 +65,36 @@ enum LidDisplayState: Equatable {
         let confirmed: Bool
     }
 
-    private let journal: URL = URL.applicationSupportDirectory
-        .appending(path: LimitlessIdentity.application, directoryHint: .isDirectory)
-        .appending(path: "AudioMute.json", directoryHint: .notDirectory)
-    private let system = AudioObjectID(kAudioObjectSystemObject)
-    private var muteAddress = AudioObjectPropertyAddress(
-        mSelector: kAudioDevicePropertyMute, mScope: kAudioObjectPropertyScopeOutput,
-        mElement: kAudioObjectPropertyElementMain)
-
+    private let journal: URL
+    private var output: any SessionAudioOutput
     private var recordLoaded = false
     private var record: Record?
     private var pending: (value: UInt32, since: ContinuousClock.Instant)?
+    private var overrideUntilWake = false
 
-    mutating func update(shouldMute: Bool) -> String? {
+    init(
+        journal: URL = URL.applicationSupportDirectory
+            .appending(path: LimitlessIdentity.application, directoryHint: .isDirectory)
+            .appending(path: "AudioMute.json", directoryHint: .notDirectory),
+        output: any SessionAudioOutput = SystemAudioOutput()
+    ) {
+        self.journal = journal
+        self.output = output
+    }
+
+    mutating func update(shouldMute: Bool, now: ContinuousClock.Instant = .now) -> String? {
         do {
+            if !shouldMute { overrideUntilWake = false }
             if !recordLoaded {
                 record = try savedRecord()
                 recordLoaded = true
             }
             if let pending, let record {
-                guard let device = findOutput(uid: record.uid), let observed = mute(of: device)
+                guard let device = output.findOutput(uid: record.uid),
+                    let observed = output.mute(of: device)
                 else { return "Reconnect the previous audio output to verify it." }
                 guard observed == pending.value else {
-                    if pending.since.duration(to: .now) >= .seconds(10) {
+                    if pending.since.duration(to: now) >= .seconds(10) {
                         self.pending = nil
                         return "macOS did not confirm the audio change."
                     }
@@ -86,36 +108,48 @@ enum LidDisplayState: Equatable {
                 }
             }
             if shouldMute {
+                guard !overrideUntilWake else { return nil }
                 if record?.confirmed == false {
                     return "Check the previous audio output and unmute it manually if needed."
                 }
-                guard record == nil, let device = defaultOutput(), let uid = uid(of: device)
+                if let record, let device = output.findOutput(uid: record.uid),
+                    output.mute(of: device) == 0
+                {
+                    try clearRecord()
+                    overrideUntilWake = true
+                    return nil
+                }
+                guard record == nil, let device = output.defaultOutput(),
+                    let uid = output.uid(of: device)
                 else { return nil }
-                guard let original = mute(of: device) else {
+                guard let original = output.mute(of: device) else {
                     return "This audio output has no mute control."
                 }
                 guard original == 0 else { return nil }
-                guard canSetMute(on: device) else { return "This audio output cannot be muted." }
+                guard output.canSetMute(on: device) else {
+                    return "This audio output cannot be muted."
+                }
                 try FileManager.default.createDirectory(
                     at: journal.deletingLastPathComponent(), withIntermediateDirectories: true,
                     attributes: [.posixPermissions: 0o700])
                 try save(Record(uid: uid, confirmed: false))
-                guard setMute(1, device: device, uid: uid) else {
+                guard output.setMute(1, device: device, uid: uid) else {
                     try clearRecord()
                     return "Audio mute could not be confirmed."
                 }
-                pending = (1, .now)
+                pending = (1, now)
             } else if let record {
-                guard let device = findOutput(uid: record.uid), let current = mute(of: device)
+                guard let device = output.findOutput(uid: record.uid),
+                    let current = output.mute(of: device)
                 else { return "Reconnect the previous audio output to restore it." }
                 if current == 1 {
                     guard record.confirmed else {
                         return "Check the previous audio output and unmute it manually if needed."
                     }
-                    guard setMute(0, device: device, uid: record.uid) else {
+                    guard output.setMute(0, device: device, uid: record.uid) else {
                         return "Audio restoration could not be confirmed."
                     }
-                    pending = (0, .now)
+                    pending = (0, now)
                     return "Restoring the previous audio output."
                 }
                 try clearRecord()
@@ -150,8 +184,15 @@ enum LidDisplayState: Equatable {
             return nil
         }
     }
+}
 
-    private func defaultOutput() -> AudioDeviceID? {
+@MainActor struct SystemAudioOutput: SessionAudioOutput {
+    private let system = AudioObjectID(kAudioObjectSystemObject)
+    private var muteAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyMute, mScope: kAudioObjectPropertyScopeOutput,
+        mElement: kAudioObjectPropertyElementMain)
+
+    func defaultOutput() -> AudioDeviceID? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
@@ -163,7 +204,7 @@ enum LidDisplayState: Equatable {
         return device
     }
 
-    private func uid(of device: AudioDeviceID) -> String? {
+    func uid(of device: AudioDeviceID) -> String? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyDeviceUID, mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain)
@@ -174,7 +215,7 @@ enum LidDisplayState: Equatable {
         return value?.takeRetainedValue() as String?
     }
 
-    private func findOutput(uid: String) -> AudioDeviceID? {
+    func findOutput(uid: String) -> AudioDeviceID? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyTranslateUIDToDevice,
             mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
@@ -190,14 +231,14 @@ enum LidDisplayState: Equatable {
         return result == noErr && device != kAudioObjectUnknown ? device : nil
     }
 
-    private mutating func mute(of device: AudioDeviceID) -> UInt32? {
+    mutating func mute(of device: AudioDeviceID) -> UInt32? {
         var value: UInt32 = 0
         var size = UInt32(MemoryLayout.size(ofValue: value))
         let result = AudioObjectGetPropertyData(device, &muteAddress, 0, nil, &size, &value)
         return result == noErr && value <= 1 ? value : nil
     }
 
-    private mutating func setMute(_ value: UInt32, device: AudioDeviceID, uid: String) -> Bool {
+    mutating func setMute(_ value: UInt32, device: AudioDeviceID, uid: String) -> Bool {
         guard self.uid(of: device) == uid else { return false }
         var value = value
         return AudioObjectSetPropertyData(
@@ -205,7 +246,7 @@ enum LidDisplayState: Equatable {
             == noErr
     }
 
-    private mutating func canSetMute(on device: AudioDeviceID) -> Bool {
+    mutating func canSetMute(on device: AudioDeviceID) -> Bool {
         var settable = DarwinBoolean(false)
         return AudioObjectIsPropertySettable(device, &muteAddress, &settable) == noErr
             && settable.boolValue
@@ -265,6 +306,11 @@ enum HotspotCredentials {
 }
 
 @MainActor final class HotspotFallback {
+    enum JoinResult: Equatable {
+        case cancelled, noMatch, joined
+    }
+
+    private enum JoinError: Error { case missingCredentials }
     private var monitor: NWPathMonitor?
     private var monitorID: UUID?
     private var offlineSince: ContinuousClock.Instant?
@@ -338,25 +384,41 @@ enum HotspotCredentials {
     private nonisolated static func joinIfAvailable(
         canJoin: @Sendable () async -> Bool
     ) async -> String? {
-        guard !Task.isCancelled, await canJoin() else { return nil }
-        guard let network = HotspotCredentials.read(),
-            let interface = CWWiFiClient.shared().interface()
-        else { return "Hotspot details could not be read. Save them again in Options." }
         do {
-            let nearby = try interface.scanForNetworks(withSSID: Data(network.ssid.utf8))
-            let matches = nearby.filter {
-                $0.ssidData == Data(network.ssid.utf8)
-                    && ($0.supportsSecurity(.wpa2Personal) || $0.supportsSecurity(.wpa3Personal))
+            let result = try await associateIfCurrent(canJoin: canJoin) {
+                guard let network = HotspotCredentials.read(),
+                    let interface = CWWiFiClient.shared().interface()
+                else { throw JoinError.missingCredentials }
+                let name = Data(network.ssid.utf8)
+                let nearby = try interface.scanForNetworks(withSSID: name)
+                let matches = nearby.filter {
+                    $0.ssidData == name
+                        && ($0.supportsSecurity(.wpa2Personal)
+                            || $0.supportsSecurity(.wpa3Personal))
+                }
+                guard matches.count == 1, let target = matches.first else { return nil }
+                return { try interface.associate(to: target, password: network.password) }
             }
-            guard matches.count == 1, let target = matches.first else {
+            if result == .noMatch {
                 return
                     "The selected protected hotspot is unavailable. Check Location Services and your iPhone."
             }
-            guard await canJoin(), !Task.isCancelled else { return nil }
-            try interface.associate(to: target, password: network.password)
             return nil
+        } catch JoinError.missingCredentials {
+            return "Hotspot details could not be read. Save them again in Options."
         } catch {
             return "The iPhone hotspot could not be joined."
         }
+    }
+
+    nonisolated static func associateIfCurrent(
+        canJoin: @Sendable () async -> Bool,
+        scan: () throws -> (() throws -> Void)?
+    ) async throws -> JoinResult {
+        guard !Task.isCancelled, await canJoin(), !Task.isCancelled else { return .cancelled }
+        guard let associate = try scan() else { return .noMatch }
+        guard !Task.isCancelled, await canJoin(), !Task.isCancelled else { return .cancelled }
+        try associate()
+        return .joined
     }
 }

@@ -167,7 +167,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         item.button?.action = #selector(clickStatusItem)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         item.button?.setAccessibilityHelp(
-            "Click to open. Command-click to start your favorite. Right-click for app actions.")
+            "Click to open. Command-click to start your favorite or add 15 minutes. Right-click for app actions."
+        )
         if let button = item.button {
             activeMark.image = BrandArt.menuOrange
             activeMark.isHidden = true
@@ -218,9 +219,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
             if presentation != lastPresentation || deadline != lastDeadlineText {
                 lastPresentation = presentation
                 lastDeadlineText = deadline
-                activeMark.isHidden = presentation != .active
+                activeMark.isHidden = deadline == nil
                 let button = statusItem?.button
-                button?.image = deadline == nil ? BrandArt.menuIdle : nil
+                button?.image =
+                    deadline == nil
+                    ? (presentation == .active ? BrandArt.menuActive : BrandArt.menuIdle) : nil
                 if let deadline {
                     let title = NSAttributedString(
                         string: deadline + "  ",

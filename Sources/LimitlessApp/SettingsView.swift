@@ -26,12 +26,17 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 12) {
             if model.showsPowerControls {
                 Text("Session").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Picker("Menu bar", selection: $model.menuBarStyle) {
+                    ForEach(MenuBarStyle.allCases, id: \.self) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
                 Picker("Favorite duration", selection: $model.favoriteMinutes) {
                     ForEach(SessionEnd.presetMinutes, id: \.self) { minutes in
                         Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h").tag(minutes)
                     }
                 }
-                Text("Command-click the menu bar icon to start the favorite.")
+                Text("Command-click to start or add 15 min.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle(
                     "Session notifications",
@@ -44,7 +49,6 @@ struct SettingsView: View {
                     Toggle("Keep display awake", isOn: $model.draft.keepsDisplayAwake)
                         .help("Keep the screen available for work that needs the desktop.")
                     Toggle("Mute audio when the display sleeps", isOn: $model.muteWhenScreenSleeps)
-                        .help("Also mute when the lid closes with no external display.")
                     if model.showsPowerSource {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Power source")
@@ -124,6 +128,12 @@ struct SettingsView: View {
                         }
                     }
                 }.disabled(!model.canControl && !model.isPreview)
+                if model.showsPowerSource {
+                    Divider()
+                    Text("Closed lid").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Toggle("Mute audio with the lid closed", isOn: $model.muteWithClosedLid)
+                        .help("Applies only when no external display is connected.")
+                }
                 Divider()
                 Text("Network").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 DisclosureGroup("iPhone hotspot", isExpanded: hotspotExpanded.projectedValue) {

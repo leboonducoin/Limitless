@@ -10,9 +10,10 @@ how to verify them.
 - Timers, dates, unlimited sessions and waiting for all selected processes.
 - Active sessions keep the display awake by default. Let the display sleep on request for background work.
 - Stop all protection at critical thermal load. Read battery and thermal state independently.
-- Distinguish a closed lid with and without an external display. Optional audio mute restores the owned output.
+- Distinguish a closed lid with and without an external display. Closed-lid and display-sleep audio muting are independent opt-ins with restoration of the owned output.
 - Optional iPhone hotspot fallback uses an exact protected network, with credentials in Keychain.
-- A Command-click starts the configured favorite when idle. The menu-bar item shows the effective end time.
+- A Command-click starts the configured favorite when idle or extends the app's current timer by 15 minutes. The menu bar offers icon-only and end-time styles.
+- Use one shared keep-awake session. Each request keeps its authorization, deadline and limits. A second app owner cannot start a separate manual session.
 - Optional session notifications report approaching expiry and session endings.
 - A small + button beside Stop adds 15 minutes per click to an owned timer or date session.
 - CLI diagnosis and whole-task AI tracking that identify the provider and respect user limits and manual sessions.

@@ -31,6 +31,7 @@ public struct BatteryCutoff: Codable, Equatable, Sendable {
 public struct SessionRegistry: Sendable {
     public private(set) var policy: UserPolicy
     public private(set) var sessions: [UUID: Session] = [:]
+    public private(set) var protectionID: UUID?
     public private(set) var batteryCutoff: BatteryCutoff?
     public private(set) var recentEndings: [SessionEnding] = []
     public static let capacity = 256
@@ -50,7 +51,11 @@ public struct SessionRegistry: Sendable {
         if kind == .agent, sessions.values.contains(where: { $0.kind == .manual }) {
             throw ServiceError.sessionRejected
         }
+        let sharedID = protectionID ?? UUID()
         if kind == .manual {
+            guard !sessions.values.contains(where: { $0.kind == .manual }) else {
+                throw PolicyError.duplicateSession
+            }
             for agent in sessions.values where agent.kind == .agent {
                 end(agent.id, reason: .manualPriority, at: now.wall)
             }
@@ -59,6 +64,7 @@ public struct SessionRegistry: Sendable {
             id: id, owner: owner, kind: kind, request: request, agent: agent,
             started: now, authorizedDuration: policy.maximumDuration
         )
+        protectionID = sharedID
         batteryCutoff = nil
         return id
     }
@@ -115,6 +121,7 @@ public struct SessionRegistry: Sendable {
     public mutating func stopAll(reason: SessionStopReason = .requested, at date: Date? = nil) {
         if date == nil {
             sessions.removeAll()
+            protectionID = nil
         } else {
             for id in sessions.keys { end(id, reason: reason, at: date) }
         }
@@ -188,6 +195,7 @@ public struct SessionRegistry: Sendable {
 
     private mutating func end(_ id: UUID, reason: SessionStopReason, at date: Date?) {
         sessions.removeValue(forKey: id)
+        if sessions.isEmpty { protectionID = nil }
         guard let date else { return }
         if recentEndings.count == 32 { recentEndings.removeFirst() }
         recentEndings.append(SessionEnding(id: id, reason: reason, date: date))

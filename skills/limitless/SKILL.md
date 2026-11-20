@@ -6,8 +6,8 @@ description: Follow a real local agent task with Limitless keep-awake protection
 # Limitless
 
 Limitless follows real task events from Codex, Claude Code, Cursor and Gemini CLI.
-The first active task requests protection through the installed hooks. Each task
-releases its own hold. Thinking, tool calls and waiting for delegated work remain
+Tasks use one shared session through the installed hooks. Each task releases its
+own request and keeps its own limits. Thinking, tool calls and waiting for delegated work remain
 part of the turn. Detached work that outlives a turn needs its own explicit
 `limitless run` or `limitless watch` session.
 

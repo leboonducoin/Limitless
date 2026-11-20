@@ -13,14 +13,17 @@ Swift throughout. No package dependencies, database or analytics.
 
 ## Sessions
 
-The helper owns the shared session registry. Each authenticated connection owns
-its demands; disconnect or a missed lease releases them. Heartbeats run every
+The helper owns one shared protection session with a stable identifier until
+its last request ends. Each authenticated connection owns its requests.
+Disconnect or a missed lease releases them. Heartbeats run every
 5 seconds with a 30-second lease. Relative deadlines use a continuous clock.
 
 Stop, deadlines, battery protection, critical thermal load and owner loss outrank recovery. Sessions
 never resume after login or reboot. CLI permission is remembered; faults revoke it.
 AI uses the selected power sources and at least 20% battery. Manual sessions
-reject or end AI holds. A stopped task cannot reacquire protection.
+reject or end AI holds. A second app owner cannot create another manual session.
+A stopped task cannot reacquire protection. The latest authorized deadline
+determines the shared countdown when every request is bounded.
 
 Only the authenticated app owning a manual session can extend its timer or date by
 15 minutes. Extensions preserve the session ID, start time, power limits and original
@@ -42,12 +45,13 @@ At critical thermal load the helper rejects new starts and releases existing
 sessions. Cooling permits a new session. The most recent endings are held in
 memory for the menu, notifications and CLI diagnosis.
 
-The menu app reads the lid state and display list separately. Optional audio
-muting operates on the output selected when display sleep or headless lid
-closure is observed. It restores that output after wake or stop if the mute was confirmed.
+The menu app reads the lid state and display list separately. Opt-ins for
+display sleep and lid closure without an external display can mute the
+selected output. It restores that output after wake or stop if the mute was confirmed.
 Switching to a different output while the display stays asleep leaves the new output alone.
-An ambiguous recovery record needs manual attention. Keyboard backlighting remains
-under macOS control.
+It honors an observed manual unmute until the next wake or session. An ambiguous
+recovery record needs manual attention. Keyboard backlighting and Low Power Mode
+remain under macOS control. Apple's public Low Power Mode API only reads state.
 
 Optional hotspot fallback runs in the user app. It reads credentials from the
 login Keychain and looks for one exact WPA2 or WPA3 Personal match after a network

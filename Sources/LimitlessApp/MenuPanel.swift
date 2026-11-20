@@ -145,12 +145,12 @@ struct MenuPanel: View {
                         .disabled(!model.canControl || model.busy)
                 }
             }
-            if let session = model.ownSession {
+            if model.status?.sessions.isEmpty == false {
                 HStack {
                     Text("Current session")
                     Spacer()
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        if let remaining = model.remainingSeconds(session) {
+                        if let remaining = model.protectionRemainingSeconds {
                             Text(
                                 Duration.seconds(remaining).formatted(
                                     .units(

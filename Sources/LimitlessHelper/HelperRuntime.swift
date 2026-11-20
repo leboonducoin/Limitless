@@ -45,7 +45,8 @@ final class HelperRuntime {
             sampledAt: now.wall,
             removal: sessions.isRemoving ? (removalReady ? .ready : .preparing) : .none,
             sudoTouchID: SudoTouchID.status(), batteryCutoff: sessions.registry.batteryCutoff,
-            thermal: thermal, recentEndings: sessions.registry.recentEndings)
+            thermal: thermal, recentEndings: sessions.registry.recentEndings,
+            protectionID: sessions.registry.protectionID)
     }
 
     func takeExpiredOwners() -> Set<UUID> {

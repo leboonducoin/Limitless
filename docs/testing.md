@@ -102,7 +102,8 @@ macOS version and any steps that fail.
 - Use Command-click while idle and check the favorite duration. Confirm that
   Command-Return starts, Command-Plus extends, and Command-Period stops from the
   panel. Open and close Options from keyboard focus. Verify that the bar displays
-  the new end time after extension.
+  the new end time after extension and that icon-only mode uses a full orange
+  mark. Check that Command-click during an owned timer adds 15 minutes to it.
 - Command-drag the Limitless icon farther right, relaunch the app and verify that macOS restores
   its position.
 - Then uninstall: the app should close and its integrations disappear.

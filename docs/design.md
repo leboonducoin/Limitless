@@ -4,12 +4,12 @@ One 340-point menu. Native material, system typography, short labels and no
 separate preferences window. Content sets the height; long lists scroll.
 
 - 21-point title. Battery and remaining time share the callout size.
-- Standard square menu-bar loop. A timed session shows its local end time and a small orange loop at the lower right. Redraw the status item only when the displayed minute or session state changes.
+- Icon-only mode uses the full-size orange loop for active protection. The timed style shows the local end time and a small orange loop at the lower right. An active session without a known end uses the full-size orange loop.
 - macOS restores the menu-bar position after the user moves the item with Command-drag.
-- Command-click starts the configured favorite while idle. Command-Return starts from the open panel, Command-Plus extends, and Command-Period stops.
+- Command-click starts the configured favorite while idle and adds 15 minutes to an owned active timer. Command-Return starts from the open panel, Command-Plus extends, and Command-Period stops.
 - Small footer: version, blue author link, MIT and GitHub.
 - Immediate settings, one Stop button, outside-click dismissal.
-- **Options** opens a disclosure in the same panel. Group controls under Session, Power, Network, Terminal & agents, Administration and App.
+- **Options** opens a disclosure in the same panel. Group controls under Session, Power, Closed lid, Network, Terminal & agents, Administration and App.
 - Small circular + button to the right of Stop for owned manual sessions. Each click adds
   15 minutes to a timer or date; rapid clicks accumulate without disabling the button.
   No extension for unlimited/process sessions. Stop discards queued additions.

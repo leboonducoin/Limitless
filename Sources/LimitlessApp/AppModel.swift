@@ -49,9 +49,14 @@ import UserNotifications
             if !isPreview { preferences.set(favoriteMinutes, forKey: "favoriteMinutes") }
         }
     }
+    var menuBarStyle: MenuBarStyle {
+        didSet {
+            if !isPreview { preferences.set(menuBarStyle.rawValue, forKey: "menuBarStyle") }
+        }
+    }
     private(set) var sessionNotifications: Bool
     private(set) var lastSessionMessage: String?
-    private var remindedSessions: Set<UUID> = []
+    private var sessionNotices = SessionNotices()
     private(set) var lidDisplayState = LidDisplayState.unknown
     private(set) var audioMessage: String?
     private(set) var hotspotMessage: String?
@@ -61,6 +66,14 @@ import UserNotifications
         didSet {
             if !isPreview {
                 preferences.set(muteWhenScreenSleeps, forKey: "muteWhenScreenSleeps")
+                updateEnvironment()
+            }
+        }
+    }
+    var muteWithClosedLid: Bool {
+        didSet {
+            if !isPreview {
+                preferences.set(muteWithClosedLid, forKey: "muteWithClosedLid")
                 updateEnvironment()
             }
         }
@@ -122,8 +135,15 @@ import UserNotifications
         self.buildTrust = buildTrust
         let savedFavorite = preferences.integer(forKey: "favoriteMinutes")
         favoriteMinutes = SessionEnd.presetMinutes.contains(savedFavorite) ? savedFavorite : 60
+        menuBarStyle =
+            preferences.string(forKey: "menuBarStyle").flatMap(MenuBarStyle.init(rawValue:))
+            ?? .timer
         sessionNotifications = preferences.bool(forKey: "sessionNotifications")
-        muteWhenScreenSleeps = preferences.bool(forKey: "muteWhenScreenSleeps")
+        let muteWhenScreenSleeps = preferences.bool(forKey: "muteWhenScreenSleeps")
+        self.muteWhenScreenSleeps = muteWhenScreenSleeps
+        muteWithClosedLid =
+            preferences.object(forKey: "muteWithClosedLid") as? Bool
+            ?? muteWhenScreenSleeps
         hotspotConfigured = preferences.bool(forKey: "hotspotConfigured")
         hotspotEnabled = preferences.bool(forKey: "hotspotEnabled")
         let authentication = LAContext()
@@ -204,8 +224,10 @@ import UserNotifications
         return true
     }
     var canStartFavorite: Bool {
-        canControl && !busy && !updating && status?.sessions.isEmpty == true
-            && status?.sleep.phase == .inactive && status?.sleep.observed == .allowed
+        guard canControl, !busy, !updating else { return false }
+        return canExtendSession
+            || (status?.sessions.isEmpty == true && status?.sleep.phase == .inactive
+                && status?.sleep.observed == .allowed)
     }
     func copyDiagnostic() {
         let reading = connectionError == nil ? status?.diagnosticSummary : nil
@@ -218,12 +240,13 @@ import UserNotifications
         NSPasteboard.general.setString(report, forType: .string)
     }
     var menuBarDeadline: Date? {
-        guard presentation == .active, let status, !status.sessions.isEmpty else { return nil }
-        let durations = status.sessions.compactMap(\.remainingSeconds)
-        guard durations.count == status.sessions.count, let latest = durations.max(),
-            latest.isFinite, latest > 0
+        guard menuBarStyle == .timer, presentation == .active, let status,
+            let latest = status.protectionRemainingSeconds, latest.isFinite, latest > 0
         else { return nil }
         return status.sampledAt.addingTimeInterval(latest)
+    }
+    var protectionRemainingSeconds: Double? {
+        currentRemainingSeconds(status?.protectionRemainingSeconds)
     }
     var taskCount: Int {
         (status?.sessions.filter { $0.kind != .manual }.count ?? 0)
@@ -255,7 +278,11 @@ import UserNotifications
     }
 
     func remainingSeconds(_ session: SessionSummary) -> Double? {
-        guard let remaining = session.remainingSeconds else { return nil }
+        currentRemainingSeconds(session.remainingSeconds)
+    }
+
+    private func currentRemainingSeconds(_ remaining: Double?) -> Double? {
+        guard let remaining else { return nil }
         let elapsed = statusReceivedAt.duration(to: .now).components
         return max(
             0, ceil(remaining - Double(elapsed.seconds) - Double(elapsed.attoseconds) / 1e18))
@@ -593,8 +620,9 @@ import UserNotifications
         let active = !quitting && presentation == .active
         lidDisplayState = active ? .read() : .unknown
         audioMessage = audio.update(
-            shouldMute: active && muteWhenScreenSleeps
-                && (screensAsleep || lidDisplayState == .closedHeadless))
+            shouldMute: lidDisplayState.shouldMuteAudio(
+                active: active, screenAsleep: screensAsleep, muteOnSleep: muteWhenScreenSleeps,
+                muteOnLidClose: muteWithClosedLid))
         hotspot.update(eligible: active && !stoppingSessions && hotspotEnabled) { [weak self] in
             await self?.canJoinHotspot() ?? false
         }
@@ -678,8 +706,6 @@ import UserNotifications
 
     private func updateSessionNotices(_ received: ServiceStatus) {
         let previous = Set(status?.sessions.map(\.id) ?? [])
-        let current = Set(received.sessions.map(\.id))
-        remindedSessions.formIntersection(current)
         if let ending = received.recentEndings.last(where: { previous.contains($0.id) }) {
             let text = ending.reason.summary
             lastSessionMessage = text
@@ -687,12 +713,7 @@ import UserNotifications
                 notify(title: "Limitless session ended", body: text)
             }
         }
-        guard received.sleep.phase == .active, received.sessions.count == 1,
-            let session = received.sessions.first, let remaining = session.remainingSeconds
-        else { return }
-        if remaining > 300 {
-            remindedSessions.remove(session.id)
-        } else if remaining > 0, remindedSessions.insert(session.id).inserted {
+        if sessionNotifications, sessionNotices.shouldRemind(received) {
             notify(title: "Limitless session ending soon", body: "Five minutes or less remain.")
         }
     }
@@ -757,7 +778,11 @@ import UserNotifications
 
     func startFavorite() async {
         guard canStartFavorite else { return }
-        await startManual(choice: .preset(favoriteMinutes))
+        if canExtendSession {
+            await extendSession()
+        } else {
+            await startManual(choice: .preset(favoriteMinutes))
+        }
     }
 
     func startManual(choice: StopChoice? = nil) async {
