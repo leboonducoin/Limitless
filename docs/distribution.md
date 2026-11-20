@@ -98,6 +98,8 @@ Run **Attest distribution archive** manually from the exact release commit on
 Developer ID input. Its attestation describes the GitHub packaging run. The
 signed app's build record supplies the source revision for the local compilation.
 Signing compiles and verifies the app in a fresh private workspace before export.
+Packaging verifies and hashes the same private archive, then checks the archive and
+metadata again at the export destination.
 
 1. Pass the release's CI and Security gates and record the
    [physical acceptance results](compatibility.md).

@@ -447,13 +447,13 @@ func archive(_ app: URL, to destination: URL) throws {
         ["-c", "-k", "--sequesterRsrc", "--keepParent", app.path, destination.path])
 }
 
-func privateSigningWorkspace() throws -> URL {
+func privateDistributionWorkspace() throws -> URL {
     var parent = stat()
     try require(
         lstat("/private/tmp", &parent) == 0 && parent.st_uid == 0
             && parent.st_mode & S_IFMT == S_IFDIR && parent.st_mode & S_ISVTX != 0,
-        "Release signing requires the system's sticky temporary directory.")
-    var path = Array("/private/tmp/limitless-signing-XXXXXX".utf8CString)
+        "Distribution requires the system's sticky temporary directory.")
+    var path = Array("/private/tmp/limitless-distribution-XXXXXX".utf8CString)
     guard path.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress) != nil }) else {
         throw CocoaError(.fileWriteUnknown)
     }
@@ -462,7 +462,7 @@ func privateSigningWorkspace() throws -> URL {
 }
 
 func selfTest(developmentApp: URL? = nil) throws {
-    let signingWorkspace = try privateSigningWorkspace()
+    let signingWorkspace = try privateDistributionWorkspace()
     defer { try? FileManager.default.removeItem(at: signingWorkspace) }
     var workspace = stat()
     try require(
@@ -645,21 +645,26 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         try require(
             try cleanRevision() == record.sourceRevision,
             "Generate release metadata from the same clean source revision as the app.")
-        let output = URL(fileURLWithPath: arguments[3], isDirectory: true)
+        let destination = URL(fileURLWithPath: arguments[3], isDirectory: true)
         try require(
-            !output.resolvingSymlinksInPath().path.hasPrefix(
+            !destination.resolvingSymlinksInPath().path.hasPrefix(
                 app.resolvingSymlinksInPath().path + "/"),
             "Archive output must be outside the signed app.")
         try require(
-            !FileManager.default.fileExists(atPath: output.path), "Output directory already exists."
+            !FileManager.default.fileExists(atPath: destination.path),
+            "Output directory already exists."
         )
-        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
+        let files = FileManager.default
+        let workspace = try privateDistributionWorkspace()
+        defer { try? files.removeItem(at: workspace) }
+        let output = workspace.appendingPathComponent("Output", isDirectory: true)
+        try files.createDirectory(
+            at: output, withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700])
         let zip = output.appendingPathComponent("Limitless-\(version)-universal.zip")
         try archive(app, to: zip)
-        let extracted = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "Limitless-verify-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: extracted, withIntermediateDirectories: false)
-        defer { try? FileManager.default.removeItem(at: extracted) }
+        let extracted = workspace.appendingPathComponent("Extracted", isDirectory: true)
+        try files.createDirectory(at: extracted, withIntermediateDirectories: false)
         _ = try run("/usr/bin/ditto", ["-x", "-k", zip.path, extracted.path])
         let (exportVersion, exportRecord) = try verifyRelease(
             extracted.appendingPathComponent("Limitless.app"), identity: identity,
@@ -667,25 +672,34 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         try require(
             exportVersion == version && exportRecord == record, "Exported archive metadata changed."
         )
-        let digest = SHA256.hash(data: try Data(contentsOf: zip, options: .mappedIfSafe)).map {
-            String(format: "%02x", $0)
-        }.joined()
-        try Data("\(digest)  \(zip.lastPathComponent)\n".utf8).write(
+        let digest = SHA256.hash(data: try Data(contentsOf: zip, options: .mappedIfSafe))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        let checksums = Data("\(hex)  \(zip.lastPathComponent)\n".utf8)
+        try checksums.write(
             to: output.appendingPathComponent("SHA256SUMS"), options: .withoutOverwriting)
         var manifest: [String: Any] = [
             "version": version, "sourceRevision": record.sourceRevision,
-            "archive": zip.lastPathComponent, "sha256": digest,
+            "archive": zip.lastPathComponent, "sha256": hex,
             "channel": community ? "community" : "developer-id", "notarized": notarized,
         ]
         manifest[community ? "certificateSHA1" : "teamID"] =
             community
             ? arguments[2].lowercased() : arguments[2]
-        try JSONSerialization.data(
-            withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys]
-        )
-        .write(to: output.appendingPathComponent("release.json"), options: .withoutOverwriting)
+        let metadata = try JSONSerialization.data(
+            withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
+        try metadata.write(
+            to: output.appendingPathComponent("release.json"), options: .withoutOverwriting)
+        try files.moveItem(at: output, to: destination)
+        try require(
+            try SHA256.hash(
+                data: Data(
+                    contentsOf: destination.appendingPathComponent(zip.lastPathComponent),
+                    options: .mappedIfSafe)) == digest
+                && Data(contentsOf: destination.appendingPathComponent("SHA256SUMS")) == checksums
+                && Data(contentsOf: destination.appendingPathComponent("release.json")) == metadata,
+            "The archive or its metadata changed during export.")
         print(
-            "Verified archive, digest and manifest: \(output.path)\nNothing published."
+            "Verified archive, digest and manifest: \(destination.path)\nNothing published."
         )
     } else {
         print(
@@ -739,7 +753,7 @@ do {
         ?? run("/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-path"], capture: true)
     let sdkVersion = try run(
         "/usr/bin/xcrun", ["--sdk", sdkPath, "--show-sdk-version"], capture: true)
-    let signingWorkspace = signing ? try privateSigningWorkspace() : nil
+    let signingWorkspace = signing ? try privateDistributionWorkspace() : nil
     defer {
         if let signingWorkspace { try? FileManager.default.removeItem(at: signingWorkspace) }
     }
