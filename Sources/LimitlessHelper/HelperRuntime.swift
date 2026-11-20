@@ -143,7 +143,7 @@ final class HelperRuntime {
                 guard removalReady, try canRemove(status) else {
                     throw ServiceError.restorationRequired
                 }
-                if sessions.isPreparingRemoval, let user {
+                if sessions.isUninstalling, let user, try InstalledCLI.isAppOwnedLinkPresent() {
                     try InstalledCLI.remove(user: user)
                 }
                 try sessions.commitRemoval()

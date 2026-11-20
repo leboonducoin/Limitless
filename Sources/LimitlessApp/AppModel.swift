@@ -1288,7 +1288,7 @@ import UserNotifications
             }
             removalStep = "Removing the sudo component…"
             try await SudoInstallation.remove(forUpdate: forUpdate, authorization: authorization)
-            if try (forUpdate && prepared) || !InstalledHelperFiles.areAbsent() {
+            if prepared {
                 await client?.close()
                 client = try await ServiceClient(role: .application)
                 _ = try await client?.send(

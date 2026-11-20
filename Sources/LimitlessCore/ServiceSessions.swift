@@ -159,7 +159,10 @@ public struct ServiceSessions: Sendable {
             try registry.revokeAutomationAndStop(reason: .requested, at: now.wall)
         case .prepareRemoval:
             try registry.revokeAutomationAndStop(at: now.wall)
-            if drain != .committedRemoval { drain = .removal(client.user) }
+            switch drain {
+            case .committedUpdate, .committedRemoval: drain = .committedRemoval
+            case .none, .update, .removal: drain = .removal(client.user)
+            }
         case .prepareUpdate:
             guard registry.sessions.isEmpty else { throw ServiceError.sessionRejected }
             if drain == .none {

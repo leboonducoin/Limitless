@@ -543,3 +543,24 @@ func unfinishedRemovalReopensAdmissionWithoutRevivingWork(_ switchUser: Bool) th
         sampledAt: Date(), removal: .preparing)
     #expect(!withWork.canRemoveService)
 }
+
+@Test func uninstallCannotReopenAdmissionAfterAnUpdateCommits() throws {
+    var (value, app, _) = try service()
+    let now = try serviceClock(0)
+    _ = try value.apply(.prepareUpdate, owner: app, now: now)
+    _ = try value.apply(.finishRemoval, owner: app, now: now)
+    try value.commitRemoval()
+    _ = try value.apply(.prepareRemoval, owner: app, now: now)
+    value.cancelRemovalPreparation()
+    #expect(throws: ServiceError.removalInProgress) {
+        try value.apply(.prepareUpdate, owner: app, now: now)
+    }
+    try value.expire(now: now, consoleUser: 502)
+    let next = UUID()
+    try value.connect(owner: next, user: 502, role: .application, now: now)
+    #expect(value.isUninstalling && !value.isPreparingRemoval)
+    #expect(throws: ServiceError.removalInProgress) {
+        try value.apply(.restorePolicy, owner: next, now: now)
+    }
+    _ = try value.apply(.finishRemoval, owner: next, now: now)
+}
