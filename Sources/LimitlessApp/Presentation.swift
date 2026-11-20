@@ -23,6 +23,23 @@ enum ProcessSelection {
     }
 }
 
+extension SessionStopReason {
+    var summary: String {
+        switch self {
+        case .expired: "The session reached its time limit."
+        case .batteryFloor: "The battery reached the reserved limit."
+        case .thermalCritical: "macOS reported a critical thermal state."
+        case .automationRevoked: "Automation or helper access was withdrawn."
+        case .policyChanged: "The session no longer met the power limits."
+        case .requested: "The session was stopped."
+        case .taskEnded: "The tracked work ended."
+        case .ownerLost: "The session lost contact with its owner."
+        case .manualPriority: "A manual session took priority."
+        case .powerFault: "Limitless could not verify keep-awake protection."
+        }
+    }
+}
+
 enum PowerPresentation: Equatable {
     case active, inactive, suspended, recovering, restoring, attention, unknown
 
@@ -77,6 +94,7 @@ struct PolicyDraft: Equatable {
     var batteryFloor = 20
     var limitsDuration = false
     var maximumMinutes: Double = 120
+    var keepsDisplayAwake = true
 
     init() {}
     init(_ policy: UserPolicy) {
@@ -84,13 +102,14 @@ struct PolicyDraft: Equatable {
         batteryFloor = policy.batteryFloor
         limitsDuration = policy.maximumDuration != nil
         maximumMinutes = (policy.maximumDuration ?? 7_200) / 60
+        keepsDisplayAwake = policy.keepsDisplayAwake
     }
 
     func policy(allowsAutomation: Bool) throws -> UserPolicy {
         try UserPolicy(
             mode: mode, batteryFloor: batteryFloor,
             maximumDuration: limitsDuration ? maximumMinutes * 60 : nil,
-            allowsAutomation: allowsAutomation)
+            allowsAutomation: allowsAutomation, keepsDisplayAwake: keepsDisplayAwake)
     }
 }
 

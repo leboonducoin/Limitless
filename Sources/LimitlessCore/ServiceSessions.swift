@@ -26,7 +26,7 @@ public struct ServiceSessions: Sendable {
                 changedUser || client.user != consoleUser || now.continuous < client.lastContact
                     || now.continuous - client.lastContact >= Self.leaseSeconds ? id : nil
             })
-        for id in expired { disconnect(id) }
+        for id in expired { disconnect(id, at: now.wall) }
         if changedUser { registry = SessionRegistry(policy: try UserPolicy()) }
         return expired
     }
@@ -41,9 +41,9 @@ public struct ServiceSessions: Sendable {
         clients[owner] = Client(user: user, role: role, lastContact: now.continuous)
     }
 
-    public mutating func disconnect(_ owner: UUID) {
+    public mutating func disconnect(_ owner: UUID, at date: Date? = nil) {
         clients.removeValue(forKey: owner)
-        registry.releaseOwner(owner)
+        registry.releaseOwner(owner, at: date)
     }
 
     public mutating func apply(
@@ -54,7 +54,7 @@ public struct ServiceSessions: Sendable {
         guard now.continuous >= client.lastContact,
             now.continuous - client.lastContact < Self.leaseSeconds
         else {
-            disconnect(owner)
+            disconnect(owner, at: now.wall)
             throw ServiceError.ownerExpired
         }
         guard !operation.requiresApplication || client.role == .application else {
@@ -82,33 +82,42 @@ public struct ServiceSessions: Sendable {
             }
             let request: SessionRequest
             let kind: SessionKind
+            let agent: AgentProvider?
             if case .start(let submitted) = operation {
                 request = submitted
                 kind = client.role == .application ? .manual : .task
+                agent = nil
             } else {
-                guard client.role == .task else { throw ServiceError.unauthorized }
+                guard client.role == .task, case .startAgent(let provider) = operation else {
+                    throw ServiceError.unauthorized
+                }
                 request = SessionRequest(
                     mode: registry.policy.mode,
                     batteryFloor: max(20, registry.policy.batteryFloor))
                 kind = .agent
+                agent = provider
             }
             if kind == .agent {
                 client.hasStarted = true
                 clients[owner] = client
             }
-            let id = try registry.start(request, owner: owner, kind: kind, now: now)
+            let id = try registry.start(request, owner: owner, kind: kind, now: now, agent: agent)
             client.hasStarted = true
             clients[owner] = client
             return id
         case .stop(let id):
-            guard registry.stop(id, owner: owner) else { throw ServiceError.unauthorized }
+            guard
+                registry.stop(
+                    id, owner: owner, reason: client.role == .task ? .taskEnded : .requested,
+                    at: now.wall)
+            else { throw ServiceError.unauthorized }
         case .extend(let id): try registry.extend(id, owner: owner, now: now)
-        case .stopAll: registry.stopAll()
+        case .stopAll: registry.stopAll(at: now.wall)
         case .prepareRemoval, .prepareUpdate:
             if operation == .prepareUpdate, !registry.sessions.isEmpty {
                 throw ServiceError.sessionRejected
             }
-            try registry.revokeAutomationAndStop()
+            try registry.revokeAutomationAndStop(at: now.wall)
             isRemoving = true
         case .finishRemoval:
             guard isRemoving else { throw ServiceError.restorationRequired }
@@ -117,11 +126,17 @@ public struct ServiceSessions: Sendable {
         return nil
     }
 
-    public mutating func evaluate(power: PowerSnapshot, now: ClockSnapshot) -> SessionEvaluation {
-        registry.evaluate(power: power, now: now)
+    public mutating func evaluate(
+        power: PowerSnapshot, now: ClockSnapshot, thermal: ThermalCondition = .nominal
+    ) -> SessionEvaluation {
+        registry.evaluate(power: power, now: now, thermal: thermal)
     }
 
-    public mutating func revokeAutomationAndStop() throws { try registry.revokeAutomationAndStop() }
+    public mutating func revokeAutomationAndStop(
+        reason: SessionStopReason = .automationRevoked, at date: Date? = nil
+    ) throws {
+        try registry.revokeAutomationAndStop(reason: reason, at: date)
+    }
 
     public func summaries(
         for owner: UUID, evaluation: SessionEvaluation, now: ClockSnapshot
@@ -140,7 +155,7 @@ public struct ServiceSessions: Sendable {
                 id: session.id, kind: session.kind, end: session.request.end,
                 startedAt: session.started.wall, remainingSeconds: limits.min().map { max(0, $0) },
                 suspension: evaluation.suspended[session.id],
-                belongsToClient: session.owner == owner)
+                belongsToClient: session.owner == owner, agent: session.agent)
         }.sorted { $0.id.uuidString < $1.id.uuidString }
     }
 }

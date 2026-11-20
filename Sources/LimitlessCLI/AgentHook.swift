@@ -1,11 +1,13 @@
 import CryptoKit
 import Darwin
 import Foundation
+import LimitlessCore
 import LimitlessSystem
 
 struct AgentEvent: Equatable {
     enum Action: String { case begin, end, endSession }
     let action: Action
+    let provider: AgentProvider
     let session: String
     let task: String
 
@@ -55,11 +57,14 @@ struct AgentEvent: Equatable {
     }
 
     init(action: Action, provider: String, session: String, task: String) throws {
-        guard [provider, session, task].allSatisfy({ !$0.isEmpty && $0.utf8.count <= 512 }) else {
+        guard let provider = AgentProvider(rawValue: provider),
+            [session, task].allSatisfy({ !$0.isEmpty && $0.utf8.count <= 512 })
+        else {
             throw CLIError.usage("Invalid task identifier.")
         }
         self.action = action
-        self.session = Self.digest(provider + "\0" + session)
+        self.provider = provider
+        self.session = Self.digest(provider.rawValue + "\0" + session)
         self.task = Self.digest(task)
     }
 
@@ -74,6 +79,7 @@ final class AgentActivity {
         let host: ProcessIdentity
         let device: dev_t
         let inode: ino_t
+        let provider: AgentProvider
     }
     static var directory: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -120,7 +126,9 @@ final class AgentActivity {
         let sampled = fstat(marker, &info) == 0
         close(marker)
         guard sampled else { throw WorkError.processUnavailable }
-        return Context(name: name, host: host, device: info.st_dev, inode: info.st_ino)
+        return Context(
+            name: name, host: host, device: info.st_dev, inode: info.st_ino,
+            provider: event.provider)
     }
 
     static func end(_ event: AgentEvent, directory: URL = directory) throws {

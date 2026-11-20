@@ -16,41 +16,55 @@ struct LimitlessCLI {
             case .help: print(help)
             case .version: print("Limitless \(LimitlessIdentity.version)")
             case .hook(let provider): await AgentHook.run(provider: provider)
+            case .checkSetup(let provider):
+                let resources = try await AgentSetup.verifiedResources()
+                if try AgentSetup.isCurrent(provider, resources: resources) {
+                    print("The bundled skill and hooks for \(provider) are installed.")
+                } else {
+                    report("The skill or hooks for \(provider) are missing or need updating.")
+                    exit(69)
+                }
             case .setup(let provider, let remove):
-                try AgentSetup.configure(provider, remove: remove)
+                let resources = try await AgentSetup.verifiedResources()
+                try AgentSetup.configure(provider, remove: remove, resources: resources)
                 print(
                     remove
                         ? "Limitless integration removed from \(provider)."
                         : "Limitless is ready for \(provider). Restart your agent and approve its hooks if asked."
                 )
             case .status(let json):
-                let client = try await ServiceClient(role: .task)
+                let status = try await readStatus()
+                if json {
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                    print(String(decoding: try encoder.encode(status), as: UTF8.self))
+                } else {
+                    print(
+                        "Limitless: \(status.sleep.phase.rawValue); observed sleep flag: \(status.sleep.observed.rawValue)"
+                    )
+                    print(
+                        "Power: \(status.power.source.rawValue); mode: \(status.policy.mode.flag); battery floor: \(status.policy.batteryFloor)%"
+                    )
+                    print(
+                        "Sessions: \(status.sessions.count); automation: \(status.policy.allowsAutomation ? "allowed" : "disabled")"
+                    )
+                    if let fault = status.sleep.fault {
+                        print("Action required: \(fault.rawValue)")
+                    }
+                }
+            case .doctor:
+                let os = ProcessInfo.processInfo.operatingSystemVersionString
+                print("Limitless \(LimitlessIdentity.version), protocol \(ServiceWire.version)")
+                print(os)
                 do {
-                    guard let status = try await client.send(.status).status else {
-                        throw ServiceError.unavailable
-                    }
-                    if json {
-                        let encoder = JSONEncoder()
-                        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                        print(String(decoding: try encoder.encode(status), as: UTF8.self))
-                    } else {
-                        print(
-                            "Limitless: \(status.sleep.phase.rawValue); observed sleep flag: \(status.sleep.observed.rawValue)"
-                        )
-                        print(
-                            "Power: \(status.power.source.rawValue); mode: \(status.policy.mode.flag); battery floor: \(status.policy.batteryFloor)%"
-                        )
-                        print(
-                            "Sessions: \(status.sessions.count); automation: \(status.policy.allowsAutomation ? "allowed" : "disabled")"
-                        )
-                        if let fault = status.sleep.fault {
-                            print("Action required: \(fault.rawValue)")
-                        }
-                    }
-                    await client.close()
+                    let status = try await readStatus()
+                    print("Power helper authenticated.")
+                    print(status.diagnosticSummary)
                 } catch {
-                    await client.close()
-                    throw error
+                    report(
+                        "No current reading from the power helper. \(error is SignatureError ? "Check the app signature and /Applications installation." : "Check helper approval and matching versions in the app.")"
+                    )
+                    exit(69)
                 }
             case .run(let command, let request):
                 let work = try TrackedCommand(arguments: command)
@@ -65,13 +79,27 @@ struct LimitlessCLI {
         }
     }
 
+    @MainActor private static func readStatus() async throws -> ServiceStatus {
+        let client = try await ServiceClient(role: .task)
+        do {
+            let reply = try await client.send(.status)
+            guard let status = reply.status else { throw ServiceError.unavailable }
+            await client.close()
+            return status
+        } catch {
+            await client.close()
+            throw error
+        }
+    }
+
     @MainActor private static func follow(
         command: TrackedCommand?, process: ProcessIdentity?, request: SessionRequest,
         agent: AgentActivity? = nil
     ) async throws -> Int32 {
         let client = try await ServiceClient(role: .task)
         do {
-            let reply = try await client.send(agent == nil ? .start(request) : .startAgent)
+            let reply = try await client.send(
+                agent.map { .startAgent($0.context.provider) } ?? .start(request))
             guard let id = reply.startedSession, let status = reply.status,
                 let session = status.sessions.first(where: { $0.id == id && $0.belongsToClient }),
                 status.sleep.fault == nil
@@ -232,9 +260,10 @@ struct LimitlessCLI {
 
         Usage:
           limitless status [--json]
+          limitless doctor
           limitless run [options] -- command [arguments...]
           limitless watch [options] --pid ID
-          limitless setup codex|claude|cursor|gemini [--remove]
+          limitless setup codex|claude|cursor|gemini [--check | --remove]
           limitless hook codex|claude|cursor|gemini|other   (lifecycle JSON on stdin)
           limitless --version
 

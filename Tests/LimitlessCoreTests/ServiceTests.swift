@@ -149,11 +149,11 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
     var (value, app, first) = try service()
     let now = try serviceClock(0)
     _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
-    let startedA = try value.apply(.startAgent, owner: first, now: now)
+    let startedA = try value.apply(.startAgent(.other), owner: first, now: now)
     let a = try #require(startedA)
     let second = UUID()
     try value.connect(owner: second, user: 501, role: .task, now: now)
-    let startedB = try value.apply(.startAgent, owner: second, now: now)
+    let startedB = try value.apply(.startAgent(.other), owner: second, now: now)
     let b = try #require(startedB)
     #expect(value.registry.sessions[a]?.request.mode == .all)
     #expect(value.registry.sessions[a]?.request.batteryFloor == 20)
@@ -163,18 +163,18 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
     let manual = try #require(startedManual)
     #expect(value.registry.sessions.count == 1 && value.registry.sessions[manual] != nil)
     #expect(throws: ServiceError.ownerExpired) {
-        try value.apply(.startAgent, owner: second, now: now)
+        try value.apply(.startAgent(.other), owner: second, now: now)
     }
     let third = UUID()
     try value.connect(owner: third, user: 501, role: .task, now: now)
     let original = value.registry.policy
     #expect(throws: ServiceError.sessionRejected) {
-        try value.apply(.startAgent, owner: third, now: now)
+        try value.apply(.startAgent(.other), owner: third, now: now)
     }
     #expect(value.registry.policy == original && value.registry.sessions[manual] != nil)
     _ = try value.apply(.stop(manual), owner: app, now: now)
     #expect(throws: ServiceError.ownerExpired) {
-        try value.apply(.startAgent, owner: third, now: now)
+        try value.apply(.startAgent(.other), owner: third, now: now)
     }
 }
 
@@ -186,7 +186,7 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
             try UserPolicy(
                 mode: .battery, batteryFloor: 35,
                 maximumDuration: 60, allowsAutomation: true)), owner: app, now: now)
-    let started = try value.apply(.startAgent, owner: task, now: now)
+    let started = try value.apply(.startAgent(.other), owner: task, now: now)
     let id = try #require(started)
     #expect(value.registry.sessions[id]?.request.mode == .battery)
     #expect(value.registry.sessions[id]?.request.batteryFloor == 35)
@@ -195,7 +195,26 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
         source: .battery, battery: .available(percent: 35, isDischarging: true))
     #expect(value.evaluate(power: power, now: now).stopped[id] == .batteryFloor)
     #expect(throws: ServiceError.ownerExpired) {
-        try value.apply(.startAgent, owner: task, now: now)
+        try value.apply(.startAgent(.other), owner: task, now: now)
+    }
+}
+
+@Test func thermalCutoffEndsTrackedWorkAndReportsItsReason() throws {
+    var (value, app, task) = try service()
+    let now = try serviceClock(0)
+    let power = PowerSnapshot(source: .external, battery: .notPresent)
+    _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
+    let started = try value.apply(.startAgent(.codex), owner: task, now: now)
+    let id = try #require(started)
+    let serious = value.evaluate(power: power, now: now, thermal: .serious)
+    #expect(serious.eligible == [id])
+    #expect(value.summaries(for: app, evaluation: serious, now: now).first?.agent == .codex)
+    let critical = value.evaluate(power: power, now: now, thermal: .critical)
+    #expect(!critical.wantsAwake && critical.stopped[id] == .thermalCritical)
+    #expect(value.registry.recentEndings.last?.reason == .thermalCritical)
+    #expect(!value.evaluate(power: power, now: now, thermal: .nominal).wantsAwake)
+    #expect(throws: ServiceError.ownerExpired) {
+        try value.apply(.startAgent(.codex), owner: task, now: now)
     }
 }
 
@@ -277,7 +296,7 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
     for data in [
         Data(), Data("{}".utf8), Data(repeating: 32, count: ServiceWire.maximumMessageBytes + 1),
         Data(
-            #"{"version":11,"operation":{"configure":{"_0":{"mode":"all","batteryFloor":81,"allowsAutomation":true}}}}"#
+            #"{"version":\#(ServiceWire.version),"operation":{"configure":{"_0":{"mode":"all","batteryFloor":81,"allowsAutomation":true}}}}"#
                 .utf8),
     ] {
         #expect(throws: ServiceError.invalidMessage) { try ServiceWire.decodeRequest(data) }
@@ -295,12 +314,19 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
     #expect(throws: ServiceError.incompatibleVersion) {
         try ServiceWire.decodeRequest(Data(#"{"version":10,"operation":{"status":{}}}"#.utf8))
     }
+    #expect(throws: ServiceError.incompatibleVersion) {
+        try ServiceWire.decodeRequest(Data(#"{"version":11,"operation":{"startAgent":{}}}"#.utf8))
+    }
+    #expect(throws: ServiceError.incompatibleVersion) {
+        try ServiceWire.decodeReply(Data(#"{"version":11,"status":{}}"#.utf8))
+    }
     for operation in [
         ServiceOperation.status, .heartbeat, .stop(UUID()), .extend(UUID()), .rearm,
         .retryRestoration,
         .stopAll, .prepareRemoval, .prepareUpdate, .finishRemoval,
         .configure(try UserPolicy(batteryFloor: 80)),
-        .start(SessionRequest(end: .after(seconds: 60))), .setSudoTouchID(true),
+        .start(SessionRequest(end: .after(seconds: 60))), .startAgent(.codex),
+        .setSudoTouchID(true),
     ] {
         #expect(
             try ServiceWire.decodeRequest(ServiceWire.encode(ServiceRequest(operation))).operation

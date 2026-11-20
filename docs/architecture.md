@@ -17,25 +17,42 @@ The helper owns the shared session registry. Each authenticated connection owns
 its demands; disconnect or a missed lease releases them. Heartbeats run every
 5 seconds with a 30-second lease. Relative deadlines use a continuous clock.
 
-Stop, deadlines, battery protection and owner loss outrank recovery. Sessions
+Stop, deadlines, battery protection, critical thermal load and owner loss outrank recovery. Sessions
 never resume after login or reboot. CLI permission is remembered; faults revoke it.
-AI uses both sources and at least 20% battery, within user limits. Manual sessions
+AI uses the selected power sources and at least 20% battery. Manual sessions
 reject or end AI holds. A stopped task cannot reacquire protection.
 
 Only the authenticated app owning a manual session can extend its timer or date by
 15 minutes. Extensions preserve the session ID, start time, power limits and original
-duration ceiling. Expired/stopped sessions cannot be extended. Protocol 11 requires
-matching app, CLI and helpers; older helpers cannot provide display protection or extensions.
+duration ceiling. Expired or stopped sessions cannot be extended. Protocol 12 requires
+matching app, CLI and helpers and adds display policy, stop reasons, thermal
+readings and agent provider names.
 
 ## Power
 
 `MacSleepBackend` isolates the undocumented global `pmset disablesleep` flag.
-Battery/adapter modes are policies, not independent macOS flags. Unknown readings
-suspend protection. The helper also runs Apple’s `caffeinate -d -i` and checks both
-system and display assertions every two seconds. Keeping the display awake prevents
-automatic idle locking while protection is active; manual locking and managed security
-policies remain under macOS control. Assertions are released with the session, including
-suspension or battery cutoff. Recovery and restoration each allow three attempts.
+Battery and adapter modes are policies. Unknown power readings suspend protection.
+The helper checks the system assertion from Apple's `caffeinate -i` and the display
+assertion when the policy also requests `-d`. Keeping the display awake prevents
+automatic idle locking. Manual locking and managed security policies stay under
+macOS control. Assertions are released at the end, including suspension, thermal
+cutoff and battery cutoff. Recovery and restoration each allow three attempts.
+
+At critical thermal load the helper rejects new starts and releases existing
+sessions. Cooling permits a new session. The most recent endings are held in
+memory for the menu, notifications and CLI diagnosis.
+
+The menu app reads the lid state and display list separately. Optional audio
+muting operates on the output selected when display sleep or headless lid
+closure is observed. It restores that output after wake or stop if the mute was confirmed.
+Switching to a different output while the display stays asleep leaves the new output alone.
+An ambiguous recovery record needs manual attention. Keyboard backlighting remains
+under macOS control.
+
+Optional hotspot fallback runs in the user app. It reads credentials from the
+login Keychain and looks for one exact WPA2 or WPA3 Personal match after a network
+outage. It rechecks eligibility before joining. CoreWLAN association already in
+progress completes under macOS control.
 
 Only owned state is restored. A protected root journal records ownership before
 changes and survives interruption; invalid files fail closed. Competing privileged

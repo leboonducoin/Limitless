@@ -25,6 +25,13 @@ import AppKit
     }
 
     static let menuIdle = menuImage()
+    static let menuOrange = NSImage(size: NSSize(width: 12, height: 10), flipped: false) { bounds in
+        NSColor(srgbRed: 0.92, green: 0.42, blue: 0.08, alpha: 1).setStroke()
+        let path = loop(in: bounds.insetBy(dx: 0.7, dy: 0.7))
+        path.lineWidth = 1.35
+        path.stroke()
+        return true
+    }
 
     static let github: NSImage = {
         let svg = """

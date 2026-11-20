@@ -1,20 +1,34 @@
 ---
 name: limitless
-description: Keep this Mac awake for the whole agent task using the installed Limitless lifecycle hooks.
+description: Follow a real local agent task with Limitless keep-awake protection, or check the installed skill, hooks and power state when protection is unclear.
 ---
 
 # Limitless
 
-Installed lifecycle hooks start protection with the task and end it when the task
-finishes. Keep them active through thinking and tool calls. Wait for delegated
-work before ending the turn. Never create dummy work to extend a session.
+Limitless follows real task events from Codex, Claude Code, Cursor and Gemini CLI.
+The first active task requests protection through the installed hooks. Each task
+releases its own hold. Thinking, tool calls and waiting for delegated work remain
+part of the turn. Detached work that outlives a turn needs its own explicit
+`limitless run` or `limitless watch` session.
 
-Use both power sources and a 20% battery reserve, within stricter user limits.
-Each task releases only its own hold; the last finished task ends protection.
-A manual Keep awake session takes priority: never change or stop it.
+## Confirm protection
 
-Do not change preferences, use sudo, rearm protection or reacquire a stopped hold.
-Use `limitless status` if uncertain. If setup is missing, report it rather than
-claiming protection. Never read transcripts to infer activity.
+- Use `limitless status --json` when the user asks whether the Mac is being kept
+  awake. Check the helper's observed state, its fault and the session suspension
+  reason. A hook event or an armed session alone cannot confirm protection.
+- Use `limitless doctor` when the helper is unavailable or a session stopped.
+  Explain what was observed and give the user a specific next action. A cutoff
+  ends protection while the underlying task continues.
+- Use `limitless setup PROVIDER --check` to verify the installed skill and hook
+  files without editing them. For setup or repair requested by the user, follow
+  the [provider instructions](https://github.com/leboonducoin/Limitless/blob/main/docs/cli.md#ai-agent-setup).
+  Setup may require an agent restart and its normal hook approval.
 
-[One-command setup and other agents](https://github.com/leboonducoin/Limitless/blob/main/docs/cli.md#ai-agent-setup).
+## Respect session ownership
+
+The app's power-source limits apply, with at least 20% battery reserved for agent
+tasks. A manual session takes priority. Use the installed hooks as the sole
+automatic source of task activity. Never synthesize lifecycle events, inspect
+transcripts to infer activity, change power preferences, use sudo, or reacquire
+protection after a stop. If cancellation was missed, tell the user how to stop
+the session in Limitless.

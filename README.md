@@ -32,7 +32,11 @@ Privacy & Security → Open Anyway**. [Apple’s instructions](https://support.a
 
 ## Use it
 
-Choose a duration and click **Keep awake**. The orange dot means it is active.
+Choose a duration and click **Keep awake**. The orange mark indicates active protection.
+
+Command-click the menu-bar icon to start your favorite duration. Timed sessions
+show their end time beside the orange Limitless mark. Open **Options** for display
+sleep, notifications, audio muting, iPhone hotspot fallback and agent setup.
 
 - Stop after a timer, at a date, or when all selected processes finish.
 - Choose battery, power adapter, or both. Reserve 20% battery by default.
@@ -48,6 +52,7 @@ For the terminal and AI integrations, enable **Allow CLI & AI tasks** in the app
 ```sh
 limitless --help
 limitless status
+limitless doctor
 ```
 
 [CLI and one-command AI setup →](docs/cli.md)

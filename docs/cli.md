@@ -1,6 +1,6 @@
 # CLI & AI
 
-Move Limitless to Applications and enable **Allow CLI & AI tasks** in its menu.
+Move Limitless to Applications and enable **Allow CLI & AI tasks** under **Options**.
 The `limitless` command is installed automatically.
 
 ## Terminal
@@ -9,6 +9,7 @@ The `limitless` command is installed automatically.
 limitless run -- swift test
 limitless watch --pid 12345
 limitless status
+limitless doctor
 limitless --help
 ```
 
@@ -25,6 +26,9 @@ session when the work ends. Your command keeps its output and exit code.
 
 Choose one power mode and one stop condition. App limits always apply.
 Reaching a limit ends protection, not your command. `status --json` is available.
+`doctor` reads the authenticated helper and reports the OS and protocol version,
+observed power state, last stop reason and any fault. It omits paths, session
+identifiers, command arguments and hotspot credentials.
 
 ## AI agent setup
 
@@ -45,8 +49,10 @@ left untouched, as are paths writable by another user through permissions or ACL
 Setup also stops if a configuration directory is replaced while the change is in
 progress. A failed setup or removal restores the previous settings and skill files.
 Custom configuration locations need manual setup.
+`limitless setup codex --check` (or another supported provider) compares the
+installed skill and hook entries to the bundled version without changing them.
 
-During a task, Limitless uses **both power sources and a 20% battery reserve**,
+During a task, Limitless uses the app's power sources and **at least a 20% battery reserve**,
 including while the agent thinks. Stricter app limits still apply. The last task
 to finish releases the hold. A manual **Keep awake** session always takes priority.
 
@@ -55,7 +61,8 @@ App uninstall also removes integrations installed this way. Backups are retained
 for recovery; other settings and hooks are preserved. A failed removal is rolled back
 so a retry starts from the prior complete installation.
 
-These integrations need a local agent with lifecycle hooks. If your agent misses
+Limitless's menu displays the providers and task count using the helper's
+authenticated session summaries. These integrations need a local agent with lifecycle hooks. If your agent misses
 a cancellation event, click **Stop** in Limitless; exiting the agent also releases
 its holds. Work detached beyond a turn needs its own task tracking.
 

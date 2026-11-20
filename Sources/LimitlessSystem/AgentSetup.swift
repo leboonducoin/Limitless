@@ -5,6 +5,18 @@ public enum AgentSetup {
     public static let providers = ["codex", "claude", "cursor", "gemini"]
     private static let maximumFileSize = 1_024 * 1_024
 
+    @concurrent public static func verifiedResources() async throws -> URL {
+        let identity = try await SignedIdentity.current(
+            expectedIdentifier: LimitlessIdentity.commandLine)
+        let app = URL(fileURLWithPath: "/Applications/Limitless.app", isDirectory: true)
+        guard app.resolvingSymlinksInPath().path == app.path,
+            identity.executableURL.path
+                == app.appendingPathComponent("Contents/MacOS/limitless").path
+        else { throw SignatureError.untrustedIdentity }
+        try identity.verifyExecutable(at: app, identifier: LimitlessIdentity.application)
+        return app.appendingPathComponent("Contents/Resources/limitless-skill")
+    }
+
     private struct ManagedFile: Equatable {
         let data: Data
         let device: dev_t
@@ -337,6 +349,33 @@ public enum AgentSetup {
         if provider == "cursor", !remove { config["version"] = 1 }
         return try JSONSerialization.data(
             withJSONObject: config, options: [.prettyPrinted, .sortedKeys])
+    }
+
+    public static func isCurrent(
+        _ provider: String, home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        resources: URL = URL(
+            fileURLWithPath: "/Applications/Limitless.app/Contents/Resources/limitless-skill")
+    ) throws -> Bool {
+        guard geteuid() != 0 else { throw CocoaError(.fileReadNoPermission) }
+        let home = home.standardizedFileURL.resolvingSymlinksInPath()
+        let paths = try locations(provider)
+        let parts = paths.config.split(separator: "/").map(String.init)
+        guard let name = parts.last,
+            let config = try ManagedDirectory.open(
+                home: home, components: Array(parts.dropLast()), create: false, owner: geteuid())?
+                .read(name)?.data,
+            let skill = try ManagedDirectory.open(
+                home: home, components: paths.skill.split(separator: "/").map(String.init),
+                create: false, owner: geteuid())?.read("SKILL.md")?.data
+        else { return false }
+        let template = try Data(
+            contentsOf: resources.appendingPathComponent("hooks/\(provider).json"))
+        let expected = try merged(config, template: template, provider: provider, remove: false)
+        let canonical = try JSONSerialization.data(
+            withJSONObject: JSONSerialization.jsonObject(with: config),
+            options: [.prettyPrinted, .sortedKeys])
+        return canonical == expected
+            && skill == (try? Data(contentsOf: resources.appendingPathComponent("SKILL.md")))
     }
 
     public static func configure(

@@ -768,6 +768,8 @@ do {
             buildEnvironment["LIMITLESS_HELPER_METADATA"] = directory.path
         }
         var sudoInfo = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
+        sudoInfo.removeValue(forKey: "NSLocationUsageDescription")
+        sudoInfo.removeValue(forKey: "NSLocationWhenInUseUsageDescription")
         sudoInfo["CFBundleIdentifier"] = "io.github.leboonducoin.Limitless.sudo"
         sudoInfo["CFBundleExecutable"] = "LimitlessSudo"
         sudoInfo["CFBundleName"] = "Limitless — Touch ID for sudo"
@@ -816,6 +818,7 @@ do {
                 [
                     "swiftc", "-DDEBUG", "-swift-version", "6", "-I", modules,
                     "Sources/LimitlessApp/AppModel.swift", "Sources/LimitlessApp/BrandArt.swift",
+                    "Sources/LimitlessApp/EnvironmentActions.swift",
                     "Sources/LimitlessApp/MenuPanel.swift",
                     "Sources/LimitlessApp/Presentation.swift",
                     "Sources/LimitlessApp/SettingsView.swift", "Tools/ExportPreview.swift",

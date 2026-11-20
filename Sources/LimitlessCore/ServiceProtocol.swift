@@ -8,7 +8,7 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
     case status
     case configure(UserPolicy)
     case start(SessionRequest)
-    case startAgent
+    case startAgent(AgentProvider)
     case stop(UUID)
     case extend(UUID)
     case stopAll
@@ -35,7 +35,7 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
 public enum ServiceError: String, Error, Codable, Sendable {
     case invalidMessage, incompatibleVersion, unauthorized, ownerExpired, capacityReached
     case sessionRejected, restorationRequired, removalInProgress, unavailable
-    case sudoTouchIDPermissionDenied, sudoTouchIDFailed
+    case sudoTouchIDPermissionDenied, sudoTouchIDFailed, thermalCritical
 }
 
 public enum RemovalState: String, Codable, Equatable, Sendable {
@@ -63,10 +63,12 @@ public struct SessionSummary: Codable, Equatable, Sendable, Identifiable {
     public let remainingSeconds: TimeInterval?
     public let suspension: SuspensionReason?
     public let belongsToClient: Bool
+    public let agent: AgentProvider?
 
     public init(
         id: UUID, kind: SessionKind, end: SessionEnd, startedAt: Date,
-        remainingSeconds: TimeInterval?, suspension: SuspensionReason?, belongsToClient: Bool
+        remainingSeconds: TimeInterval?, suspension: SuspensionReason?, belongsToClient: Bool,
+        agent: AgentProvider? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -75,6 +77,7 @@ public struct SessionSummary: Codable, Equatable, Sendable, Identifiable {
         self.remainingSeconds = remainingSeconds
         self.suspension = suspension
         self.belongsToClient = belongsToClient
+        self.agent = agent
     }
 }
 
@@ -87,10 +90,27 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
     public let removal: RemovalState
     public let sudoTouchID: SudoTouchIDState
     public let batteryCutoff: BatteryCutoff?
+    public let thermal: ThermalCondition
+    public let recentEndings: [SessionEnding]
 
     public var canRemoveService: Bool {
         removal != .none && sessions.isEmpty && !sleep.ownsGlobalHold
             && sleep.observed == .allowed && (sleep.phase == .inactive || sleep.phase == .blocked)
+    }
+
+    public var diagnosticSummary: String {
+        let end = recentEndings.last?.reason.rawValue ?? "none"
+        return """
+            State: \(sleep.phase.rawValue)
+            Observed sleep flag: \(sleep.observed.rawValue)
+            Owned power change: \(sleep.ownsGlobalHold ? "yes" : "no")
+            Power source: \(power.source.rawValue)
+            Thermal state: \(thermal.rawValue)
+            Battery reserve: \(policy.batteryFloor)%
+            Active or suspended sessions: \(sessions.count)
+            Last stop reason: \(end)
+            Power fault: \(sleep.fault?.rawValue ?? "none")
+            """
     }
 
     public func automationPolicyToRestore(_ saved: UserPolicy) throws -> UserPolicy? {
@@ -103,13 +123,14 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
             batteryFloor: max(policy.batteryFloor, saved.batteryFloor),
             maximumDuration: [policy.maximumDuration, saved.maximumDuration].compactMap { $0 }
                 .min(),
-            allowsAutomation: true)
+            allowsAutomation: true, keepsDisplayAwake: saved.keepsDisplayAwake)
     }
 
     public init(
         policy: UserPolicy, power: PowerSnapshot, sleep: SleepReport,
         sessions: [SessionSummary], sampledAt: Date, removal: RemovalState = .none,
-        sudoTouchID: SudoTouchIDState = .unavailable, batteryCutoff: BatteryCutoff? = nil
+        sudoTouchID: SudoTouchIDState = .unavailable, batteryCutoff: BatteryCutoff? = nil,
+        thermal: ThermalCondition = .unknown, recentEndings: [SessionEnding] = []
     ) {
         self.policy = policy
         self.power = power
@@ -119,6 +140,8 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
         self.removal = removal
         self.sudoTouchID = sudoTouchID
         self.batteryCutoff = batteryCutoff
+        self.thermal = thermal
+        self.recentEndings = recentEndings
     }
 }
 
@@ -142,8 +165,12 @@ public struct ServiceReply: Codable, Sendable {
 }
 
 public enum ServiceWire {
-    public static let version = 11
+    public static let version = 12
     public static let maximumMessageBytes = 131_072
+
+    private struct Header: Decodable {
+        let version: Int
+    }
 
     public static func decodeRequest(_ data: Data) throws -> ServiceRequest {
         let request: ServiceRequest = try decode(data)
@@ -167,7 +194,13 @@ public enum ServiceWire {
         guard !data.isEmpty, data.count <= maximumMessageBytes else {
             throw ServiceError.invalidMessage
         }
-        do { return try JSONDecoder().decode(T.self, from: data) } catch {
+        let decoder = JSONDecoder()
+        do { return try decoder.decode(T.self, from: data) } catch {
+            if let header = try? decoder.decode(Header.self, from: data),
+                header.version != version
+            {
+                throw ServiceError.incompatibleVersion
+            }
             throw ServiceError.invalidMessage
         }
     }

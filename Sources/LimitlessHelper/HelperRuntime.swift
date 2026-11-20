@@ -26,13 +26,15 @@ final class HelperRuntime {
         expiredOwners.formUnion(
             try sessions.expire(now: now, consoleUser: ConsoleUser.identifier()))
         let power = powerReader.snapshot()
-        var evaluation = sessions.evaluate(power: power, now: now)
+        let thermal = ThermalCondition(ProcessInfo.processInfo.thermalState)
+        var evaluation = sessions.evaluate(power: power, now: now, thermal: thermal)
         var report = controller.reconcile(
-            wantsAwake: evaluation.wantsAwake, now: now,
+            wantsAwake: evaluation.wantsAwake,
+            keepsDisplayAwake: sessions.registry.policy.keepsDisplayAwake, now: now,
             backend: &backend, journal: &journal)
         if report.fault != nil {
-            try sessions.revokeAutomationAndStop()
-            evaluation = sessions.evaluate(power: power, now: now)
+            try sessions.revokeAutomationAndStop(reason: .powerFault, at: now.wall)
+            evaluation = sessions.evaluate(power: power, now: now, thermal: thermal)
             report = controller.reconcile(
                 wantsAwake: false, now: now,
                 backend: &backend, journal: &journal)
@@ -42,7 +44,8 @@ final class HelperRuntime {
             sessions: sessions.summaries(for: owner, evaluation: evaluation, now: now),
             sampledAt: now.wall,
             removal: sessions.isRemoving ? (removalReady ? .ready : .preparing) : .none,
-            sudoTouchID: SudoTouchID.status(), batteryCutoff: sessions.registry.batteryCutoff)
+            sudoTouchID: SudoTouchID.status(), batteryCutoff: sessions.registry.batteryCutoff,
+            thermal: thermal, recentEndings: sessions.registry.recentEndings)
     }
 
     func takeExpiredOwners() -> Set<UUID> {
@@ -54,16 +57,17 @@ final class HelperRuntime {
         do {
             let request = try ServiceWire.decodeRequest(data)
             if case .setSudoTouchID = request.operation { throw ServiceError.unauthorized }
-            _ = try reconcile(owner: owner)
-            if controller.fault != nil {
-                switch request.operation {
-                case .start, .startAgent: throw ServiceError.restorationRequired
-                default: break
-                }
+            let before = try reconcile(owner: owner)
+            switch request.operation {
+            case .start, .startAgent:
+                if before.thermal == .critical { throw ServiceError.thermalCritical }
+                if controller.fault != nil { throw ServiceError.restorationRequired }
+            default: break
             }
             let started = try sessions.apply(
                 request.operation, owner: owner, now: SystemClock.now())
             switch request.operation {
+            case .status, .heartbeat: return ServiceReply(status: before)
             case .installCLI:
                 guard let user = sessions.consoleUser else { throw ServiceError.unauthorized }
                 try InstalledCLI.install(identity: identity, user: user)
@@ -92,7 +96,15 @@ final class HelperRuntime {
                 else { throw ServiceError.restorationRequired }
                 try installedFiles?.remove()
             }
-            return ServiceReply(status: try reconcile(owner: owner), startedSession: started)
+            let after = try reconcile(owner: owner)
+            if let started,
+                after.recentEndings.contains(where: {
+                    $0.id == started && $0.reason == .thermalCritical
+                })
+            {
+                return ServiceReply(status: after, error: .thermalCritical)
+            }
+            return ServiceReply(status: after, startedSession: started)
         } catch {
             let failure: ServiceError
             switch error {

@@ -5,7 +5,7 @@ Include the app version, macOS version and steps to reproduce it. Leave out
 passwords, keys and private task contents. Use public issues for ordinary bugs.
 
 Limitless asks macOS for administrator approval to manage sleep. It never stores
-your password. Terminal commands and AI tasks run with your normal permissions.
+the administrator password. Terminal commands and AI tasks run with your normal permissions.
 Tasks cannot override your limits or take over a manual session.
 
 Touch ID for sudo is a separate, optional Mac-wide setting. It keeps password
@@ -14,6 +14,10 @@ fallback and never grants sudo rights to users who do not already have them.
 There is no analytics or task-content collection. Update requests go to GitHub;
 downloaded apps must pass integrity and publisher-signature checks. macOS opening
 approvals remain in place.
+
+The optional iPhone hotspot stores only its network name and password in the
+local Keychain. The menu app requests Location Services to read Wi-Fi network names.
+Neither credential appears in diagnostics.
 
 Updates are installed only while idle. Uninstall restores sleep before removing
 the helper. If restoration fails, the app keeps the information needed to retry.

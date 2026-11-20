@@ -8,6 +8,7 @@ private enum SimulatedFailure: Error { case io }
 private struct TestBackend: SleepBackend {
     var observation: SleepObservation = .allowed
     var hasIdleAssertion = false
+    var keepsDisplayAwake = false
     var writes: [Bool] = []
     var failsEnable = false
     var failsDisable = false
@@ -20,10 +21,28 @@ private struct TestBackend: SleepBackend {
         if disabled ? failsEnable : failsDisable { throw SimulatedFailure.io }
         if !ignoresWrites { observation = disabled ? .disabled : .allowed }
     }
-    mutating func setIdleAssertion(_ held: Bool) throws {
+    mutating func setIdleAssertion(_ held: Bool, keepingDisplayAwake: Bool) throws {
         if failsAssertion { throw SimulatedFailure.io }
         hasIdleAssertion = held
+        keepsDisplayAwake = held && keepingDisplayAwake
     }
+}
+
+@Test func changingDisplayModeKeepsGlobalHoldAndRestoresOnStop() throws {
+    var controller = SleepController(restoringOwnedHold: false)
+    var backend = TestBackend()
+    var journal = TestJournal()
+    _ = controller.reconcile(
+        wantsAwake: true, now: try instant(), backend: &backend, journal: &journal)
+    #expect(backend.keepsDisplayAwake)
+    let changed = controller.reconcile(
+        wantsAwake: true, keepsDisplayAwake: false, now: try instant(11), backend: &backend,
+        journal: &journal)
+    #expect(changed.phase == .active && backend.hasIdleAssertion && !backend.keepsDisplayAwake)
+    #expect(controller.recoveryAttempts == 0 && backend.writes == [true])
+    _ = controller.reconcile(
+        wantsAwake: false, now: try instant(12), backend: &backend, journal: &journal)
+    #expect(backend.writes == [true, false] && journal.claims == [true, false])
 }
 
 private struct TestJournal: OwnershipJournal {

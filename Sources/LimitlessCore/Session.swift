@@ -39,6 +39,20 @@ public enum SessionKind: String, Codable, Sendable {
     case manual, task, agent
 }
 
+public enum AgentProvider: String, Codable, Sendable, CaseIterable {
+    case codex, claude, cursor, gemini, other
+
+    public var displayName: String {
+        switch self {
+        case .codex: "Codex"
+        case .claude: "Claude"
+        case .cursor: "Cursor"
+        case .gemini: "Gemini"
+        case .other: "Other agent"
+        }
+    }
+}
+
 public struct SessionRequest: Codable, Equatable, Sendable {
     public let mode: PowerMode?
     public let batteryFloor: Int?
@@ -73,6 +87,7 @@ public struct Session: Equatable, Sendable, Identifiable {
     public let owner: UUID
     public let kind: SessionKind
     public let request: SessionRequest
+    public let agent: AgentProvider?
     public let started: ClockSnapshot
     public let authorizedDuration: TimeInterval?
 

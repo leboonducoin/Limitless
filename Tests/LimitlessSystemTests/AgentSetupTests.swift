@@ -43,8 +43,11 @@ func agentSetupPreservesSettingsIsRepeatableAndRemovesOnlyItsIntegration(_ provi
         "theme": "custom", "hooks": [event: [other]],
     ])
     try original.write(to: config)
+    #expect(try !AgentSetup.isCurrent(provider, home: home, resources: resources))
     try AgentSetup.configure(provider, home: home, resources: resources)
     let installed = try Data(contentsOf: config)
+    #expect(try AgentSetup.isCurrent(provider, home: home, resources: resources))
+    #expect(try Data(contentsOf: config) == installed)
     let object = try #require(JSONSerialization.jsonObject(with: installed) as? [String: Any])
     #expect(object["theme"] as? String == "custom")
     #expect((object["hooks"] as? [String: [[String: Any]]])?[event]?.count == 2)

@@ -66,6 +66,19 @@ macOS version and any steps that fail.
   locking returns. Repeat after expiry, battery cutoff and power-source suspension.
   Manual lock must still work. Record managed-policy restrictions separately.
 - On a laptop, test lid open/closed, switching power and the battery limit.
+- Check a closed laptop on an external display and disconnect the display. Check
+  that the menu distinguishes both configurations and that expiry restores the
+  owned sleep change in each. Record any actual system sleep separately.
+- Switch Keep display awake during a bounded session and verify the corresponding
+  assertions. Test optional muting with supported and unsupported outputs,
+  disconnect/reconnect the original output before restoration, and check that a
+  pre-muted output stays muted.
+- Use simulated serious and critical thermal state in the test suite. For native
+  qualification observe telemetry during ordinary workload on a ventilated Mac.
+- Check the notification permission flow, one reminder for the last five minutes,
+  a postponed reminder after extension, and the correct end reason.
+- On an approved iPhone/Mac pair, verify hotspot setup, password retention across
+  a same-identity update, recovery after an outage, and cancellation before association.
 - Type a battery limit, press Return or leave the field, then try the arrows.
   Letters are refused; 81 becomes 80. A blocked start or battery cutoff explains why.
 - Run two AI tasks. The last one ending stops their hold; manual sessions stay yours.
@@ -86,6 +99,10 @@ macOS version and any steps that fail.
   After approving a quarantined update, verify that CLI opt-in is restored even if macOS
   starts the app from a randomized path; the next update must still target the signed app
   in Applications. Do not remove quarantine to make this pass.
+- Use Command-click while idle and check the favorite duration. Confirm that
+  Command-Return starts, Command-Plus extends, and Command-Period stops from the
+  panel. Open and close Options from keyboard focus. Verify that the bar displays
+  the new end time after extension.
 - Command-drag the Limitless icon farther right, relaunch the app and verify that macOS restores
   its position.
 - Then uninstall: the app should close and its integrations disappear.

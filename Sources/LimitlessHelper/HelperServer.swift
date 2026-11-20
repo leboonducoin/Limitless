@@ -18,6 +18,7 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private var watchdog: (any DispatchSourceTimer)?
     private var signals: [any DispatchSourceSignal] = []
     private var notificationTokens: [Int32] = []
+    private var thermalObserver: (any NSObjectProtocol)?
     private var stoppingAt: TimeInterval?
 
     init(identity: SignedIdentity) {
@@ -48,6 +49,12 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
                 } else {
                     logger.error("Power notification unavailable; watchdog remains active.")
                 }
+            }
+            thermalObserver = NotificationCenter.default.addObserver(
+                forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: nil
+            ) { [weak self] _ in
+                guard let self else { return }
+                queue.async { self.tick() }
             }
             for number in [SIGTERM, SIGINT] {
                 signal(number, SIG_IGN)
@@ -121,7 +128,7 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private func disconnect(_ owner: UUID) {
         queue.async { [self] in
             connections.removeValue(forKey: owner)
-            runtime?.sessions.disconnect(owner)
+            runtime?.sessions.disconnect(owner, at: Date())
             tick()
         }
     }

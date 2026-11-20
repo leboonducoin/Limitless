@@ -5,6 +5,9 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var model: AppModel
     private var batteryInput = SwiftUI.State<String>(wrappedValue: "")
+    private var hotspotName = SwiftUI.State<String>(wrappedValue: "")
+    private var hotspotPassword = SwiftUI.State<String>(wrappedValue: "")
+    private var hotspotExpanded = SwiftUI.State<Bool>(wrappedValue: false)
     @FocusState private var batteryFocused: Bool
 
     private static let batteryFormatter: NumberFormatter = {
@@ -22,7 +25,26 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if model.showsPowerControls {
+                Text("Session").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Picker("Favorite duration", selection: $model.favoriteMinutes) {
+                    ForEach(SessionEnd.presetMinutes, id: \.self) { minutes in
+                        Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h").tag(minutes)
+                    }
+                }
+                Text("Command-click the menu bar icon to start the favorite.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle(
+                    "Session notifications",
+                    isOn: Binding(
+                        get: { model.sessionNotifications },
+                        set: { enabled in Task { await model.setSessionNotifications(enabled) } }))
+                Divider()
+                Text("Power").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Group {
+                    Toggle("Keep display awake", isOn: $model.draft.keepsDisplayAwake)
+                        .help("Keep the screen available for work that needs the desktop.")
+                    Toggle("Mute audio when the display sleeps", isOn: $model.muteWhenScreenSleeps)
+                        .help("Also mute when the lid closes with no external display.")
                     if model.showsPowerSource {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Power source")
@@ -102,7 +124,48 @@ struct SettingsView: View {
                         }
                     }
                 }.disabled(!model.canControl && !model.isPreview)
-                if model.showsPowerSource || model.stopChoice == .process { Divider() }
+                Divider()
+                Text("Network").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                DisclosureGroup("iPhone hotspot", isExpanded: hotspotExpanded.projectedValue) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(
+                            "Join if the network drops",
+                            isOn: Binding(
+                                get: { model.hotspotEnabled },
+                                set: { model.setHotspotEnabled($0) })
+                        )
+                        .disabled(!model.hotspotConfigured || model.isPreview)
+                        Text(
+                            "During a session, after at least 30 seconds offline. Wi-Fi names require Location Services."
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        TextField("Hotspot name", text: hotspotName.projectedValue)
+                        SecureField("Hotspot password", text: hotspotPassword.projectedValue)
+                        HStack {
+                            Button("Save hotspot") {
+                                if model.saveHotspot(
+                                    name: hotspotName.wrappedValue,
+                                    password: hotspotPassword.wrappedValue)
+                                {
+                                    hotspotName.wrappedValue = ""
+                                    hotspotPassword.wrappedValue = ""
+                                }
+                            }
+                            .disabled(
+                                model.isPreview || hotspotName.wrappedValue.isEmpty
+                                    || hotspotPassword.wrappedValue.isEmpty)
+                            if model.hotspotConfigured {
+                                Button("Forget hotspot") { model.forgetHotspot() }
+                                    .disabled(model.isPreview)
+                            }
+                        }
+                    }
+                    .padding(.top, 6)
+                    .onDisappear { hotspotPassword.wrappedValue = "" }
+                }
+                Divider()
+                Text("Terminal & agents").font(.caption.weight(.semibold)).foregroundStyle(
+                    .secondary)
                 HStack {
                     Toggle(
                         "Allow CLI & AI tasks",
@@ -124,6 +187,8 @@ struct SettingsView: View {
                 }
             }
             if model.showsSudoTouchID {
+                Divider()
+                Text("Administration").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Toggle(
                     "Touch ID for sudo",
                     isOn: Binding(
@@ -180,6 +245,10 @@ struct SettingsView: View {
                     }
                 }
             }
+            if model.showsPowerControls { Divider() }
+            Text("App").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Button("Copy diagnostic") { model.copyDiagnostic() }
+                .disabled(model.isPreview)
             Toggle(
                 "Launch at login",
                 isOn: Binding(
@@ -208,7 +277,6 @@ struct SettingsView: View {
             }
         }
         .font(.callout).toggleStyle(.switch).controlSize(.small)
-        .onChange(of: model.draft) { model.policyEdited() }
     }
 
     private func applyBatteryInput() {

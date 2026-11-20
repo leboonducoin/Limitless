@@ -79,7 +79,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     private var terminating = false
     private var statusItem: NSStatusItem?
     private var lastPresentation: PowerPresentation?
-    private let activeDot = StatusDot()
+    private var lastDeadlineText: String?
+    private let activeMark = StatusMark()
     private let popover = NSPopover()
     private var outsideClickMonitor: Any?
     private var removalWindow: NSWindow?
@@ -116,6 +117,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                 exit(success ? 0 : 1)
             }
             await model.restoreUpdateHelperIfNeeded()
+            if model.trustedBuild && !model.isPreview {
+                let workspace = NSWorkspace.shared.notificationCenter
+                workspace.addObserver(
+                    self, selector: #selector(screensSlept),
+                    name: NSWorkspace.screensDidSleepNotification, object: nil)
+                workspace.addObserver(
+                    self, selector: #selector(screensWoke),
+                    name: NSWorkspace.screensDidWakeNotification, object: nil)
+                NotificationCenter.default.addObserver(
+                    self, selector: #selector(displaysChanged),
+                    name: NSApplication.didChangeScreenParametersNotification, object: nil)
+                model.updateEnvironment()
+            }
             model.beginMonitoring()
         }
         #if DEBUG
@@ -139,6 +153,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         #endif
     }
 
+    @objc private func screensSlept(_ notice: Notification) { model.setScreensAsleep(true) }
+    @objc private func screensWoke(_ notice: Notification) { model.setScreensAsleep(false) }
+    @objc private func displaysChanged(_ notice: Notification) { model.updateEnvironment() }
+
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.autosaveName = LimitlessIdentity.application
@@ -149,18 +167,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         item.button?.action = #selector(clickStatusItem)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         item.button?.setAccessibilityHelp(
-            "Click to open. Right-click for updates, uninstall and quit.")
+            "Click to open. Command-click to start your favorite. Right-click for app actions.")
         if let button = item.button {
-            activeDot.frame = NSRect(
-                x: button.bounds.midX + 6,
-                y: button.isFlipped ? button.bounds.maxY - 8 : 3, width: 5, height: 5)
-            activeDot.isHidden = true
-            activeDot.wantsLayer = true
-            activeDot.layer?.backgroundColor =
-                NSColor(srgbRed: 0.85, green: 0.36, blue: 0.04, alpha: 1).cgColor
-            activeDot.layer?.cornerRadius = 2.5
-            activeDot.setAccessibilityElement(false)
-            button.addSubview(activeDot)
+            activeMark.image = BrandArt.menuOrange
+            activeMark.isHidden = true
+            activeMark.setAccessibilityElement(false)
+            activeMark.frame = NSRect(
+                x: max(0, button.bounds.maxX - 15),
+                y: button.isFlipped ? max(0, button.bounds.maxY - 12) : 2,
+                width: 12, height: 10)
+            activeMark.autoresizingMask = [
+                .minXMargin, button.isFlipped ? .minYMargin : .maxYMargin,
+            ]
+            button.addSubview(activeMark)
         }
         popover.behavior = .transient
         popover.delegate = self
@@ -191,11 +210,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     private func observePresentation() {
         withObservationTracking {
             let presentation = model.presentation
-            if presentation != lastPresentation {
+            let deadline = model.menuBarDeadline.map { date in
+                let minute = (date.timeIntervalSinceReferenceDate / 60).rounded()
+                return Date(timeIntervalSinceReferenceDate: minute * 60)
+                    .formatted(date: .omitted, time: .shortened)
+            }
+            if presentation != lastPresentation || deadline != lastDeadlineText {
                 lastPresentation = presentation
-                activeDot.isHidden = presentation != .active
+                lastDeadlineText = deadline
+                activeMark.isHidden = presentation != .active
+                let button = statusItem?.button
+                button?.image = deadline == nil ? BrandArt.menuIdle : nil
+                if let deadline {
+                    let title = NSAttributedString(
+                        string: deadline + "  ",
+                        attributes: [
+                            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+                        ])
+                    button?.attributedTitle = title
+                    statusItem?.length = ceil(title.size().width) + 19
+                } else {
+                    button?.title = ""
+                    statusItem?.length = NSStatusItem.squareLength
+                }
+                let endLabel = deadline.map { ", ends at \($0)" } ?? ""
                 statusItem?.button?.setAccessibilityLabel(
-                    "Limitless: \(presentation?.title ?? "Setup required")")
+                    "Limitless: \(presentation?.title ?? "Setup required")\(endLabel)")
             }
         } onChange: { [weak self] in
             Task { @MainActor in self?.observePresentation() }
@@ -230,15 +270,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
             popover.performClose(nil)
             actionsMenu().popUp(
                 positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY), in: button)
+        } else if NSApp.currentEvent?.type == .leftMouseUp,
+            NSApp.currentEvent?.modifierFlags.contains(.command) == true,
+            model.canStartFavorite
+        {
+            Task {
+                await model.startFavorite()
+                if model.presentation != .active, !popover.isShown { showPopover(from: button) }
+            }
         } else if popover.isShown {
             popover.performClose(nil)
         } else {
-            popover.animates =
-                !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-                && NSApp.currentEvent?.type == .leftMouseUp
-            NSApp.activate()
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            showPopover(from: button)
         }
+    }
+
+    private func showPopover(from button: NSStatusBarButton) {
+        popover.animates =
+            !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            && NSApp.currentEvent?.type == .leftMouseUp
+        NSApp.activate()
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 
     private func actionsMenu() -> NSMenu {
@@ -434,6 +486,6 @@ private struct RemovalProgress: View {
     }
 }
 
-private final class StatusDot: NSView {
+private final class StatusMark: NSImageView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

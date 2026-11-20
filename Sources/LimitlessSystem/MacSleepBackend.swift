@@ -18,6 +18,7 @@ public struct MacSleepBackend: SleepBackend, Sendable {
     public init() {}
 
     public var hasIdleAssertion: Bool { caffeinate.isEffective }
+    public var keepsDisplayAwake: Bool { caffeinate.keepsDisplayAwake }
 
     public mutating func observe() -> SleepObservation {
         guard !command.isRunning else { return .unknown }
@@ -37,8 +38,12 @@ public struct MacSleepBackend: SleepBackend, Sendable {
         return disabled ? .disabled : .allowed
     }
 
-    public mutating func setIdleAssertion(_ held: Bool) throws {
-        if held { try caffeinate.start() } else { try caffeinate.stop() }
+    public mutating func setIdleAssertion(_ held: Bool, keepingDisplayAwake: Bool) throws {
+        if held {
+            try caffeinate.start(keepingDisplayAwake: keepingDisplayAwake)
+        } else {
+            try caffeinate.stop()
+        }
     }
 
     public mutating func setSleepDisabled(_ disabled: Bool) throws {
@@ -56,6 +61,7 @@ public struct MacSleepBackend: SleepBackend, Sendable {
 
 struct CaffeinateAssertion: Sendable {
     var process: Process?
+    private(set) var keepsDisplayAwake = true
 
     var isEffective: Bool {
         guard let process, process.isRunning else { return false }
@@ -63,30 +69,32 @@ struct CaffeinateAssertion: Sendable {
         guard IOPMCopyAssertionsByProcess(&assertions) == kIOReturnSuccess,
             let snapshot = assertions?.takeRetainedValue() as? [NSNumber: Any]
         else { return false }
-        return Self.containsIdleAssertion(snapshot[NSNumber(value: process.processIdentifier)])
+        return Self.containsIdleAssertion(
+            snapshot[NSNumber(value: process.processIdentifier)],
+            keepingDisplayAwake: keepsDisplayAwake)
             && process.isRunning
     }
 
-    static func containsIdleAssertion(_ value: Any?) -> Bool {
+    static func containsIdleAssertion(_ value: Any?, keepingDisplayAwake: Bool = true) -> Bool {
         guard let assertions = value as? [[String: Any]] else { return false }
-        return [
-            kIOPMAssertionTypePreventUserIdleSystemSleep,
-            kIOPMAssertionTypePreventUserIdleDisplaySleep,
-        ].allSatisfy { type in
+        func contains(_ type: String) -> Bool {
             assertions.contains { assertion in
                 assertion[kIOPMAssertionTypeKey] as? String == type
                     && (assertion[kIOPMAssertionLevelKey] as? NSNumber)?.intValue
                         == kIOPMAssertionLevelOn
             }
         }
+        return contains(kIOPMAssertionTypePreventUserIdleSystemSleep)
+            && contains(kIOPMAssertionTypePreventUserIdleDisplaySleep) == keepingDisplayAwake
     }
 
-    mutating func start() throws {
-        if isEffective { return }
+    mutating func start(keepingDisplayAwake: Bool) throws {
+        if keepsDisplayAwake == keepingDisplayAwake, isEffective { return }
         try stop()
+        keepsDisplayAwake = keepingDisplayAwake
         let child = Process()
         child.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
-        child.arguments = ["-d", "-i", "-w", String(getpid())]
+        child.arguments = (keepingDisplayAwake ? ["-d"] : []) + ["-i", "-w", String(getpid())]
         child.currentDirectoryURL = URL(fileURLWithPath: "/")
         child.environment = ["PATH": "/usr/bin:/bin", "LC_ALL": "C"]
         child.standardInput = FileHandle.nullDevice

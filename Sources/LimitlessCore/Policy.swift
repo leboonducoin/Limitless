@@ -47,12 +47,14 @@ public struct UserPolicy: Codable, Equatable, Sendable {
     public let batteryFloor: Int
     public let maximumDuration: TimeInterval?
     public let allowsAutomation: Bool
+    public let keepsDisplayAwake: Bool
 
     public init(
         mode: PowerMode = .all,
         batteryFloor: Int = 20,
         maximumDuration: TimeInterval? = nil,
-        allowsAutomation: Bool = false
+        allowsAutomation: Bool = false,
+        keepsDisplayAwake: Bool = true
     ) throws {
         guard Self.batteryFloorRange.contains(batteryFloor) else {
             throw PolicyError.invalidBatteryFloor
@@ -62,6 +64,7 @@ public struct UserPolicy: Codable, Equatable, Sendable {
         self.batteryFloor = batteryFloor
         self.maximumDuration = maximumDuration
         self.allowsAutomation = allowsAutomation
+        self.keepsDisplayAwake = keepsDisplayAwake
     }
 
     public init(from decoder: any Decoder) throws {
@@ -70,12 +73,27 @@ public struct UserPolicy: Codable, Equatable, Sendable {
             mode: values.decode(PowerMode.self, forKey: .mode),
             batteryFloor: values.decode(Int.self, forKey: .batteryFloor),
             maximumDuration: values.decodeIfPresent(TimeInterval.self, forKey: .maximumDuration),
-            allowsAutomation: values.decode(Bool.self, forKey: .allowsAutomation)
+            allowsAutomation: values.decode(Bool.self, forKey: .allowsAutomation),
+            keepsDisplayAwake: values.decodeIfPresent(Bool.self, forKey: .keepsDisplayAwake) ?? true
         )
     }
 
     public static func validateDuration(_ seconds: TimeInterval) throws {
         guard seconds.isFinite, seconds > 0 else { throw PolicyError.invalidDuration }
+    }
+}
+
+public enum ThermalCondition: String, Codable, Sendable {
+    case nominal, fair, serious, critical, unknown
+
+    public init(_ state: ProcessInfo.ThermalState) {
+        switch state {
+        case .nominal: self = .nominal
+        case .fair: self = .fair
+        case .serious: self = .serious
+        case .critical: self = .critical
+        @unknown default: self = .unknown
+        }
     }
 }
 

@@ -8,6 +8,7 @@ struct MenuPanel: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     private var contentHeight = SwiftUI.State<CGFloat>(wrappedValue: 320)
+    private var optionsExpanded = SwiftUI.State<Bool>(wrappedValue: false)
 
     init(model: AppModel) {
         self.model = model
@@ -61,7 +62,7 @@ struct MenuPanel: View {
     }
 
     private var panelContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 Image(nsImage: BrandArt.appIcon(size: 64)).resizable()
                     .frame(width: 32, height: 32).accessibilityHidden(true)
@@ -69,22 +70,29 @@ struct MenuPanel: View {
                 Spacer()
             }
             statusOverview
+                .padding(10)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
             if model.removalInProgress {
                 Text("Uninstall pending. Right-click the icon to retry.").font(.callout)
             }
-            Divider()
             if model.showsPowerControls {
                 sessionControls
             } else {
                 setupControls
             }
-            Divider()
-            SettingsView(model: model)
             if let message = model.message {
                 Text(message).font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }.padding(20)
+            Divider()
+            DisclosureGroup(isExpanded: optionsExpanded.projectedValue) {
+                SettingsView(model: model).padding(.top, 10)
+            } label: {
+                Label("Options", systemImage: "slider.horizontal.3")
+                    .font(.callout.weight(.medium))
+            }
+        }.padding(18)
+            .onChange(of: model.draft) { model.policyEdited() }
     }
 
     private var statusOverview: some View {
@@ -106,6 +114,19 @@ struct MenuPanel: View {
             }
             if let error = model.connectionError ?? model.status?.sleep.fault?.guidance {
                 Text(error).font(.caption).fixedSize(horizontal: false, vertical: true)
+            }
+            if model.status?.thermal == .serious || model.status?.thermal == .critical {
+                Label("High thermal load", systemImage: "thermometer.high")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+            if let lid = model.lidDisplayState.label {
+                Label(lid, systemImage: "laptopcomputer").font(.caption)
+            }
+            if let audio = model.audioMessage {
+                Label(audio, systemImage: "speaker.slash").font(.caption)
+            }
+            if let hotspot = model.hotspotMessage {
+                Label(hotspot, systemImage: "wifi.exclamationmark").font(.caption)
             }
             if model.connectionError != nil {
                 Button("Reconnect") { Task { await model.refresh() } }.disabled(model.busy)
@@ -145,6 +166,11 @@ struct MenuPanel: View {
                 startButton.disabled(
                     (!model.canControl && !model.isPreview) || model.busy
                         || model.status?.sleep.fault != nil)
+                if model.status?.sessions.isEmpty == true, let outcome = model.lastSessionMessage,
+                    model.batteryNotice == nil
+                {
+                    Text(outcome).font(.caption).foregroundStyle(.secondary)
+                }
             }
             if (model.status?.sessions.count ?? 0) > 0 {
                 HStack(spacing: 8) {
@@ -157,6 +183,7 @@ struct MenuPanel: View {
                         ).frame(maxWidth: .infinity)
                     }
                     .help("End all Limitless sessions; running commands continue.")
+                    .keyboardShortcut(".", modifiers: .command)
                     .controlSize(.large).buttonStyle(.bordered)
                     .disabled(
                         (!model.canControl && !model.isPreview) || model.stoppingSessions
@@ -169,6 +196,7 @@ struct MenuPanel: View {
                                 .frame(width: 28, height: 28).contentShape(Circle())
                         }
                         .buttonStyle(.bordered).buttonBorderShape(.circle)
+                        .keyboardShortcut("+", modifiers: .command)
                         .accessibilityLabel("Add 15 minutes").help("Add 15 minutes")
                         .disabled(
                             (!model.canControl && !model.isPreview) || !model.canExtendSession
@@ -177,10 +205,22 @@ struct MenuPanel: View {
                 }
             }
             if model.showsTaskCount {
-                Label(
-                    "\(model.taskCount) tracked \(model.taskCount == 1 ? "task" : "tasks")",
-                    systemImage: "terminal"
-                ).font(.caption)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(
+                        "\(model.taskCount) tracked \(model.taskCount == 1 ? "task" : "tasks")",
+                        systemImage: "terminal"
+                    )
+                    if let sessions = model.status?.sessions {
+                        let providers = Set(sessions.compactMap(\.agent))
+                        if !providers.isEmpty {
+                            Text(
+                                AgentProvider.allCases.filter(providers.contains).map(\.displayName)
+                                    .formatted(.list(type: .and))
+                            )
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                }.font(.caption)
             }
             if let processes = model.watchedProcesses, !processes.isEmpty {
                 ScrollView {
@@ -212,6 +252,7 @@ struct MenuPanel: View {
             Label(model.busy ? "Verifying…" : "Keep awake", systemImage: "power")
                 .frame(maxWidth: .infinity)
         }.controlSize(.large)
+            .keyboardShortcut(.return, modifiers: .command)
         if reduceTransparency || contrast == .increased {
             button.buttonStyle(.borderedProminent)
         } else if #available(macOS 26, *) {

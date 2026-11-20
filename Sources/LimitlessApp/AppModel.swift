@@ -5,6 +5,7 @@ import LimitlessSystem
 import LocalAuthentication
 import Observation
 import ServiceManagement
+import UserNotifications
 
 @MainActor @Observable final class AppModel {
     enum BuildTrust { case checking, trusted, untrusted }
@@ -16,7 +17,11 @@ import ServiceManagement
     private(set) var stoppingSessions = false
     private var pendingExtensions = 0
     private(set) var sudoTouchIDBusy = false
-    private(set) var connectionError: String?
+    private(set) var connectionError: String? {
+        didSet {
+            if connectionError != oldValue { updateEnvironment() }
+        }
+    }
     private(set) var helperStatus: SMAppService.Status = .notRegistered
     private(set) var loginStatus: SMAppService.Status = .notRegistered
     private(set) var buildTrust = BuildTrust.checking
@@ -39,6 +44,30 @@ import ServiceManagement
     private(set) var sudoTouchIDError: ServiceError?
     var pendingSudoTouchID: Bool?
     var draft = PolicyDraft()
+    var favoriteMinutes: Int {
+        didSet {
+            if !isPreview { preferences.set(favoriteMinutes, forKey: "favoriteMinutes") }
+        }
+    }
+    private(set) var sessionNotifications: Bool
+    private(set) var lastSessionMessage: String?
+    private var remindedSessions: Set<UUID> = []
+    private(set) var lidDisplayState = LidDisplayState.unknown
+    private(set) var audioMessage: String?
+    private(set) var hotspotMessage: String?
+    private(set) var hotspotConfigured: Bool
+    private(set) var hotspotEnabled: Bool
+    var muteWhenScreenSleeps: Bool {
+        didSet {
+            if !isPreview {
+                preferences.set(muteWhenScreenSleeps, forKey: "muteWhenScreenSleeps")
+                updateEnvironment()
+            }
+        }
+    }
+    private var screensAsleep = false
+    @ObservationIgnored private var audio = SessionAudioMute()
+    private let hotspot = HotspotFallback()
     var stopChoice: StopChoice = .preset(60)
     var customDuration: Double = 90
     var durationUnit: DurationUnit = .minutes
@@ -61,6 +90,7 @@ import ServiceManagement
     private var client: ServiceClient?
     private var restoredAutomationPreference = false
     private var monitoring: Task<Void, Never>?
+    private var processMonitoring: Task<Void, Never>?
     private(set) var watchedProcesses: [ProcessIdentity]?
     private var policyApplication: Task<Void, Never>?
     private var updateMonitoring: Task<Void, Never>?
@@ -90,6 +120,12 @@ import ServiceManagement
         self.preferences = preferences
         self.helper = helper
         self.buildTrust = buildTrust
+        let savedFavorite = preferences.integer(forKey: "favoriteMinutes")
+        favoriteMinutes = SessionEnd.presetMinutes.contains(savedFavorite) ? savedFavorite : 60
+        sessionNotifications = preferences.bool(forKey: "sessionNotifications")
+        muteWhenScreenSleeps = preferences.bool(forKey: "muteWhenScreenSleeps")
+        hotspotConfigured = preferences.bool(forKey: "hotspotConfigured")
+        hotspotEnabled = preferences.bool(forKey: "hotspotEnabled")
         let authentication = LAContext()
         hasTouchID =
             authentication.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
@@ -166,6 +202,28 @@ import ServiceManagement
         else { return false }
         if case .unlimited = session.end { return false }
         return true
+    }
+    var canStartFavorite: Bool {
+        canControl && !busy && !updating && status?.sessions.isEmpty == true
+            && status?.sleep.phase == .inactive && status?.sleep.observed == .allowed
+    }
+    func copyDiagnostic() {
+        let reading = connectionError == nil ? status?.diagnosticSummary : nil
+        let report = """
+            Limitless \(LimitlessIdentity.version), protocol \(ServiceWire.version)
+            \(ProcessInfo.processInfo.operatingSystemVersionString)
+            \(reading ?? "No current reading from the power helper.")
+            """
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(report, forType: .string)
+    }
+    var menuBarDeadline: Date? {
+        guard presentation == .active, let status, !status.sessions.isEmpty else { return nil }
+        let durations = status.sessions.compactMap(\.remainingSeconds)
+        guard durations.count == status.sessions.count, let latest = durations.max(),
+            latest.isFinite, latest > 0
+        else { return nil }
+        return status.sampledAt.addingTimeInterval(latest)
     }
     var taskCount: Int {
         (status?.sessions.filter { $0.kind != .manual }.count ?? 0)
@@ -251,17 +309,28 @@ import ServiceManagement
             }
         }
         monitoring = Task { [weak self] in
-            var tick = 0
             while !Task.isCancelled {
                 guard let self else { return }
                 if !quitting {
-                    if pollWatchedProcesses(), ownSession != nil, !busy {
-                        await stopManual()
-                    }
-                    if tick % 5 == 0 { await refresh() }
+                    await refresh()
+                    if status == nil || connectionError != nil { updateEnvironment() }
                     requestAutomaticUpdateIfReady()
                 }
-                tick &+= 1
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            }
+        }
+    }
+
+    private func monitorProcesses() {
+        processMonitoring?.cancel()
+        guard watchedProcesses != nil else { return }
+        processMonitoring = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, watchedProcesses != nil, ownSession != nil else { return }
+                if !quitting, pollWatchedProcesses(), !busy {
+                    await stopManual()
+                    if ownSession == nil { return }
+                }
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
         }
@@ -436,20 +505,35 @@ import ServiceManagement
             }
             if !restoredAutomationPreference {
                 restoredAutomationPreference = true
+                let saved = preferences.data(forKey: "userPolicy").flatMap {
+                    try? JSONDecoder().decode(UserPolicy.self, from: $0)
+                }
                 if let received = reply.status, preferences.bool(forKey: "allowsAutomation"),
                     let identity = try? await SignedIdentity.current(
                         expectedIdentifier: LimitlessIdentity.application),
                     (try? await GitHubUpdate.currentInstalledApplication(identity: identity)) != nil
                 {
-                    let saved =
-                        preferences.data(forKey: "userPolicy").flatMap {
-                            try? JSONDecoder().decode(UserPolicy.self, from: $0)
-                        } ?? received.policy
-                    if let restored = try received.automationPolicyToRestore(saved) {
+                    if let restored = try received.automationPolicyToRestore(
+                        saved ?? received.policy)
+                    {
                         _ = try await client.send(.installCLI)
                         guard currentRevision == revision, !busy, !quitting else { return }
                         reply = try await client.send(.configure(restored))
                     }
+                }
+                guard currentRevision == revision, !busy, !quitting else { return }
+                if let saved, let received = reply.status, received.sessions.isEmpty,
+                    received.removal == .none, received.sleep.fault == nil,
+                    received.policy.keepsDisplayAwake != saved.keepsDisplayAwake
+                {
+                    let policy = received.policy
+                    reply = try await client.send(
+                        .configure(
+                            UserPolicy(
+                                mode: policy.mode, batteryFloor: policy.batteryFloor,
+                                maximumDuration: policy.maximumDuration,
+                                allowsAutomation: policy.allowsAutomation,
+                                keepsDisplayAwake: saved.keepsDisplayAwake)))
                 }
             }
             guard currentRevision == revision, !busy, !quitting else { return }
@@ -463,7 +547,8 @@ import ServiceManagement
                             mode: .all,
                             batteryFloor: policy.batteryFloor,
                             maximumDuration: policy.maximumDuration,
-                            allowsAutomation: policy.allowsAutomation)))
+                            allowsAutomation: policy.allowsAutomation,
+                            keepsDisplayAwake: policy.keepsDisplayAwake)))
             }
             guard currentRevision == revision else { return }
             try accept(reply)
@@ -480,6 +565,7 @@ import ServiceManagement
 
     func accept(_ reply: ServiceReply) throws {
         guard let received = reply.status else { throw ServiceError.unavailable }
+        updateSessionNotices(received)
         if received.batteryCutoff != status?.batteryCutoff {
             batteryNotice = received.batteryCutoff.map { cutoff in
                 reply.startedSession == cutoff.sessionID
@@ -492,6 +578,134 @@ import ServiceManagement
         status = received
         statusReceivedAt = .now
         if ownSession == nil { watchedProcesses = nil }
+        updateEnvironment()
+    }
+
+    func setScreensAsleep(_ asleep: Bool) {
+        screensAsleep = asleep
+        updateEnvironment()
+    }
+
+    func updateEnvironment() {
+        guard trustedBuild, !isPreview,
+            Bundle.main.bundleIdentifier == LimitlessIdentity.application
+        else { return }
+        let active = !quitting && presentation == .active
+        lidDisplayState = active ? .read() : .unknown
+        audioMessage = audio.update(
+            shouldMute: active && muteWhenScreenSleeps
+                && (screensAsleep || lidDisplayState == .closedHeadless))
+        hotspot.update(eligible: active && !stoppingSessions && hotspotEnabled) { [weak self] in
+            await self?.canJoinHotspot() ?? false
+        }
+        hotspotMessage = hotspot.message
+    }
+
+    private func canJoinHotspot() async -> Bool {
+        guard hotspotEnabled, canControl, !busy, !quitting, !stoppingSessions, let client
+        else { return false }
+        let startingRevision = revision
+        let reading = try? await client.send(.status).status
+        guard startingRevision == revision, hotspotEnabled, canControl, !quitting,
+            !stoppingSessions, let reading
+        else { return false }
+        return PowerPresentation(reading) == .active
+            && reading.sessions.contains { $0.suspension == nil }
+    }
+
+    func saveHotspot(name: String, password: String) -> Bool {
+        guard trustedBuild, !isPreview else { return false }
+        let network = HotspotCredentials.Network(ssid: name, password: password)
+        guard network.isValid else {
+            message = "Enter your hotspot name and its password (at least eight characters)."
+            return false
+        }
+        preferences.set(true, forKey: "hotspotConfigured")
+        guard HotspotCredentials.save(network) else {
+            preferences.set(hotspotConfigured, forKey: "hotspotConfigured")
+            message = "The hotspot details could not be saved in Keychain."
+            return false
+        }
+        hotspotConfigured = true
+        hotspot.update(eligible: false)
+        updateEnvironment()
+        message = "Hotspot details saved in Keychain."
+        return true
+    }
+
+    func setHotspotEnabled(_ enabled: Bool) {
+        guard trustedBuild, !isPreview, !enabled || hotspotConfigured else { return }
+        hotspotEnabled = enabled
+        preferences.set(enabled, forKey: "hotspotEnabled")
+        if enabled { hotspot.requestLocationAccess() }
+        updateEnvironment()
+    }
+
+    func forgetHotspot() {
+        guard trustedBuild, !isPreview else { return }
+        setHotspotEnabled(false)
+        guard removeHotspotConfiguration() else {
+            message = "The hotspot details could not be removed from Keychain."
+            return
+        }
+        message = nil
+    }
+
+    private func removeHotspotConfiguration() -> Bool {
+        guard HotspotCredentials.remove() else { return false }
+        hotspotConfigured = false
+        hotspotEnabled = false
+        preferences.removeObject(forKey: "hotspotConfigured")
+        preferences.removeObject(forKey: "hotspotEnabled")
+        return true
+    }
+
+    func setSessionNotifications(_ enabled: Bool) async {
+        guard !isPreview, Bundle.main.bundleURL.pathExtension == "app" else { return }
+        sessionNotifications = enabled
+        preferences.set(enabled, forKey: "sessionNotifications")
+        guard enabled else { return }
+        let outcome = try? await UNUserNotificationCenter.current().requestAuthorization(options: [
+            .alert
+        ])
+        if outcome != true, sessionNotifications {
+            sessionNotifications = false
+            preferences.set(false, forKey: "sessionNotifications")
+            message =
+                "Allow notifications for Limitless in System Settings to receive session alerts."
+        }
+    }
+
+    private func updateSessionNotices(_ received: ServiceStatus) {
+        let previous = Set(status?.sessions.map(\.id) ?? [])
+        let current = Set(received.sessions.map(\.id))
+        remindedSessions.formIntersection(current)
+        if let ending = received.recentEndings.last(where: { previous.contains($0.id) }) {
+            let text = ending.reason.summary
+            lastSessionMessage = text
+            if received.sessions.isEmpty {
+                notify(title: "Limitless session ended", body: text)
+            }
+        }
+        guard received.sleep.phase == .active, received.sessions.count == 1,
+            let session = received.sessions.first, let remaining = session.remainingSeconds
+        else { return }
+        if remaining > 300 {
+            remindedSessions.remove(session.id)
+        } else if remaining > 0, remindedSessions.insert(session.id).inserted {
+            notify(title: "Limitless session ending soon", body: "Five minutes or less remain.")
+        }
+    }
+
+    private func notify(title: String, body: String) {
+        guard sessionNotifications, !isPreview, Bundle.main.bundleURL.pathExtension == "app" else {
+            return
+        }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
     private func perform(_ operation: ServiceOperation) async -> Bool {
@@ -521,6 +735,8 @@ import ServiceManagement
         switch error as? ServiceError {
         case .sudoTouchIDPermissionDenied, .sudoTouchIDFailed:
             sudoTouchIDError = error as? ServiceError
+        case .thermalCritical:
+            message = "The Mac is too hot to start a session. Let it cool down and try again."
         default:
             message =
                 "The request was not confirmed. Check the current state and your limits before retrying."
@@ -539,11 +755,16 @@ import ServiceManagement
         }
     }
 
-    func startManual() async {
+    func startFavorite() async {
+        guard canStartFavorite else { return }
+        await startManual(choice: .preset(favoriteMinutes))
+    }
+
+    func startManual(choice: StopChoice? = nil) async {
         do {
             let end: SessionEnd
             var followed: [ProcessIdentity] = []
-            switch stopChoice {
+            switch choice ?? stopChoice {
             case .unlimited: end = .unlimited
             case .preset(let minutes): end = .after(seconds: Double(minutes) * 60)
             case .custom: end = .after(seconds: customDuration * durationUnit.seconds)
@@ -559,6 +780,7 @@ import ServiceManagement
             try end.validate(at: SystemClock.now())
             if await perform(.start(SessionRequest(end: end))), ownSession != nil {
                 watchedProcesses = followed.isEmpty ? nil : followed
+                monitorProcesses()
             }
         } catch {
             message =
@@ -589,7 +811,11 @@ import ServiceManagement
     func stopAll() async {
         guard !stoppingSessions else { return }
         stoppingSessions = true
-        defer { stoppingSessions = false }
+        updateEnvironment()
+        defer {
+            stoppingSessions = false
+            updateEnvironment()
+        }
         pendingExtensions = 0
         while extendingSession { try? await Task.sleep(for: .milliseconds(20)) }
         _ = await perform(.stopAll)
@@ -650,7 +876,8 @@ import ServiceManagement
         do {
             let updated = try UserPolicy(
                 mode: policy.mode, batteryFloor: policy.batteryFloor,
-                maximumDuration: policy.maximumDuration, allowsAutomation: enabled)
+                maximumDuration: policy.maximumDuration, allowsAutomation: enabled,
+                keepsDisplayAwake: policy.keepsDisplayAwake)
             if await perform(.configure(updated)) {
                 preferences.set(enabled, forKey: "allowsAutomation")
             }
@@ -762,6 +989,17 @@ import ServiceManagement
             return false
         }
         quitting = true
+        updateEnvironment()
+        if let audioMessage {
+            quitting = false
+            message = audioMessage
+            return false
+        }
+        if !forUpdate, hotspotConfigured, !removeHotspotConfiguration() {
+            quitting = false
+            message = "The hotspot details could not be removed from Keychain. Unlock it and retry."
+            return false
+        }
         busy = true
         removalStep = "Restoring normal sleep…"
         revision &+= 1
@@ -888,17 +1126,19 @@ import ServiceManagement
     func prepareToQuit() async -> Bool {
         if isPreview { return true }
         quitting = true
+        updateEnvironment()
         if !removalComplete { updateInstallation?.cancel() }
         while busy || refreshing || updating { try? await Task.sleep(for: .milliseconds(50)) }
         if ownSession != nil { await stopManual() }
         let unresolved =
             (status?.sleep.ownsGlobalHold == true)
             && (connectionError != nil || status?.sleep.fault != nil || ownSession != nil)
-        if unresolved {
+        if unresolved || audioMessage != nil {
             quitting = false
             return false
         }
         monitoring?.cancel()
+        processMonitoring?.cancel()
         updateMonitoring?.cancel()
         await client?.close()
         return true
