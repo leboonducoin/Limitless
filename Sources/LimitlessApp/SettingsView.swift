@@ -31,13 +31,15 @@ struct SettingsView: View {
                         Text(style.label).tag(style)
                     }
                 }
-                Picker("Favorite duration", selection: $model.favoriteMinutes) {
-                    ForEach(SessionEnd.presetMinutes, id: \.self) { minutes in
-                        Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h").tag(minutes)
+                VStack(alignment: .leading, spacing: 3) {
+                    Picker("Favorite duration", selection: $model.favoriteMinutes) {
+                        ForEach(SessionEnd.presetMinutes, id: \.self) { minutes in
+                            Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h").tag(minutes)
+                        }
                     }
+                    Text("⌘-click to start or add 15 min.")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
-                Text("Command-click to start or add 15 min.")
-                    .font(.caption).foregroundStyle(.secondary)
                 Toggle(
                     "Session notifications",
                     isOn: Binding(
@@ -46,9 +48,6 @@ struct SettingsView: View {
                 Divider()
                 Text("Power").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Group {
-                    Toggle("Keep display awake", isOn: $model.draft.keepsDisplayAwake)
-                        .help("Keep the screen available for work that needs the desktop.")
-                    Toggle("Mute audio when the display sleeps", isOn: $model.muteWhenScreenSleeps)
                     if model.showsPowerSource {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Power source")
@@ -63,6 +62,9 @@ struct SettingsView: View {
                             .accessibilityLabel("Power source")
                         }
                     }
+                    Toggle("Keep display awake", isOn: $model.draft.keepsDisplayAwake)
+                        .help("Keep the screen available for work that needs the desktop.")
+                    Toggle("Mute audio when the display sleeps", isOn: $model.muteWhenScreenSleeps)
                     if model.showsBatteryLimit {
                         HStack {
                             Text("Battery reserved limit")

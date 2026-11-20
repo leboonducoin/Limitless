@@ -75,14 +75,18 @@ enum LimitlessApp {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSMenuItemValidation {
     let model: AppModel
-    private var previewWindow: NSWindow?
     private var terminating = false
     private var statusItem: NSStatusItem?
     private var lastPresentation: PowerPresentation?
-    private var lastDeadlineText: String?
+    private var lastMenuBarTime: MenuBarTime?
+    #if DEBUG
+        private var previewTick: Task<Void, Never>?
+    #endif
     private let activeMark = StatusMark()
+    private var commandClick = StatusCommandClick()
+    private var closesPanelOnStatusClick = false
+    private var statusClickMonitors: [Any] = []
     private let popover = NSPopover()
-    private var outsideClickMonitor: Any?
     private var removalWindow: NSWindow?
 
     override init() {
@@ -106,6 +110,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         NSApp.applicationIconImage = BrandArt.appIcon(size: 256)
+        #if DEBUG
+            if model.isPreview, CommandLine.arguments.contains("--light") {
+                NSApp.appearance = NSAppearance(
+                    named: CommandLine.arguments.contains("--contrast")
+                        ? .accessibilityHighContrastAqua : .aqua)
+            }
+        #endif
         if !CommandLine.arguments.contains("--prepare-uninstall") { installStatusItem() }
         Task {
             await model.prepareForLaunch()
@@ -132,25 +143,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
             }
             model.beginMonitoring()
         }
-        #if DEBUG
-            if model.isPreview {
-                if CommandLine.arguments.contains("--light") {
-                    NSApp.appearance = NSAppearance(
-                        named: CommandLine.arguments.contains("--contrast")
-                            ? .accessibilityHighContrastAqua : .aqua)
-                }
-                let window = NSWindow(
-                    contentRect: NSRect(x: 0, y: 0, width: 360, height: 620),
-                    styleMask: [.titled, .closable], backing: .buffered, defer: false)
-                window.title = "Limitless — Read-only preview"
-                window.contentView = NSHostingView(rootView: MenuPanel(model: model))
-                window.center()
-                window.makeKeyAndOrderFront(nil)
-                window.makeFirstResponder(nil)
-                NSApp.activate()
-                previewWindow = window
-            }
-        #endif
     }
 
     @objc private func screensSlept(_ notice: Notification) { model.setScreensAsleep(true) }
@@ -174,18 +166,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
             activeMark.isHidden = true
             activeMark.setAccessibilityElement(false)
             activeMark.frame = NSRect(
-                x: max(0, button.bounds.maxX - 15),
-                y: button.isFlipped ? max(0, button.bounds.maxY - 12) : 2,
-                width: 12, height: 10)
+                x: max(0, button.bounds.midX + 3),
+                y: button.bounds.midY + (button.isFlipped ? 3 : -10),
+                width: 8, height: 7)
             activeMark.autoresizingMask = [
-                .minXMargin, button.isFlipped ? .minYMargin : .maxYMargin,
+                .minXMargin, .maxXMargin, .minYMargin, .maxYMargin,
             ]
             button.addSubview(activeMark)
         }
-        popover.behavior = .transient
+        let statusMouseEvents: NSEvent.EventTypeMask = [
+            .leftMouseDown, .leftMouseUp, .leftMouseDragged,
+        ]
+        let local = NSEvent.addLocalMonitorForEvents(matching: statusMouseEvents) {
+            [weak self] event in
+            MainActor.assumeIsolated { self?.trackStatusClick(event) }
+            return event
+        }
+        let global = NSEvent.addGlobalMonitorForEvents(
+            matching: statusMouseEvents.union(.rightMouseDown)
+        ) { [weak self] event in
+            MainActor.assumeIsolated { self?.handleGlobalMouseEvent(event) }
+        }
+        statusClickMonitors = [local, global].compactMap { $0 }
         popover.delegate = self
         popover.animates = false
-        let host = NSHostingController(rootView: MenuPanel(model: model))
+        let host = NSHostingController(
+            rootView: MenuPanel(model: model).onExitCommand { [weak self] in
+                self?.popover.performClose(nil)
+            })
         host.sizingOptions = [.preferredContentSize]
         popover.contentViewController = host
         let mainMenu = NSMenu()
@@ -210,78 +218,137 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
 
     private func observePresentation() {
         withObservationTracking {
-            let presentation = model.presentation
-            let deadline = model.menuBarDeadline.map { date in
-                let minute = (date.timeIntervalSinceReferenceDate / 60).rounded()
-                return Date(timeIntervalSinceReferenceDate: minute * 60)
-                    .formatted(date: .omitted, time: .shortened)
-            }
-            if presentation != lastPresentation || deadline != lastDeadlineText {
-                lastPresentation = presentation
-                lastDeadlineText = deadline
-                activeMark.isHidden = deadline == nil
-                let button = statusItem?.button
-                button?.image =
-                    deadline == nil
-                    ? (presentation == .active ? BrandArt.menuActive : BrandArt.menuIdle) : nil
-                if let deadline {
-                    let title = NSAttributedString(
-                        string: deadline + "  ",
-                        attributes: [
-                            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
-                        ])
-                    button?.attributedTitle = title
-                    statusItem?.length = ceil(title.size().width) + 19
-                } else {
-                    button?.title = ""
-                    statusItem?.length = NSStatusItem.squareLength
-                }
-                let endLabel = deadline.map { ", ends at \($0)" } ?? ""
-                statusItem?.button?.setAccessibilityLabel(
-                    "Limitless: \(presentation?.title ?? "Setup required")\(endLabel)")
-            }
+            refreshMenuBarTime()
         } onChange: { [weak self] in
             Task { @MainActor in self?.observePresentation() }
         }
     }
 
+    private func refreshMenuBarTime() {
+        let presentation = model.presentation
+        let time = model.menuBarTime
+        #if DEBUG
+            if model.isPreview { schedulePreviewTick() }
+        #endif
+        guard presentation != lastPresentation || time != lastMenuBarTime else { return }
+        lastPresentation = presentation
+        lastMenuBarTime = time
+        activeMark.isHidden = time == nil
+        statusItem?.button?.image =
+            time.map { BrandArt.menuTime(top: $0.top, bottom: $0.bottom) }
+            ?? (presentation == .active ? BrandArt.menuActive : BrandArt.menuIdle)
+        let timeLabel = time.map { ", \($0.accessibilityLabel)" } ?? ""
+        statusItem?.button?.setAccessibilityLabel(
+            "Limitless: \(presentation?.title ?? "Setup required")\(timeLabel)")
+    }
+
+    #if DEBUG
+        private func schedulePreviewTick() {
+            previewTick?.cancel()
+            guard model.presentation == .active, let remaining = model.protectionRemainingSeconds
+            else { return }
+            let delay = max(1, remaining - (ceil(remaining / 60) - 1) * 60)
+            previewTick = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+                guard let self else { return }
+                if model.protectionRemainingSeconds == 0 {
+                    await model.stopAll()
+                } else {
+                    refreshMenuBarTime()
+                }
+            }
+        }
+    #endif
+
     func applicationDidResignActive(_ notification: Notification) {
+        if NSEvent.pressedMouseButtons & 1 != 0,
+            statusButtonBounds()?.contains(NSEvent.mouseLocation) == true
+        {
+            return
+        }
         popover.performClose(nil)
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        statusClickMonitors.forEach(NSEvent.removeMonitor)
+    }
+
     func popoverDidShow(_ notification: Notification) {
+        model.panelVisible = true
         let window = popover.contentViewController?.view.window
         window?.makeKey()
         window?.makeFirstResponder(nil)
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [
-            .leftMouseDown, .rightMouseDown,
-        ]) { [weak self] _ in
-            MainActor.assumeIsolated { self?.popover.performClose(nil) }
-        }
     }
 
     func popoverDidClose(_ notification: Notification) {
-        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
-        outsideClickMonitor = nil
+        model.optionsExpanded = false
+        model.panelVisible = false
     }
 
-    @objc private func clickStatusItem() {
-        guard let button = statusItem?.button else { return }
-        if NSApp.currentEvent?.type == .rightMouseUp
-            || NSApp.currentEvent?.modifierFlags.contains(.control) == true
+    private func handleGlobalMouseEvent(_ event: NSEvent) {
+        if popover.isShown, event.type == .leftMouseDown || event.type == .rightMouseDown,
+            statusButtonBounds()?.contains(screenPoint(for: event)) != true
         {
             popover.performClose(nil)
-            actionsMenu().popUp(
-                positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY), in: button)
-        } else if NSApp.currentEvent?.type == .leftMouseUp,
-            NSApp.currentEvent?.modifierFlags.contains(.command) == true,
-            model.canStartFavorite
-        {
+        }
+        trackStatusClick(event)
+    }
+
+    private func statusButtonBounds() -> NSRect? {
+        guard let item = statusItem, item.isVisible, let button = item.button,
+            let window = button.window, window.screen != nil
+        else { return nil }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    }
+
+    private func screenPoint(for event: NSEvent) -> NSPoint {
+        event.window?.convertPoint(toScreen: event.locationInWindow) ?? event.locationInWindow
+    }
+
+    private func trackStatusClick(_ event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if event.type == .leftMouseDown {
+            closesPanelOnStatusClick =
+                !modifiers.contains(.command) && popover.isShown
+                && statusButtonBounds()?.contains(screenPoint(for: event)) == true
+        }
+        if event.type == .leftMouseDown || modifiers != .command {
+            commandClick.cancel()
+        }
+        guard modifiers == .command,
+            event.type == .leftMouseDown || commandClick.isTracking,
+            let bounds = statusButtonBounds()
+        else { return }
+        switch event.type {
+        case .leftMouseDown:
+            commandClick.begin(at: screenPoint(for: event), within: bounds)
+        case .leftMouseDragged:
+            commandClick.cancel()
+        case .leftMouseUp:
+            guard commandClick.finish(at: screenPoint(for: event), within: bounds),
+                let button = statusItem?.button
+            else { return }
             Task {
                 await model.startFavorite()
                 if model.presentation != .active, !popover.isShown { showPopover(from: button) }
             }
-        } else if popover.isShown {
+        default: break
+        }
+    }
+
+    @objc private func clickStatusItem() {
+        guard let button = statusItem?.button else { return }
+        let event = NSApp.currentEvent
+        defer { closesPanelOnStatusClick = false }
+        if event?.type == .rightMouseUp
+            || event?.modifierFlags.contains(.control) == true
+        {
+            popover.performClose(nil)
+            actionsMenu().popUp(
+                positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY), in: button)
+        } else if event?.type == .leftMouseUp, event?.modifierFlags.contains(.command) == true {
+            return
+        } else if popover.isShown || (event?.type == .leftMouseUp && closesPanelOnStatusClick) {
             popover.performClose(nil)
         } else {
             showPopover(from: button)
@@ -289,9 +356,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     }
 
     private func showPopover(from button: NSStatusBarButton) {
-        popover.animates =
-            !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-            && NSApp.currentEvent?.type == .leftMouseUp
         NSApp.activate()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }

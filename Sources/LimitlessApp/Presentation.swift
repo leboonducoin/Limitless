@@ -120,13 +120,67 @@ enum StopChoice: Hashable {
 }
 
 enum MenuBarStyle: String, CaseIterable {
-    case icon, timer
+    case remainingTime, icon
+    case endTime = "timer"
 
     var label: String {
         switch self {
+        case .remainingTime: "Time remaining"
         case .icon: "Icon only"
-        case .timer: "End time and icon"
+        case .endTime: "End time"
         }
+    }
+}
+
+struct StatusCommandClick {
+    private var origin: CGPoint?
+    var isTracking: Bool { origin != nil }
+
+    mutating func begin(at point: CGPoint, within bounds: CGRect) {
+        origin = bounds.contains(point) ? point : nil
+    }
+
+    mutating func cancel() { origin = nil }
+
+    mutating func finish(at point: CGPoint, within bounds: CGRect) -> Bool {
+        defer { cancel() }
+        guard let origin, bounds.contains(point) else { return false }
+        return hypot(point.x - origin.x, point.y - origin.y) < 4
+    }
+}
+
+struct MenuBarTime: Equatable {
+    let top: String
+    let bottom: String
+    let accessibilityLabel: String
+
+    static func remaining(seconds: Double) -> Self? {
+        guard seconds.isFinite, seconds > 0 else { return nil }
+        let rounded = ceil(seconds / 60)
+        guard rounded < 100 * 24 * 60 else {
+            return Self(top: "99+", bottom: "d", accessibilityLabel: "Over 99 days remaining")
+        }
+        let minutes = Int(rounded)
+        let hours = minutes / 60
+        let label = Duration.seconds(minutes * 60).formatted(
+            .units(allowed: [.days, .hours, .minutes], width: .wide))
+        if hours >= 100 {
+            return Self(top: "\(hours / 24)", bottom: "d", accessibilityLabel: "\(label) remaining")
+        }
+        if hours > 0 {
+            return Self(
+                top: "\(hours)h", bottom: String(format: "%02d", minutes % 60),
+                accessibilityLabel: "\(label) remaining")
+        }
+        return Self(top: "\(minutes)", bottom: "min", accessibilityLabel: "\(label) remaining")
+    }
+
+    static func end(at deadline: Date, calendar: Calendar = .current) -> Self {
+        let clock = calendar.dateComponents([.hour, .minute], from: deadline)
+        return Self(
+            top: String(format: "%02d:", clock.hour ?? 0),
+            bottom: String(format: "%02d", clock.minute ?? 0),
+            accessibilityLabel: "Ends at \(deadline.formatted(date: .omitted, time: .shortened))")
     }
 }
 

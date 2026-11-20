@@ -44,6 +44,8 @@ import UserNotifications
     private(set) var sudoTouchIDError: ServiceError?
     var pendingSudoTouchID: Bool?
     var draft = PolicyDraft()
+    var optionsExpanded = false
+    var panelVisible = false
     var favoriteMinutes: Int {
         didSet {
             if !isPreview { preferences.set(favoriteMinutes, forKey: "favoriteMinutes") }
@@ -137,7 +139,7 @@ import UserNotifications
         favoriteMinutes = SessionEnd.presetMinutes.contains(savedFavorite) ? savedFavorite : 60
         menuBarStyle =
             preferences.string(forKey: "menuBarStyle").flatMap(MenuBarStyle.init(rawValue:))
-            ?? .timer
+            ?? .remainingTime
         sessionNotifications = preferences.bool(forKey: "sessionNotifications")
         let muteWhenScreenSleeps = preferences.bool(forKey: "muteWhenScreenSleeps")
         self.muteWhenScreenSleeps = muteWhenScreenSleeps
@@ -224,7 +226,7 @@ import UserNotifications
         return true
     }
     var canStartFavorite: Bool {
-        guard canControl, !busy, !updating else { return false }
+        guard showsPowerControls, !busy, !updating else { return false }
         return canExtendSession
             || (status?.sessions.isEmpty == true && status?.sleep.phase == .inactive
                 && status?.sleep.observed == .allowed)
@@ -239,11 +241,15 @@ import UserNotifications
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(report, forType: .string)
     }
-    var menuBarDeadline: Date? {
-        guard menuBarStyle == .timer, presentation == .active, let status,
-            let latest = status.protectionRemainingSeconds, latest.isFinite, latest > 0
+    var menuBarTime: MenuBarTime? {
+        guard menuBarStyle != .icon, presentation == .active, let status,
+            let remaining = protectionRemainingSeconds, remaining.isFinite, remaining > 0
         else { return nil }
-        return status.sampledAt.addingTimeInterval(latest)
+        if menuBarStyle == .endTime, let latest = status.protectionRemainingSeconds {
+            let end = status.sampledAt.timeIntervalSinceReferenceDate + latest
+            return .end(at: Date(timeIntervalSinceReferenceDate: (end / 60).rounded() * 60))
+        }
+        return .remaining(seconds: remaining)
     }
     var protectionRemainingSeconds: Double? {
         currentRemainingSeconds(status?.protectionRemainingSeconds)
@@ -600,8 +606,9 @@ import UserNotifications
                     : "Session ended at \(cutoff.percent)% battery (limit: \(cutoff.limit)%)."
             }
         }
-        if !draftChanged { draft = PolicyDraft(received.policy) }
-        baseline = PolicyDraft(received.policy)
+        let receivedDraft = PolicyDraft(received.policy)
+        if !draftChanged, draft != receivedDraft { draft = receivedDraft }
+        if baseline != receivedDraft { baseline = receivedDraft }
         status = received
         statusReceivedAt = .now
         if ownSession == nil { watchedProcesses = nil }
@@ -802,7 +809,15 @@ import UserNotifications
                 }
                 end = .unlimited
             }
-            try end.validate(at: SystemClock.now())
+            let now = try SystemClock.now()
+            try end.validate(at: now)
+            #if DEBUG
+                if isPreview, showsPowerControls, status?.sessions.isEmpty == true, followed.isEmpty
+                {
+                    simulateSession(end)
+                    return
+                }
+            #endif
             if await perform(.start(SessionRequest(end: end))), ownSession != nil {
                 watchedProcesses = followed.isEmpty ? nil : followed
                 monitorProcesses()
@@ -819,6 +834,14 @@ import UserNotifications
     }
 
     func extendSession() async {
+        #if DEBUG
+            if isPreview, canExtendSession, let session = ownSession,
+                let remaining = remainingSeconds(session)
+            {
+                simulateSession(.after(seconds: remaining + 900))
+                return
+            }
+        #endif
         guard canControl, canExtendSession, !busy || extendingSession else { return }
         pendingExtensions += 1
         guard !extendingSession, let id = ownSession?.id else { return }
@@ -834,6 +857,12 @@ import UserNotifications
     }
 
     func stopAll() async {
+        #if DEBUG
+            if isPreview {
+                if status?.sessions.isEmpty == false { simulateSession(nil) }
+                return
+            }
+        #endif
         guard !stoppingSessions else { return }
         stoppingSessions = true
         updateEnvironment()
@@ -1172,6 +1201,35 @@ import UserNotifications
 
 #if DEBUG
     extension AppModel {
+        private func simulateSession(_ end: SessionEnd?) {
+            guard isPreview, let status else { return }
+            let previous = ownSession
+            let now = Date.now
+            let sessions: [SessionSummary] =
+                end.map { end in
+                    let remaining: Double? =
+                        switch end {
+                        case .unlimited: nil
+                        case .after(let seconds): seconds
+                        case .at(let date): date.timeIntervalSince(now)
+                        }
+                    return [
+                        SessionSummary(
+                            id: previous?.id ?? UUID(), kind: .manual, end: end,
+                            startedAt: previous?.startedAt ?? now, remainingSeconds: remaining,
+                            suspension: nil, belongsToClient: true)
+                    ]
+                } ?? []
+            let active = !sessions.isEmpty
+            let simulated = ServiceStatus(
+                policy: status.policy, power: status.power,
+                sleep: SleepReport(
+                    phase: active ? .active : .inactive, observed: active ? .disabled : .allowed,
+                    ownsGlobalHold: active, fault: nil),
+                sessions: sessions, sampledAt: now, sudoTouchID: status.sudoTouchID)
+            try? accept(ServiceReply(status: simulated))
+        }
+
         static func preview(_ state: String, watchedProcesses: [ProcessIdentity]? = nil) -> AppModel
         {
             let model = AppModel()

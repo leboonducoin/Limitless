@@ -50,18 +50,79 @@ private func protection(
     #expect(shouldRemind)
 }
 
-@Test @MainActor func iconPreferenceHidesOnlyTheMenuBarTime() throws {
+@Test @MainActor func menuBarDefaultsToRemainingTimeAndPersistsEachStyle() throws {
     let domain = "Limitless.menu-style-test.\(UUID())"
     let preferences = try #require(UserDefaults(suiteName: domain))
     defer { preferences.removePersistentDomain(forName: domain) }
     let model = AppModel(preferences: preferences)
     try model.accept(ServiceReply(status: protection(UUID(), [60, 120])))
-    model.menuBarStyle = .timer
-    #expect(model.menuBarDeadline != nil)
+    #expect(model.menuBarStyle == .remainingTime)
+    #expect(model.menuBarTime?.top == "2" && model.menuBarTime?.bottom == "min")
+    model.menuBarStyle = .endTime
+    #expect(model.menuBarTime?.top.hasSuffix(":") == true)
+    #expect(AppModel(preferences: preferences).menuBarStyle == .endTime)
     model.menuBarStyle = .icon
-    #expect(model.menuBarDeadline == nil && model.protectionRemainingSeconds != nil)
+    #expect(model.menuBarTime == nil && model.protectionRemainingSeconds != nil)
     #expect(AppModel(preferences: preferences).menuBarStyle == .icon)
 }
+
+@Test func compactClockRoundsRemainingUpAndSplitsHoursAndMinutes() {
+    #expect(MenuBarTime.remaining(seconds: 0) == nil)
+    #expect(MenuBarTime.remaining(seconds: .infinity) == nil)
+    let minute = MenuBarTime.remaining(seconds: 0.1)
+    #expect(minute?.top == "1" && minute?.bottom == "min")
+    let hours = MenuBarTime.remaining(seconds: 7_260)
+    #expect(hours?.top == "2h" && hours?.bottom == "01")
+    let long = MenuBarTime.remaining(seconds: 100 * 24 * 60 * 60)
+    #expect(long?.top == "99+" && long?.bottom == "d")
+}
+
+@Test func commandClickRequiresBothEndpointsInsideTheItemAndRejectsDrags() {
+    let item = CGRect(x: 100, y: 10, width: 24, height: 24)
+    let center = CGPoint(x: item.midX, y: item.midY)
+    let outside = CGPoint(x: item.maxX + 1, y: item.midY)
+    var click = StatusCommandClick()
+
+    click.begin(at: outside, within: item)
+    let endsInside = click.finish(at: center, within: item)
+    #expect(!endsInside)
+    click.begin(at: center, within: item)
+    let endsOutside = click.finish(at: outside, within: item)
+    #expect(!endsOutside)
+    click.begin(at: center, within: item)
+    let movesInside = click.finish(
+        at: CGPoint(x: center.x + 5, y: center.y), within: item)
+    #expect(!movesInside)
+    click.begin(at: center, within: item)
+    click.cancel()
+    let returnsAfterDrag = click.finish(at: center, within: item)
+    #expect(!returnsAfterDrag)
+    click.begin(at: center, within: item)
+    let staysInside = click.finish(at: center, within: item)
+    #expect(staysInside && !click.isTracking)
+}
+
+@Test @MainActor func optionsViewportStaysCompactOnStandardAndShortDisplays() {
+    #expect(MenuPanel.optionsHeight(screenHeight: nil) == 250)
+    #expect(MenuPanel.optionsHeight(screenHeight: 1_050) == 250)
+    #expect(MenuPanel.optionsHeight(screenHeight: 480) == 160)
+}
+
+#if DEBUG
+    @Test @MainActor func previewFavoriteStartsAndExtendsOnlyTheSimulatedSession() async throws {
+        let model = AppModel.preview("inactive")
+        model.favoriteMinutes = 30
+        #expect(model.canStartFavorite && !model.canControl)
+        await model.startFavorite()
+        let session = try #require(model.ownSession)
+        #expect(session.remainingSeconds == 1_800 && model.menuBarTime?.top == "30")
+        await model.startFavorite()
+        #expect(model.ownSession?.id == session.id && model.ownSession?.remainingSeconds == 2_700)
+        await model.stopAll()
+        #expect(model.status?.sessions.isEmpty == true && model.menuBarTime == nil)
+        #expect(model.presentation == .inactive && !model.canControl)
+    }
+#endif
 
 @Test func lidMuteRequiresOptInActiveProtectionAndNoExternalDisplay() {
     for state in [LidDisplayState.open, .closedWithDisplay, .unknown] {

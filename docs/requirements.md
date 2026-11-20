@@ -12,7 +12,8 @@ how to verify them.
 - Stop all protection at critical thermal load. Read battery and thermal state independently.
 - Distinguish a closed lid with and without an external display. Closed-lid and display-sleep audio muting are independent opt-ins with restoration of the owned output.
 - Optional iPhone hotspot fallback uses an exact protected network, with credentials in Keychain.
-- A Command-click starts the configured favorite when idle or extends the app's current timer by 15 minutes. The menu bar offers icon-only and end-time styles.
+- A Command-click starts the configured favorite when idle or extends the app's current timer by 15 minutes.
+  The menu bar offers remaining time by default, end time, and icon only at the same width.
 - Use one shared keep-awake session. Each request keeps its authorization, deadline and limits. A second app owner cannot start a separate manual session.
 - Optional session notifications report approaching expiry and session endings.
 - A small + button beside Stop adds 15 minutes per click to an owned timer or date session.

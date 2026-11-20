@@ -33,8 +33,10 @@ Set `SDKROOT` to an installed SDK path if the selected SDK and Swift compiler do
 swift Tools/ProjectTool.swift preview
 ```
 
-Open the **Limitless.app** path printed at the end. This is an inert preview,
-with a PNG beside it. It cannot keep the Mac awake or install the helper.
+Open the **Limitless.app** path printed at the end, then click its status item.
+The preview opens only in the menu bar, with a PNG beside the bundle.
+Command-click and the timer controls simulate sessions in memory. The preview cannot
+keep the Mac awake or install the helper.
 Previews use a separate app identity so they do not replace Limitless in macOS settings.
 For the setup screen instead:
 
@@ -44,9 +46,10 @@ env LIMITLESS_PREVIEW_STATE=setup swift Tools/ProjectTool.swift bundle
 
 Other previews: `inactive`, `process`, `desktop`, `external`, `battery-unknown`, `battery-low`,
 `touch-id-external` and `touch-id-permission`. Check light/dark mode, Tab navigation, VoiceOver and
-Reduce Motion/Transparency. Check that content stays within the menu on first opening and when
-Automatic updates changes or an Update button appears. Keyboard input must follow the Mac's
-layout and locale.
+Reduce Motion/Transparency. Check that the Options label, icon, blank space and chevron all
+open Options. Scroll to the App category while the session controls stay visible. Close the
+panel and reopen it to verify Options is collapsed. Check that content fits when Automatic
+updates changes or an Update button appears. Keyboard input must follow the Mac's layout and locale.
 
 ## Test the installed app
 
@@ -101,9 +104,10 @@ macOS version and any steps that fail.
   in Applications. Do not remove quarantine to make this pass.
 - Use Command-click while idle and check the favorite duration. Confirm that
   Command-Return starts, Command-Plus extends, and Command-Period stops from the
-  panel. Open and close Options from keyboard focus. Verify that the bar displays
-  the new end time after extension and that icon-only mode uses a full orange
-  mark. Check that Command-click during an owned timer adds 15 minutes to it.
+  panel. Open and close Options from keyboard focus. Verify that the remaining time
+  and end time update after extension, that icon-only mode uses a full orange mark,
+  and that none of the styles changes the status item's width. Check that Command-click
+  during an owned timer adds 15 minutes to it.
 - Command-drag the Limitless icon farther right, relaunch the app and verify that macOS restores
   its position.
 - Then uninstall: the app should close and its integrations disappear.

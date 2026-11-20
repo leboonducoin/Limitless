@@ -7,8 +7,7 @@ struct MenuPanel: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
-    private var contentHeight = SwiftUI.State<CGFloat>(wrappedValue: 320)
-    private var optionsExpanded = SwiftUI.State<Bool>(wrappedValue: false)
+    private static let logo = BrandArt.appIcon(size: 64)
 
     init(model: AppModel) {
         self.model = model
@@ -16,16 +15,7 @@ struct MenuPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                panelContent.fixedSize(horizontal: false, vertical: true)
-                    .onGeometryChange(for: CGFloat.self) {
-                        ceil($0.size.height)
-                    } action: {
-                        if contentHeight.wrappedValue != $0 { contentHeight.wrappedValue = $0 }
-                    }
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(height: min(contentHeight.wrappedValue, maximumBodyHeight))
+            panelContent.fixedSize(horizontal: false, vertical: true)
             Divider()
             HStack(spacing: 8) {
                 HStack(spacing: 0) {
@@ -57,17 +47,16 @@ struct MenuPanel: View {
         .transaction { $0.animation = nil }
     }
 
-    private var maximumBodyHeight: CGFloat {
-        max(200, (NSScreen.main?.visibleFrame.height ?? 740) - 100)
-    }
-
     private var panelContent: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Image(nsImage: BrandArt.appIcon(size: 64)).resizable()
+                Image(nsImage: Self.logo).resizable()
                     .frame(width: 32, height: 32).accessibilityHidden(true)
                 Text("Limitless").font(.system(size: 21, weight: .semibold))
                 Spacer()
+                if model.isPreview {
+                    Text("Preview").font(.caption).foregroundStyle(.secondary)
+                }
             }
             statusOverview
                 .padding(10)
@@ -85,14 +74,38 @@ struct MenuPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
-            DisclosureGroup(isExpanded: optionsExpanded.projectedValue) {
-                SettingsView(model: model).padding(.top, 10)
+            Button {
+                model.optionsExpanded.toggle()
             } label: {
-                Label("Options", systemImage: "slider.horizontal.3")
-                    .font(.callout.weight(.medium))
+                HStack {
+                    Label("Options", systemImage: "slider.horizontal.3")
+                    Spacer()
+                    Image(systemName: model.optionsExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
+                .font(.callout.weight(.medium))
+                .padding(8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(model.optionsExpanded ? "Expanded" : "Collapsed")
+            if model.optionsExpanded {
+                ScrollView {
+                    SettingsView(model: model)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 8)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(height: Self.optionsHeight(screenHeight: NSScreen.main?.visibleFrame.height))
             }
         }.padding(18)
             .onChange(of: model.draft) { model.policyEdited() }
+    }
+
+    static func optionsHeight(screenHeight: CGFloat?) -> CGFloat {
+        min(250, (screenHeight ?? 750) / 3)
     }
 
     private var statusOverview: some View {
@@ -149,7 +162,7 @@ struct MenuPanel: View {
                 HStack {
                     Text("Current session")
                     Spacer()
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    TimelineView(.animation(minimumInterval: 1, paused: !model.panelVisible)) { _ in
                         if let remaining = model.protectionRemainingSeconds {
                             Text(
                                 Duration.seconds(remaining).formatted(
