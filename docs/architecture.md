@@ -130,8 +130,9 @@ removing its service; updates preserve the setting. Update preparation can be ca
 same console user while the power helper's recovery record is still intact. An update records
 whether the power helper was enabled, restores it after relaunch and retries from the previous
 app if opening the replacement fails. The requester hands recovery to the installer before
-exiting. Other instances leave a live recovery record alone. The rollback records whether the
-helper was enabled before the update. Uninstall confirms normal sleep before handling audio
+exiting. A relaunched app waits for a live installer to exit before restoring the helper.
+The rollback records whether the helper was enabled before the update. Uninstall confirms
+normal sleep before handling audio
 restoration or Keychain cleanup. A failed power-helper preflight can reopen admission after
 confirmed restoration. Preparation ends on a console user change. Once system removal starts,
 admission stays closed until cleanup completes. Failed cleanup stays visible and retryable.

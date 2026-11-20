@@ -132,6 +132,7 @@ import UserNotifications
     private var updateHelperRecoveryReceipt: UpdatePreferences.Receipt?
     private(set) var updateHelperRecoveryPending: Bool
     private var updateRecoveryReadable = true
+    private(set) var waitingForUpdateInstaller = false
     private var checkingUpdates = false
     private var persistsUpdateState = false
     private var updateSchedule: UpdateSchedule {
@@ -230,15 +231,25 @@ import UserNotifications
         }
     }
 
-    func restoreUpdateHelperIfNeeded(confirmReady: (() async -> Bool)? = nil) async {
+    func restoreUpdateHelperIfNeeded(
+        ownerIsStillRunning: (() throws -> Bool)? = nil,
+        confirmReady: (() async -> Bool)? = nil
+    ) async {
         guard updateRecoveryReadable, updateHelperRecoveryPending, trustedBuild, !isPreview,
             let helper
         else { return }
+        waitingForUpdateInstaller = false
         do {
-            if updateHelperRecoveryReceipt != nil,
-                let recovery = try UpdatePreferences.helperRecovery(),
-                recovery.requesterIsStillRunning
-            {
+            let ownerIsAlive =
+                if let ownerIsStillRunning {
+                    try ownerIsStillRunning()
+                } else if updateHelperRecoveryReceipt != nil {
+                    try UpdatePreferences.helperRecovery()?.requesterIsStillRunning == true
+                } else {
+                    false
+                }
+            if ownerIsAlive {
+                waitingForUpdateInstaller = true
                 return
             }
             if [.notRegistered, .notFound].contains(helper.status) {
@@ -639,6 +650,8 @@ import UserNotifications
         if !updateRecoveryReadable {
             await readUpdateRecovery()
             if updateRecoveryReadable { await restoreUpdateHelperIfNeeded() }
+        } else if waitingForUpdateInstaller, updateHelperRecoveryPending, !updating {
+            await restoreUpdateHelperIfNeeded()
         }
         defer {
             refreshing = false

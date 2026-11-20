@@ -320,21 +320,26 @@ private func status(
         preferences.set(true, forKey: "restoreHelperAfterUpdate")
         let oldPreferences = AppModel(
             preferences: preferences, helper: helper, buildTrust: .trusted)
-        await oldPreferences.restoreUpdateHelperIfNeeded { true }
+        await oldPreferences.restoreUpdateHelperIfNeeded(confirmReady: { true })
         #expect(helper.registrations == 0 && !oldPreferences.updateHelperRecoveryPending)
         let model = AppModel(
             preferences: preferences, helper: helper, buildTrust: .trusted,
             updateHelperRecoveryPending: true)
-        await model.restoreUpdateHelperIfNeeded { false }
+        await model.restoreUpdateHelperIfNeeded(
+            ownerIsStillRunning: { true }, confirmReady: { false })
+        #expect(model.waitingForUpdateInstaller && helper.registrations == 0)
+        await model.restoreUpdateHelperIfNeeded(
+            ownerIsStillRunning: { false }, confirmReady: { false })
+        #expect(!model.waitingForUpdateInstaller)
         #expect(helper.registrations == 1)
         #expect(model.updateHelperRecoveryPending)
         #expect(model.message != nil)
         helper.registrationFails = false
-        await model.restoreUpdateHelperIfNeeded { false }
+        await model.restoreUpdateHelperIfNeeded(confirmReady: { false })
         #expect(helper.registrations == 2)
         #expect(helper.status == .enabled)
         #expect(model.updateHelperRecoveryPending)
-        await model.restoreUpdateHelperIfNeeded { true }
+        await model.restoreUpdateHelperIfNeeded(confirmReady: { true })
         #expect(helper.registrations == 2)
         #expect(!model.updateHelperRecoveryPending)
 
