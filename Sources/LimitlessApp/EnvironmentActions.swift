@@ -369,19 +369,17 @@ enum HotspotCredentials {
             guard eligible else { return false }
             return await confirmSession()
         }
-        attempt = Task.detached(priority: .utility) { [weak self] in
+        attempt = Task(priority: .utility) { [weak self] in
             let result = await Self.joinIfAvailable(canJoin: canJoin)
-            await MainActor.run {
-                guard let self else { return }
-                self.attempt = nil
-                if self.monitorID == monitorID, self.offlineSince != nil {
-                    self.message = result
-                }
+            guard let self else { return }
+            self.attempt = nil
+            if self.monitorID == monitorID, self.offlineSince != nil {
+                self.message = result
             }
         }
     }
 
-    private nonisolated static func joinIfAvailable(
+    @concurrent private static func joinIfAvailable(
         canJoin: @Sendable () async -> Bool
     ) async -> String? {
         do {
