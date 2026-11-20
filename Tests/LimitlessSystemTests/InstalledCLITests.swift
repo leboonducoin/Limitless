@@ -4,6 +4,29 @@ import Testing
 
 @testable import LimitlessSystem
 
+@Test func cliExecutionPathsRejectWritableOrRedirectedComponents() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let folder = root.appendingPathComponent("bin")
+    let executable = folder.appendingPathComponent("limitless")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data().write(to: executable)
+    try InstalledCLI.requireProtectedPath(
+        root: root, components: ["bin", "limitless"], executable: true, owner: getuid())
+    #expect(chmod(folder.path, 0o775) == 0)
+    #expect(throws: JournalError.insecureDirectory) {
+        try InstalledCLI.requireProtectedPath(
+            root: root, components: ["bin", "limitless"], executable: true, owner: getuid())
+    }
+    #expect(chmod(folder.path, 0o755) == 0)
+    try FileManager.default.removeItem(at: executable)
+    try FileManager.default.createSymbolicLink(at: executable, withDestinationURL: root)
+    #expect(throws: (any Error).self) {
+        try InstalledCLI.requireProtectedPath(
+            root: root, components: ["bin", "limitless"], executable: true, owner: getuid())
+    }
+}
+
 @Test func cliShortcutInstallsIdempotentlyAndRemovesOnlyItsOwnLink() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(

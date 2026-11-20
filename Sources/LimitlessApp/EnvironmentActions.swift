@@ -257,6 +257,13 @@ enum HotspotCredentials {
     struct Network: Codable, Sendable {
         let ssid: String
         let password: String
+        let automaticJoin: Bool?
+
+        init(ssid: String, password: String, automaticJoin: Bool = false) {
+            self.ssid = ssid
+            self.password = password
+            self.automaticJoin = automaticJoin
+        }
 
         var isValid: Bool {
             (1...32).contains(ssid.utf8.count) && (8...63).contains(password.utf8.count)
@@ -385,6 +392,7 @@ enum HotspotCredentials {
         do {
             let result = try await associateIfCurrent(canJoin: canJoin) {
                 guard let network = HotspotCredentials.read(),
+                    network.automaticJoin == true,
                     let interface = CWWiFiClient.shared().interface()
                 else { throw JoinError.missingCredentials }
                 let name = Data(network.ssid.utf8)

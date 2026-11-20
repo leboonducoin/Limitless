@@ -83,7 +83,7 @@ public struct UserPolicy: Codable, Equatable, Sendable {
         else { throw PolicyError.invalidDuration }
     }
 
-    func withAutomation(_ allowed: Bool) throws -> Self {
+    package func withAutomation(_ allowed: Bool) throws -> Self {
         try Self(
             mode: mode, batteryFloor: batteryFloor, maximumDuration: maximumDuration,
             allowsAutomation: allowed, keepsDisplayAwake: keepsDisplayAwake)

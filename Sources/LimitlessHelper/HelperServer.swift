@@ -8,7 +8,7 @@ import os
 
 final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private let queue = DispatchQueue(label: "io.github.leboonducoin.Limitless.helper")
-    private let pending = OSAllocatedUnfairLock(initialState: 0)
+    private let pending = OSAllocatedUnfairLock(initialState: (total: 0, tasks: 0))
     private let logger = Logger(subsystem: LimitlessIdentity.helper, category: "service")
     private let identity: SignedIdentity
     private let control = NSXPCListener(machServiceName: LimitlessIdentity.controlService)
@@ -95,19 +95,22 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
         }
         guard accepted else { return false }
         connection.exportedInterface = NSXPCInterface(with: LimitlessXPC.self)
-        connection.exportedObject = Endpoint(server: self, owner: owner)
+        connection.exportedObject = Endpoint(server: self, owner: owner, role: role)
         connection.invalidationHandler = { [weak self] in self?.disconnect(owner) }
         connection.interruptionHandler = { [weak connection] in connection?.invalidate() }
         connection.activate()
         return true
     }
 
-    func submit(_ data: Data, owner: UUID, reply: @escaping @Sendable (Data) -> Void) {
+    func submit(
+        _ data: Data, owner: UUID, role: ClientRole, reply: @escaping @Sendable (Data) -> Void
+    ) {
         let admitted = pending.withLock { count in
-            guard count < ServiceSessions.clientCapacity,
+            guard count.total < ServiceSessions.clientCapacity, role != .task || count.tasks < 8,
                 data.count <= ServiceWire.maximumMessageBytes
             else { return false }
-            count += 1
+            count.total += 1
+            if role == .task { count.tasks += 1 }
             return true
         }
         guard admitted else {
@@ -115,7 +118,12 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
             return
         }
         queue.async { [self] in
-            defer { pending.withLock { $0 -= 1 } }
+            defer {
+                pending.withLock { count in
+                    count.total -= 1
+                    if role == .task { count.tasks -= 1 }
+                }
+            }
             guard stoppingAt == nil, let runtime, connections[owner] != nil else {
                 reply(Self.encode(ServiceReply(error: .ownerExpired)))
                 return
@@ -177,11 +185,13 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
 private final class Endpoint: NSObject, LimitlessXPC {
     let server: HelperServer
     let owner: UUID
-    init(server: HelperServer, owner: UUID) {
+    let role: ClientRole
+    init(server: HelperServer, owner: UUID, role: ClientRole) {
         self.server = server
         self.owner = owner
+        self.role = role
     }
     func request(_ data: Data, reply: @escaping @Sendable (Data) -> Void) {
-        server.submit(data, owner: owner, reply: reply)
+        server.submit(data, owner: owner, role: role, reply: reply)
     }
 }

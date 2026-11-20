@@ -1,7 +1,19 @@
 # CLI & AI
 
 Move Limitless to Applications and enable **Allow CLI & AI tasks** under **Options**.
-The `limitless` command is installed automatically.
+Approve the macOS prompt. A protected system installation exposes `limitless`
+directly. If the app or command directories are writable by a local account,
+Limitless installs a verified private copy for your account. Use its path in the
+commands below or define an alias for this shell:
+
+```sh
+alias limitless='"$HOME/Library/Application Support/Limitless CLI/Limitless.app/Contents/MacOS/limitless"'
+```
+
+Run setup again for each previously configured agent before using its old
+hooks. Explicit setup migrates Limitless entries to the protected command and
+keeps other settings. Closing your agents during migration prevents them from
+running a legacy hook.
 
 ## Terminal
 
@@ -45,7 +57,7 @@ Close your agent, then run its command once:
 Restart the agent and accept its normal hook approval if asked. Setup installs
 the skill and task hooks together. Existing settings are kept, with a private
 `.limitless-backup-*` copy beside the settings file. Invalid or linked files are
-left untouched, as are paths writable by another user through permissions or ACLs.
+left untouched, as are files with an ACL and directories writable by another user.
 Setup also stops if a configuration directory is replaced while the change is in
 progress. A failed setup or removal restores the previous settings and skill files.
 Custom configuration locations need manual setup.

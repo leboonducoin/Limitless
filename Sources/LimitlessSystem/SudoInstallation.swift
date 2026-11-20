@@ -70,7 +70,7 @@ public enum SudoInstallation {
         if !isRegistered { try await openConfigurator(register: true) }
     }
 
-    @MainActor public static func remove(forUpdate: Bool) async throws {
+    @MainActor public static func remove(forUpdate: Bool, authorization: Data?) async throws {
         if !isRegistered {
             guard try InstalledHelperFiles.areAbsent(kind: .sudo) else {
                 throw HelperInstallationError.unconfirmedRemoval
@@ -81,8 +81,9 @@ public enum SudoInstallation {
         if try !InstalledHelperFiles.areAbsent(kind: .sudo) {
             let client = try await ServiceClient(role: .application, sudo: true)
             do {
-                _ = try await client.send(forUpdate ? .prepareUpdate : .prepareRemoval)
-                _ = try await client.send(.finishRemoval)
+                _ = try await client.send(
+                    forUpdate ? .prepareUpdate : .prepareRemoval, authorization: authorization)
+                _ = try await client.send(.finishRemoval, authorization: authorization)
                 await client.close()
             } catch {
                 await client.close()

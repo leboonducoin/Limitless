@@ -4,6 +4,7 @@ public struct ServiceSessions: Sendable {
     public static let leaseSeconds: TimeInterval = 30
     public static let heartbeatSeconds: TimeInterval = 5
     public static let clientCapacity = 64
+    public static let taskClientCapacity = clientCapacity - 4
     public private(set) var registry: SessionRegistry
     public private(set) var consoleUser: UInt32?
     public private(set) var policyConfigured = false
@@ -54,6 +55,10 @@ public struct ServiceSessions: Sendable {
         guard clients[owner] == nil, clients.count < Self.clientCapacity else {
             throw ServiceError.capacityReached
         }
+        guard
+            role != .task
+                || clients.values.filter({ $0.role == .task }).count < Self.taskClientCapacity
+        else { throw ServiceError.capacityReached }
         clients[owner] = Client(user: user, role: role, lastContact: now.continuous)
     }
 
@@ -63,7 +68,8 @@ public struct ServiceSessions: Sendable {
     }
 
     public mutating func apply(
-        _ operation: ServiceOperation, owner: UUID, now: ClockSnapshot
+        _ operation: ServiceOperation, owner: UUID, now: ClockSnapshot,
+        authorizedPolicy: UserPolicy? = nil
     ) throws -> UUID? {
         guard var client = clients[owner] else { throw ServiceError.ownerExpired }
         guard client.user == consoleUser else { throw ServiceError.unauthorized }
@@ -95,7 +101,7 @@ public struct ServiceSessions: Sendable {
             policyConfigured = true
         case .restorePolicy(let policy):
             if !policyConfigured {
-                registry.updatePolicy(try policy.withAutomation(false))
+                registry.updatePolicy(try authorizedPolicy ?? policy.withAutomation(false))
                 policyConfigured = true
             }
         case .setAutomation(let allowed):

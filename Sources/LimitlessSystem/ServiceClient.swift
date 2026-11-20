@@ -33,10 +33,13 @@ public actor ServiceClient {
         connection.invalidate()
     }
 
-    public func send(_ operation: ServiceOperation) async throws -> ServiceReply {
+    public func send(_ operation: ServiceOperation, authorization: Data? = nil) async throws
+        -> ServiceReply
+    {
         try Task.checkCancellation()
         guard !closed else { throw ServiceError.unavailable }
-        let payload = try ServiceWire.encode(ServiceRequest(operation))
+        let payload = try ServiceWire.encode(
+            ServiceRequest(operation, authorization: authorization))
         do {
             let data: Data = try await withCheckedThrowingContinuation { continuation in
                 let pending = OSAllocatedUnfairLock(

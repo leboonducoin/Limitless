@@ -72,16 +72,6 @@ enum LimitlessApp {
             app.run()
             return
         }
-        if CommandLine.arguments.contains("--prepare-uninstall") {
-            let options = Array(CommandLine.arguments.dropFirst())
-            guard options == ["--prepare-uninstall"] else {
-                FileHandle.standardError.write(
-                    Data(
-                        "Usage: LimitlessApp --prepare-uninstall (erases Limitless preferences)\n"
-                            .utf8))
-                exit(64)
-            }
-        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
@@ -134,16 +124,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                         ? .accessibilityHighContrastAqua : .aqua)
             }
         #endif
-        if !CommandLine.arguments.contains("--prepare-uninstall") { installStatusItem() }
+        installStatusItem()
         Task {
             await model.prepareForLaunch()
-            if CommandLine.arguments.contains("--prepare-uninstall") {
-                let success = await model.removeIntegration()
-                let output = (model.message ?? "Removal was not confirmed.") + "\n"
-                (success ? FileHandle.standardOutput : FileHandle.standardError).write(
-                    Data(output.utf8))
-                exit(success ? 0 : 1)
-            }
             await model.restoreUpdateHelperIfNeeded()
             if model.trustedBuild && !model.isPreview {
                 let workspace = NSWorkspace.shared.notificationCenter

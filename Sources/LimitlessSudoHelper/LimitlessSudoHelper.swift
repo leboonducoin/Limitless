@@ -76,8 +76,10 @@ private final class SudoServer: NSObject, NSXPCListenerDelegate, @unchecked Send
                 guard let connection = connections[owner],
                     connection.effectiveUserIdentifier == ConsoleUser.identifier()
                 else { throw ServiceError.unauthorized }
-                let operation = try ServiceWire.decodeRequest(data).operation
+                let request = try ServiceWire.decodeRequest(data)
+                let operation = request.operation
                 try SudoTouchID.validateOperation(operation)
+                try AdministratorAuthorization.verify(request)
                 switch operation {
                 case .status: break
                 case .setSudoTouchID(let enabled):

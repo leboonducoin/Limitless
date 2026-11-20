@@ -4,6 +4,55 @@ import Testing
 
 @testable import LimitlessSystem
 
+@Test func agentSetupLeavesConfigurationThatHasAFileACLUnchanged() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let folder = root.appendingPathComponent(".codex")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let resource = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+            "skills/limitless")
+    let config = folder.appendingPathComponent("hooks.json")
+    let contents = Data("{}".utf8)
+    try contents.write(to: config)
+    let acl = Process()
+    acl.executableURL = URL(fileURLWithPath: "/bin/chmod")
+    acl.arguments = ["+a", "everyone deny write", config.path]
+    try acl.run()
+    acl.waitUntilExit()
+    try #require(acl.terminationStatus == 0)
+    #expect(throws: JournalError.extendedAccess) {
+        try AgentSetup.configure("codex", home: root, resources: resource)
+    }
+    #expect(try Data(contentsOf: config) == contents)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["hooks.json"])
+}
+
+@Test func agentSetupReplacesLegacyCommandsWithAnEscapedPrivatePath() throws {
+    let template = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("skills/limitless/hooks/codex.json")
+    let original = try Data(contentsOf: template)
+    let executable = URL(fileURLWithPath: "/Users/Test Person's folder/limitless")
+    let migrated = try AgentSetup.merged(
+        original, template: original, provider: "codex", remove: false,
+        privateExecutable: executable, usePrivate: true)
+    let object = try #require(JSONSerialization.jsonObject(with: migrated) as? [String: Any])
+    let hooks = try #require(object["hooks"] as? [String: [[String: Any]]])
+    let groups = try #require(hooks["UserPromptSubmit"])
+    #expect(groups.count == 1)
+    let commands = try #require(groups.first?["hooks"] as? [[String: Any]])
+    #expect(
+        commands.first?["command"] as? String
+            == "'/Users/Test Person'\"'\"'s folder/limitless' hook codex")
+
+    let removed = try AgentSetup.merged(
+        migrated, template: original, provider: "codex", remove: true,
+        privateExecutable: executable)
+    let remaining = try #require(JSONSerialization.jsonObject(with: removed) as? [String: Any])
+    #expect(remaining.isEmpty)
+}
+
 @Test func freshAgentSetupNeedsNoPreexistingDirectoriesAndRemovesItsEmptyConfiguration() throws {
     let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: home) }

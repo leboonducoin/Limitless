@@ -26,13 +26,17 @@
 - `limitless doctor` reports the authenticated helper, active protection, power and thermal readings, and protocol. Copy diagnostics from the menu when reporting a problem.
 - See which agent or provider is keeping the Mac awake, alongside any manual request. The bundled skill explains how lifecycle hooks protect Codex, Claude, Cursor, and Gemini tasks and how their protection ends.
 - Recover abandoned task markers while preserving the markers used by active workers. Disabling or removing a Limitless integration leaves unmanaged agent configuration alone.
-- Changing CLI access leaves the current power limits in place. Protocol 13 requires the app, CLI, and helpers from the same release.
+- Changing CLI access leaves the current power limits in place. The helper stores approved access and its limits in protected preferences. Existing installations require one new approval. Protocol 14 requires the app, CLI, and helpers from the same release.
 
 ### Updates, cleanup, and verification
 
 - Recover safely from interrupted updates. The previous installation stays available until the new app starts and its power helper is confirmed when required.
 - Offer a manual download when the installed app cannot be replaced automatically. Automatic updates still require an idle session and a matching signing identity.
 - Restore normal sleep during uninstall before handling audio or Keychain errors. Existing external Touch ID settings are preserved during uninstall.
+- Uninstall requires confirmation in the menu. The helpers verify macOS administrator approval before removing system components, granting CLI access, or changing Touch ID for sudo.
+- Reserve space for app controls even when many CLI or agent tasks connect.
+- Install a protected CLI per account when the shared application or command directories are writable. Re-run agent setup to switch existing hooks to the protected command.
+- Keep hotspot consent with the saved credential in Keychain. Preserve the access restrictions on agent settings and avoid copying extra files into the release.
 - Add regression tests for session ownership and timing, thermal limits, hotspot cancellation, audio restoration, and update recovery. CI checks Swift compilation, sanitizers, dependencies, workflows, and secrets.
 - Add an interactive demo and GitHub workflows that attest inert preview archives and verified distribution packages.
 

@@ -92,6 +92,11 @@ macOS version and any steps that fail.
 - Type a battery limit, press Return or leave the field, then try the arrows.
   Letters are refused; 81 becomes 80. A blocked start or battery cutoff explains why.
 - Run two AI tasks. The last one ending stops their hold; manual sessions stay yours.
+- On a user-owned installation, enable CLI access and confirm setup uses its
+  private executable. Rerun setup over existing hooks and verify the legacy
+  Limitless command is replaced without changing foreign hooks. Reopen after
+  helper restart and confirm the consent and limits are restored independently
+  of user preferences.
 - Try Touch ID, Cancel and password fallback for sudo.
   Its setup component uses the Limitless icon and **Limitless — Touch ID for sudo**
   name. Full Disk Access can list its helper as **io.github.leboonducoin.Limitless.sudo.helper**.

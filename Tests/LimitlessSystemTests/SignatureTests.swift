@@ -5,6 +5,22 @@ import Testing
 
 @testable import LimitlessSystem
 
+@Test func systemChangesRejectMissingOrMalformedAdministratorApproval() throws {
+    for operation in [
+        ServiceOperation.prepareRemoval, .prepareUpdate, .finishRemoval, .installCLI,
+        .setAutomation(true), .setSudoTouchID(true), .setSudoTouchID(false),
+    ] {
+        #expect(throws: ServiceError.unauthorized) {
+            try AdministratorAuthorization.verify(.init(operation))
+        }
+        #expect(throws: ServiceError.unauthorized) {
+            try AdministratorAuthorization.verify(.init(operation, authorization: Data([0])))
+        }
+    }
+    try AdministratorAuthorization.verify(.init(.status))
+    try AdministratorAuthorization.verify(.init(.setAutomation(false)))
+}
+
 @Test func signingRequirementsPinIdentifierAndCertificateAndRejectInjection() throws {
     let fingerprint = "0123456789abcdef0123456789abcdef01234567"
     for identifier in [

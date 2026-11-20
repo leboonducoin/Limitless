@@ -5,14 +5,27 @@ public enum AgentSetup {
     public static let providers = ["codex", "claude", "cursor", "gemini"]
     private static let maximumFileSize = 1_024 * 1_024
 
-    @concurrent public static func verifiedResources() async throws -> URL {
+    private static func usesPrivateResources(_ resources: URL, home: URL) -> Bool {
+        resources.standardizedFileURL.path
+            == InstalledCLI.privateApplication(in: home)
+            .appendingPathComponent("Contents/Resources/limitless-skill").path
+    }
+
+    @concurrent public static func verifiedResources(forRemoval: Bool = false) async throws -> URL {
         let identity = try await SignedIdentity.current(
             expectedIdentifier: LimitlessIdentity.commandLine)
-        let app = URL(fileURLWithPath: "/Applications/Limitless.app", isDirectory: true)
-        guard app.resolvingSymlinksInPath().path == app.path,
-            identity.executableURL.path
-                == app.appendingPathComponent("Contents/MacOS/limitless").path
-        else { throw SignatureError.untrustedIdentity }
+        let app: URL
+        if identity.executableURL.path == InstalledCLI.privateExecutable().path {
+            try InstalledCLI.requirePrivatePath(identity.executableURL, executable: true)
+            app = InstalledCLI.privateApplication()
+        } else {
+            guard identity.executableURL.path == InstalledCLI.target,
+                forRemoval || InstalledCLI.sharedPathIsProtected
+            else { throw SignatureError.untrustedIdentity }
+            app = URL(fileURLWithPath: "/Applications/Limitless.app", isDirectory: true)
+            guard app.resolvingSymlinksInPath().path == app.path
+            else { throw SignatureError.untrustedIdentity }
+        }
         try identity.verifyExecutable(at: app, identifier: LimitlessIdentity.application)
         return app.appendingPathComponent("Contents/Resources/limitless-skill")
     }
@@ -151,7 +164,17 @@ public enum AgentSetup {
                 descriptor, name,
                 O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, mode)
             guard file >= 0 else { throw JournalError.system(errno) }
-            defer { close(file) }
+            var created = false
+            defer {
+                if !created,
+                    (try? SecureOwnershipJournal.requireSameEntry(
+                        descriptor, name: name, descriptor: file)) != nil
+                {
+                    unlinkat(descriptor, name, 0)
+                }
+                close(file)
+            }
+            _ = try validateFile(file)
             try FileHandle(fileDescriptor: file, closeOnDealloc: false).write(contentsOf: data)
             guard fchmod(file, mode) == 0, fsync(file) == 0 else {
                 throw JournalError.system(errno)
@@ -164,6 +187,7 @@ public enum AgentSetup {
                 descriptor, name: name, descriptor: file)
             guard fsync(descriptor) == 0 else { throw JournalError.system(errno) }
             try validate()
+            created = true
             return ManagedFile(
                 data: data, device: info.st_dev, inode: info.st_ino,
                 mode: info.st_mode & 0o777)
@@ -186,6 +210,7 @@ public enum AgentSetup {
                 close(file)
                 unlinkat(descriptor, temporary, 0)
             }
+            _ = try validateFile(file)
             try FileHandle(fileDescriptor: file, closeOnDealloc: false).write(contentsOf: data)
             guard fchmod(file, expected?.mode ?? 0o600) == 0, fsync(file) == 0 else {
                 throw JournalError.system(errno)
@@ -249,7 +274,7 @@ public enum AgentSetup {
                 info.st_mode & 0o022 == 0, info.st_nlink == 1, info.st_size >= 0,
                 info.st_size <= off_t(maximumFileSize)
             else { throw CocoaError(.fileReadCorruptFile) }
-            try SecureOwnershipJournal.rejectWriteGrantingAccess(file)
+            try SecureOwnershipJournal.rejectExtendedAccess(file)
             return info
         }
 
@@ -300,8 +325,10 @@ public enum AgentSetup {
         }
     }
 
-    static func merged(_ data: Data?, template: Data, provider: String, remove: Bool) throws -> Data
-    {
+    static func merged(
+        _ data: Data?, template: Data, provider: String, remove: Bool,
+        privateExecutable: URL? = nil, usePrivate: Bool = false
+    ) throws -> Data {
         let source = try JSONSerialization.jsonObject(with: template) as? [String: Any]
         guard let additions = source?["hooks"] as? [String: [[String: Any]]] else {
             throw CocoaError(.fileReadCorruptFile)
@@ -320,7 +347,20 @@ public enum AgentSetup {
             throw CocoaError(.fileReadCorruptFile)
         }
         var hooks = config["hooks"] as? [String: Any] ?? [:]
-        let command = "/Applications/Limitless.app/Contents/MacOS/limitless hook " + provider
+        let command = InstalledCLI.target + " hook " + provider
+        let privateCommand = privateExecutable.map {
+            "'" + $0.path.replacingOccurrences(of: "'", with: "'\"'\"'") + "' hook " + provider
+        }
+        guard !usePrivate || privateCommand != nil else { throw CocoaError(.fileReadCorruptFile) }
+        let ownedCommands = Set([command, privateCommand].compactMap { $0 })
+        let installedCommand = usePrivate ? (privateCommand ?? command) : command
+        func replacingCommand(in entry: [String: Any]) throws -> [String: Any] {
+            guard entry["command"] as? String == command
+            else { throw CocoaError(.fileReadCorruptFile) }
+            var entry = entry
+            entry["command"] = installedCommand
+            return entry
+        }
         for (event, entries) in additions {
             if hooks[event] != nil, !(hooks[event] is [[String: Any]]) {
                 throw CocoaError(.fileReadCorruptFile)
@@ -329,9 +369,13 @@ public enum AgentSetup {
             var retained: [[String: Any]] = []
             for var entry in existing {
                 if provider == "cursor" {
-                    if entry["command"] as? String != command { retained.append(entry) }
+                    if !ownedCommands.contains(entry["command"] as? String ?? "") {
+                        retained.append(entry)
+                    }
                 } else if let commands = entry["hooks"] as? [[String: Any]] {
-                    let remaining = commands.filter { $0["command"] as? String != command }
+                    let remaining = commands.filter {
+                        !ownedCommands.contains($0["command"] as? String ?? "")
+                    }
                     if remaining.count == commands.count {
                         retained.append(entry)
                     } else if !remaining.isEmpty {
@@ -342,7 +386,16 @@ public enum AgentSetup {
                     retained.append(entry)
                 }
             }
-            if !remove { retained += entries }
+            if !remove {
+                retained += try entries.map { entry in
+                    if provider == "cursor" { return try replacingCommand(in: entry) }
+                    guard let commands = entry["hooks"] as? [[String: Any]]
+                    else { throw CocoaError(.fileReadCorruptFile) }
+                    var entry = entry
+                    entry["hooks"] = try commands.map(replacingCommand)
+                    return entry
+                }
+            }
             hooks[event] = retained.isEmpty ? nil : retained
         }
         config["hooks"] = hooks.isEmpty ? nil : hooks
@@ -370,7 +423,10 @@ public enum AgentSetup {
         else { return false }
         let template = try Data(
             contentsOf: resources.appendingPathComponent("hooks/\(provider).json"))
-        let expected = try merged(config, template: template, provider: provider, remove: false)
+        let expected = try merged(
+            config, template: template, provider: provider, remove: false,
+            privateExecutable: InstalledCLI.privateExecutable(in: home),
+            usePrivate: usesPrivateResources(resources, home: home))
         let canonical = try JSONSerialization.data(
             withJSONObject: JSONSerialization.jsonObject(with: config),
             options: [.prettyPrinted, .sortedKeys])
@@ -417,7 +473,9 @@ public enum AgentSetup {
         let template = try Data(
             contentsOf: resources.appendingPathComponent("hooks/\(provider).json"))
         let updated = try merged(
-            old?.data, template: template, provider: provider, remove: remove)
+            old?.data, template: template, provider: provider, remove: remove,
+            privateExecutable: InstalledCLI.privateExecutable(in: home),
+            usePrivate: usesPrivateResources(resources, home: home))
         let skillText = try Data(contentsOf: resources.appendingPathComponent("SKILL.md"))
         if skillExisted {
             let names = try skillDirectory!.names()

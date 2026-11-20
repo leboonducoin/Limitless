@@ -26,7 +26,8 @@ works. This is a Mac-wide setting; it does not change Limitless's administrator
 prompt. Remote sessions may still need a password.
 
 The first change installs a separate **Limitless — Touch ID for sudo** component,
-with its own administrator approval. If macOS blocks the change, click **Open Full
+with its own administrator approval. Each change also requires administrator
+authorization. If macOS blocks the change, click **Open Full
 Disk Access**. In Settings, enable the entry ending in **Limitless.sudo.helper**,
 then return to Limitless and retry the toggle.
 
@@ -61,6 +62,8 @@ that position for later launches.
 Right-click the menu-bar icon → **Uninstall Limitless**. This stops sessions and
 removes the app, helper, CLI shortcut, login item, preferences and AI integrations
 installed by Limitless. Existing Touch ID settings and recovery backups are kept.
+Uninstall and updates that remove an active helper require administrator
+authorization before privileged cleanup.
 The **Attested preview** workflow can build an inert Debug archive from `main`
 on request. The workflow artifact includes `SHA256SUMS` and has a GitHub build
 attestation. Use the full commit SHA from the preview's workflow run as `COMMIT`.

@@ -27,10 +27,11 @@ determines the shared countdown when every request is bounded.
 
 Only the authenticated app owning a manual session can extend its timer or date by
 15 minutes. Extensions preserve the session ID, start time, power limits and original
-duration ceiling. Expired or stopped sessions cannot be extended. Protocol 13 requires
+duration ceiling. Expired or stopped sessions cannot be extended. Protocol 14 requires
 matching app, CLI and helpers. A fresh helper rejects starts until the app reapplies
-the saved power policy. Toggling CLI access changes consent independently of power
-limits.
+the saved power policy. The helper remembers CLI consent and its power limits in
+root-owned preferences keyed by the console account's directory identity. App
+preferences cannot grant access. Existing installations need one new approval.
 
 ## Power
 
@@ -55,7 +56,9 @@ recovery record needs manual attention. Keyboard backlighting and Low Power Mode
 remain under macOS control. Apple's public Low Power Mode API only reads state.
 
 Optional hotspot fallback runs in the user app. It reads credentials from the
-login Keychain and looks for one exact WPA2 or WPA3 Personal match after a network
+login Keychain, where it also stores permission to join automatically. Credentials
+without explicit approval stay inactive. It looks for one exact WPA2 or WPA3
+Personal match after a network
 outage. It rechecks eligibility before joining. CoreWLAN association already in
 progress completes under macOS control.
 
@@ -68,8 +71,17 @@ while the app is active; forced restarts remain outside its control.
 
 App and CLI use separate XPC endpoints. Both sides verify the exact executable ID
 and certificate. Requests are bounded to 128 KiB, with 64 clients and 256 sessions.
-The helper accepts no arbitrary command or path. It alone installs the fixed CLI
-link. Root files use ownership, permissions, no-follow, locking and atomic writes.
+Up to 60 task connections may be admitted, and only eight task requests may be
+pending, leaving capacity for app controls.
+The helper accepts no arbitrary command or path. It installs the fixed system
+CLI link only when its complete execution path and destination directory are
+protected from local account writes. Otherwise the app verifies a copy of the
+signed bundle in an owner-only per-account directory and uses that path for
+CLI and agent setup. Root files use ownership, permissions, no-follow, locking
+and atomic writes.
+The app requests native administrator authorization for privileged removal, CLI
+enablement, and changes to Touch ID. Each privileged service verifies the
+authorization before it applies such a request.
 
 The optional sudo component has its own app identity, icon and administrator
 approval. Its helper belongs only to that component; Full Disk Access is not

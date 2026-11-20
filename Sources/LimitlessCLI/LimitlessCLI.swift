@@ -25,7 +25,7 @@ struct LimitlessCLI {
                     exit(69)
                 }
             case .setup(let provider, let remove):
-                let resources = try await AgentSetup.verifiedResources()
+                let resources = try await AgentSetup.verifiedResources(forRemoval: remove)
                 try AgentSetup.configure(provider, remove: remove, resources: resources)
                 print(
                     remove

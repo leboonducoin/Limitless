@@ -35,6 +35,15 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
         case .status, .start, .startAgent, .stop, .heartbeat: false
         }
     }
+
+    public var requiresAdministrator: Bool {
+        switch self {
+        case .prepareRemoval, .prepareUpdate, .finishRemoval, .installCLI, .setSudoTouchID,
+            .setAutomation(true):
+            true
+        default: false
+        }
+    }
 }
 
 public enum ServiceError: String, Error, Codable, Sendable {
@@ -54,9 +63,11 @@ public enum SudoTouchIDState: String, Codable, Equatable, Sendable {
 public struct ServiceRequest: Codable, Sendable {
     public let version: Int
     public let operation: ServiceOperation
-    public init(_ operation: ServiceOperation) {
+    public let authorization: Data?
+    public init(_ operation: ServiceOperation, authorization: Data? = nil) {
         version = ServiceWire.version
         self.operation = operation
+        self.authorization = authorization
     }
 }
 
@@ -126,12 +137,6 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
             """
     }
 
-    public var canRestoreAutomation: Bool {
-        policyConfigured && !policy.allowsAutomation && sessions.isEmpty && removal == .none
-            && sleep.phase == .inactive && sleep.observed == .allowed && !sleep.ownsGlobalHold
-            && sleep.fault == nil
-    }
-
     public init(
         policy: UserPolicy, power: PowerSnapshot, sleep: SleepReport,
         sessions: [SessionSummary], sampledAt: Date, removal: RemovalState = .none,
@@ -174,7 +179,7 @@ public struct ServiceReply: Codable, Sendable {
 }
 
 public enum ServiceWire {
-    public static let version = 13
+    public static let version = 14
     public static let maximumMessageBytes = 131_072
 
     private struct Header: Decodable {

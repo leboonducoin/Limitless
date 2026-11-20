@@ -18,26 +18,32 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     return (value, app, task)
 }
 
-@Test func rememberedAutomationCanOnlyBeRestoredForAnIdleAndHealthyHelper() throws {
-    let policy = try UserPolicy(mode: .external, batteryFloor: 35, maximumDuration: 60)
-    func snapshot(
-        _ phase: SleepPhase = .inactive, observed: SleepObservation = .allowed,
-        fault: SleepFault? = nil, removal: RemovalState = .none,
-        sessions: [SessionSummary] = []
-    ) -> ServiceStatus {
-        ServiceStatus(
-            policy: policy, power: .init(source: .external, battery: .notPresent),
-            sleep: .init(phase: phase, observed: observed, ownsGlobalHold: false, fault: fault),
-            sessions: sessions, sampledAt: Date(), removal: removal)
+@Test func taskConnectionsLeaveCapacityForPowerControls() throws {
+    var value = try ServiceSessions()
+    let now = try serviceClock(0)
+    try value.expire(now: now, consoleUser: 501)
+    for _ in 0..<ServiceSessions.taskClientCapacity {
+        try value.connect(owner: UUID(), user: 501, role: .task, now: now)
     }
-    #expect(snapshot().canRestoreAutomation)
-    #expect(!snapshot(observed: .unknown).canRestoreAutomation)
-    #expect(!snapshot(fault: .interrupted).canRestoreAutomation)
-    #expect(!snapshot(removal: .ready).canRestoreAutomation)
-    let active = SessionSummary(
-        id: UUID(), kind: .manual, end: .unlimited, startedAt: Date(),
-        remainingSeconds: nil, suspension: nil, belongsToClient: true)
-    #expect(!snapshot(sessions: [active]).canRestoreAutomation)
+    #expect(throws: ServiceError.capacityReached) {
+        try value.connect(owner: UUID(), user: 501, role: .task, now: now)
+    }
+    let app = UUID()
+    try value.connect(owner: app, user: 501, role: .application, now: now)
+    _ = try value.apply(.status, owner: app, now: now)
+}
+
+@Test func theAuthorizedPolicyTakesPriorityOverTheAppPreferences() throws {
+    var (value, app, _) = try service()
+    let now = try serviceClock(0)
+    let preferences = try UserPolicy(batteryFloor: 0, allowsAutomation: true)
+    let approved = try UserPolicy(
+        mode: .external, batteryFloor: 35, maximumDuration: 60, allowsAutomation: true)
+    _ = try value.apply(
+        .restorePolicy(preferences), owner: app, now: now, authorizedPolicy: approved)
+    #expect(value.registry.policy == approved)
+    _ = try value.apply(.restorePolicy(preferences), owner: app, now: now)
+    #expect(value.registry.policy == approved)
 }
 
 @Test func aFreshHelperRestoresManualLimitsBeforeEnablingAutomation() throws {
@@ -317,13 +323,15 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
 @Test func watchdogExpiresStaleClientsAndBoundsConnections() throws {
     var value = try ServiceSessions()
     try value.expire(now: serviceClock(0), consoleUser: 501)
-    for _ in 0..<ServiceSessions.clientCapacity {
+    for _ in 0..<ServiceSessions.taskClientCapacity {
         try value.connect(owner: UUID(), user: 501, role: .task, now: serviceClock(0))
     }
     #expect(throws: ServiceError.capacityReached) {
         try value.connect(owner: UUID(), user: 501, role: .task, now: serviceClock(0))
     }
-    #expect(try value.expire(now: serviceClock(30), consoleUser: 501).count == 64)
+    #expect(
+        try value.expire(now: serviceClock(30), consoleUser: 501).count
+            == ServiceSessions.taskClientCapacity)
     try value.connect(owner: UUID(), user: 501, role: .task, now: serviceClock(30))
 }
 

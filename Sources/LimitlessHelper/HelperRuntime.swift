@@ -1,6 +1,8 @@
+import CoreFoundation
 import Foundation
 import LimitlessCore
 import LimitlessSystem
+import OpenDirectory
 
 final class HelperRuntime {
     var sessions: ServiceSessions
@@ -11,6 +13,7 @@ final class HelperRuntime {
     private let identity: SignedIdentity
     private var installedFiles: InstalledHelperFiles?
     private var removalReady = false
+    private var faultRevokedUser: UInt32?
     private(set) var expiredOwners: Set<UUID> = []
 
     init(identity: SignedIdentity) throws {
@@ -37,10 +40,18 @@ final class HelperRuntime {
             backend: &backend, journal: &journal)
         if report.fault != nil {
             try sessions.revokeAutomationAndStop(reason: .powerFault, at: now.wall)
+            if let user = sessions.consoleUser, faultRevokedUser != user {
+                do {
+                    try AutomationConsent.store(nil, for: user)
+                    faultRevokedUser = user
+                } catch {}
+            }
             evaluation = sessions.evaluate(power: power, now: now, thermal: thermal)
             report = controller.reconcile(
                 wantsAwake: false, now: now,
                 backend: &backend, journal: &journal)
+        } else {
+            faultRevokedUser = nil
         }
         return (now, power, thermal, evaluation, report)
     }
@@ -67,6 +78,7 @@ final class HelperRuntime {
         do {
             let request = try ServiceWire.decodeRequest(data)
             if case .setSudoTouchID = request.operation { throw ServiceError.unauthorized }
+            try AdministratorAuthorization.verify(request)
             let before = try status(owner: owner)
             switch request.operation {
             case .start, .startAgent:
@@ -82,8 +94,37 @@ final class HelperRuntime {
                 }
             default: break
             }
+            let operation: ServiceOperation
+            if case .configure(let policy) = request.operation {
+                operation = .configure(try policy.withAutomation(before.policy.allowsAutomation))
+            } else {
+                operation = request.operation
+            }
+            let user = sessions.consoleUser
+            var authorizedPolicy: UserPolicy?
+            if case .restorePolicy = operation, !before.policyConfigured,
+                before.sleep.fault == nil, let user
+            {
+                authorizedPolicy = try AutomationConsent.load(for: user)
+            }
+            let changeRequiresConsentWrite: Bool
+            switch operation {
+            case .setAutomation: changeRequiresConsentWrite = true
+            case .configure: changeRequiresConsentWrite = before.policy.allowsAutomation
+            default: changeRequiresConsentWrite = false
+            }
+            let previousSessions = changeRequiresConsentWrite ? sessions : nil
             let started = try sessions.apply(
-                request.operation, owner: owner, now: SystemClock.now())
+                operation, owner: owner, now: SystemClock.now(), authorizedPolicy: authorizedPolicy)
+            if let previousSessions, let user {
+                do {
+                    let policy = sessions.registry.policy
+                    try AutomationConsent.store(policy.allowsAutomation ? policy : nil, for: user)
+                } catch {
+                    sessions = previousSessions
+                    throw error
+                }
+            }
             switch request.operation {
             case .status, .heartbeat: return ServiceReply(status: before)
             case .installCLI:
@@ -101,6 +142,7 @@ final class HelperRuntime {
                 else { throw ServiceError.restorationRequired }
                 if request.operation == .prepareRemoval {
                     if let user = sessions.consoleUser { try InstalledCLI.remove(user: user) }
+                    try AutomationConsent.removeAll()
                 }
                 if installedFiles == nil {
                     installedFiles = try InstalledHelperFiles(identity: identity)
@@ -136,5 +178,64 @@ final class HelperRuntime {
             }
             return ServiceReply(status: try? status(owner: owner), error: failure)
         }
+    }
+}
+
+private enum AutomationConsent {
+    private static let domain = LimitlessIdentity.helper + ".automation"
+
+    private static func key(for user: UInt32) throws -> CFString {
+        guard geteuid() == 0, user != 0 else { throw ServiceError.unauthorized }
+        let node = try ODNode(session: ODSession.default(), type: UInt32(kODNodeTypeAuthentication))
+        let query = try ODQuery(
+            node: node, forRecordTypes: kODRecordTypeUsers, attribute: kODAttributeTypeUniqueID,
+            matchType: ODMatchType(kODMatchEqualTo), queryValues: String(user),
+            returnAttributes: [kODAttributeTypeGUID], maximumResults: 2)
+        guard let records = try query.resultsAllowingPartial(false) as? [ODRecord],
+            records.count == 1,
+            let identifier = try records[0].values(forAttribute: kODAttributeTypeGUID).first
+                as? String,
+            let identity = UUID(uuidString: identifier)
+        else { throw ServiceError.unavailable }
+        return identity.uuidString as CFString
+    }
+
+    static func load(for user: UInt32) throws -> UserPolicy? {
+        let key = try key(for: user)
+        guard
+            let value = CFPreferencesCopyValue(
+                key, domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+        else { return nil }
+        guard let data = value as? Data, data.count <= 1_024,
+            let policy = try? JSONDecoder().decode(UserPolicy.self, from: data),
+            policy.allowsAutomation
+        else { throw ServiceError.unavailable }
+        return policy
+    }
+
+    static func store(_ policy: UserPolicy?, for user: UInt32) throws {
+        let key = try key(for: user)
+        let data = try policy.map { try JSONEncoder().encode($0) as CFData }
+        CFPreferencesSetValue(
+            key, data, domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+        try synchronize()
+    }
+
+    static func removeAll() throws {
+        guard geteuid() == 0 else { throw ServiceError.unauthorized }
+        if let keys = CFPreferencesCopyKeyList(
+            domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+        {
+            CFPreferencesSetMultiple(
+                nil, keys, domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+            try synchronize()
+        }
+    }
+
+    private static func synchronize() throws {
+        guard
+            CFPreferencesSynchronize(
+                domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
+        else { throw ServiceError.unavailable }
     }
 }

@@ -187,16 +187,63 @@ func withAuthorization(right: String, operation: (AuthorizationRef) throws -> Vo
         throw NSError(domain: NSOSStatusErrorDomain, code: Int(created))
     }
     defer { AuthorizationFree(reference, [.destroyRights]) }
-    try right.withCString { name in
-        var item = AuthorizationItem(name: name, valueLength: 0, value: nil, flags: 0)
-        try withUnsafeMutablePointer(to: &item) { itemPointer in
-            var rights = AuthorizationRights(count: 1, items: itemPointer)
-            let result = AuthorizationCopyRights(
-                reference, &rights, nil, [.interactionAllowed, .extendRights, .preAuthorize], nil)
-            guard result == errAuthorizationSuccess else {
-                throw NSError(domain: NSOSStatusErrorDomain, code: Int(result))
-            }
-        }
+    let result = copyAuthorizationRight(
+        right, reference: reference, flags: [.interactionAllowed, .extendRights, .preAuthorize])
+    guard result == errAuthorizationSuccess else {
+        throw NSError(domain: NSOSStatusErrorDomain, code: Int(result))
     }
     try operation(reference)
+}
+
+private func copyAuthorizationRight(
+    _ right: String, reference: AuthorizationRef, flags: AuthorizationFlags
+) -> OSStatus {
+    right.withCString { name in
+        var item = AuthorizationItem(name: name, valueLength: 0, value: nil, flags: 0)
+        return withUnsafeMutablePointer(to: &item) { itemPointer in
+            var rights = AuthorizationRights(count: 1, items: itemPointer)
+            return AuthorizationCopyRights(reference, &rights, nil, flags, nil)
+        }
+    }
+}
+
+public enum AdministratorAuthorization {
+    @concurrent public static func withGrant<Result: Sendable>(
+        _ operation: @MainActor @Sendable (Data) async throws -> Result
+    ) async throws -> Result {
+        var authorization: AuthorizationRef?
+        guard AuthorizationCreate(nil, nil, [], &authorization) == errAuthorizationSuccess,
+            let authorization
+        else { throw ServiceError.unauthorized }
+        defer { AuthorizationFree(authorization, [.destroyRights]) }
+        guard
+            copyAuthorizationRight(
+                kSMRightModifySystemDaemons, reference: authorization,
+                flags: [.interactionAllowed, .extendRights])
+                == errAuthorizationSuccess
+        else { throw ServiceError.unauthorized }
+        var form = AuthorizationExternalForm()
+        guard AuthorizationMakeExternalForm(authorization, &form) == errAuthorizationSuccess
+        else { throw ServiceError.unauthorized }
+        try Task.checkCancellation()
+        return try await operation(withUnsafeBytes(of: &form) { Data($0) })
+    }
+
+    public static func verify(_ request: ServiceRequest) throws {
+        guard request.operation.requiresAdministrator else { return }
+        guard let data = request.authorization,
+            data.count == MemoryLayout<AuthorizationExternalForm>.size
+        else { throw ServiceError.unauthorized }
+        var form = AuthorizationExternalForm()
+        _ = withUnsafeMutableBytes(of: &form) { data.copyBytes(to: $0) }
+        var authorization: AuthorizationRef?
+        guard AuthorizationCreateFromExternalForm(&form, &authorization) == errAuthorizationSuccess,
+            let authorization
+        else { throw ServiceError.unauthorized }
+        defer { AuthorizationFree(authorization, []) }
+        guard
+            copyAuthorizationRight(kSMRightModifySystemDaemons, reference: authorization, flags: [])
+                == errAuthorizationSuccess
+        else { throw ServiceError.unauthorized }
+    }
 }

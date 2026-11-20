@@ -221,6 +221,13 @@ private actor AssociationPermission {
     func next() -> Bool { decisions.isEmpty ? false : decisions.removeFirst() }
 }
 
+@Test func olderHotspotCredentialsDoNotAuthorizeAutomaticAssociation() throws {
+    let data = Data(#"{"ssid":"Test network","password":"test-password"}"#.utf8)
+    let legacy = try JSONDecoder().decode(HotspotCredentials.Network.self, from: data)
+    #expect(legacy.isValid)
+    #expect(legacy.automaticJoin != true)
+}
+
 @Test func hotspotRechecksTheAuthenticatedSessionAfterScanning() async throws {
     let permission = AssociationPermission([true, false])
     var scanned = false
