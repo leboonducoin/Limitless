@@ -6,7 +6,19 @@ public struct ServiceSessions: Sendable {
     public static let clientCapacity = 64
     public private(set) var registry: SessionRegistry
     public private(set) var consoleUser: UInt32?
-    public private(set) var isRemoving = false
+    public private(set) var policyConfigured = false
+    private enum Drain: Equatable {
+        case none
+        case update(UInt32)
+        case committedUpdate(UInt32)
+        case removal
+    }
+    private var drain = Drain.none
+    public var isRemoving: Bool { drain != .none }
+    public var isPreparingUpdate: Bool {
+        if case .update = drain { return true }
+        return false
+    }
     private struct Client: Sendable {
         let user: UInt32
         let role: ClientRole
@@ -27,7 +39,11 @@ public struct ServiceSessions: Sendable {
                     || now.continuous - client.lastContact >= Self.leaseSeconds ? id : nil
             })
         for id in expired { disconnect(id, at: now.wall) }
-        if changedUser { registry = SessionRegistry(policy: try UserPolicy()) }
+        if changedUser {
+            registry = SessionRegistry(policy: try UserPolicy())
+            policyConfigured = false
+            if isPreparingUpdate { drain = .none }
+        }
         return expired
     }
 
@@ -62,18 +78,33 @@ public struct ServiceSessions: Sendable {
         }
         if isRemoving {
             switch operation {
-            case .configure, .start, .startAgent, .extend, .rearm, .installCLI, .setSudoTouchID:
+            case .configure, .restorePolicy, .setAutomation, .start, .startAgent, .extend, .rearm,
+                .installCLI,
+                .setSudoTouchID:
                 throw ServiceError.removalInProgress
             case .status, .stop, .stopAll, .heartbeat, .retryRestoration, .prepareRemoval,
-                .prepareUpdate, .finishRemoval:
+                .prepareUpdate, .cancelUpdate, .finishRemoval:
                 break
             }
         }
         client.lastContact = now.continuous
         clients[owner] = client
         switch operation {
-        case .configure(let policy): registry.updatePolicy(policy)
+        case .configure(let policy):
+            registry.updatePolicy(policy)
+            policyConfigured = true
+        case .restorePolicy(let policy):
+            if !policyConfigured {
+                registry.updatePolicy(try policy.withAutomation(false))
+                policyConfigured = true
+            }
+        case .setAutomation(let allowed):
+            guard policyConfigured else { throw ServiceError.sessionRejected }
+            registry.updatePolicy(try registry.policy.withAutomation(allowed))
         case .start, .startAgent:
+            if client.role == .application, !policyConfigured {
+                throw ServiceError.sessionRejected
+            }
             guard client.role == .application || !client.hasStarted else {
                 throw ServiceError.ownerExpired
             }
@@ -113,17 +144,34 @@ public struct ServiceSessions: Sendable {
             else { throw ServiceError.unauthorized }
         case .extend(let id): try registry.extend(id, owner: owner, now: now)
         case .stopAll: registry.stopAll(at: now.wall)
-        case .prepareRemoval, .prepareUpdate:
-            if operation == .prepareUpdate, !registry.sessions.isEmpty {
-                throw ServiceError.sessionRejected
-            }
+        case .prepareRemoval:
             try registry.revokeAutomationAndStop(at: now.wall)
-            isRemoving = true
+            drain = .removal
+        case .prepareUpdate:
+            guard registry.sessions.isEmpty else { throw ServiceError.sessionRejected }
+            if drain == .none {
+                drain = .update(client.user)
+            } else if drain != .update(client.user) && drain != .committedUpdate(client.user) {
+                throw ServiceError.removalInProgress
+            }
+        case .cancelUpdate:
+            guard drain == .update(client.user) else { throw ServiceError.removalInProgress }
+            drain = .none
         case .finishRemoval:
-            guard isRemoving else { throw ServiceError.restorationRequired }
+            guard
+                drain == .removal || drain == .update(client.user)
+                    || drain == .committedUpdate(client.user)
+            else {
+                throw ServiceError.restorationRequired
+            }
         case .status, .heartbeat, .rearm, .retryRestoration, .installCLI, .setSudoTouchID: break
         }
         return nil
+    }
+
+    public mutating func commitRemoval() throws {
+        try registry.revokeAutomationAndStop()
+        if case .update(let user) = drain { drain = .committedUpdate(user) }
     }
 
     public mutating func evaluate(

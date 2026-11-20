@@ -79,6 +79,54 @@ private func protection(
     #expect(hours?.top == "2h" && hours?.bottom == "01")
     let long = MenuBarTime.remaining(seconds: 100 * 24 * 60 * 60)
     #expect(long?.top == "99+" && long?.bottom == "d")
+    #expect(MenuBarTime.panelDuration(1e30) == "Over 99 days")
+    #expect(MenuBarTime.panelDuration(.infinity) == "Time unavailable")
+}
+
+#if DEBUG
+    @Test @MainActor func manualControlsAreAvailableDuringAgentOnlyProtection() throws {
+        let model = AppModel.preview("inactive")
+        let base = try #require(model.status)
+        let now = Date.now
+        let agent = SessionSummary(
+            id: UUID(), kind: .agent, end: .unlimited, startedAt: now,
+            remainingSeconds: nil, suspension: nil, belongsToClient: false, agent: .codex)
+        let active = ServiceStatus(
+            policy: base.policy, power: base.power,
+            sleep: .init(phase: .active, observed: .disabled, ownsGlobalHold: true, fault: nil),
+            sessions: [agent], sampledAt: now)
+        try model.accept(ServiceReply(status: active))
+        #expect(model.hasOnlyAgentSessions && model.canStartFavorite && model.canStartManualSession)
+    }
+
+    @Test @MainActor func aShortSessionEndingAppearsEvenWhenTheAppDidNotSeeItStart() throws {
+        let model = AppModel.preview("inactive")
+        let base = try #require(model.status)
+        var registry = SessionRegistry(policy: try UserPolicy(allowsAutomation: true))
+        let owner = UUID()
+        let now = try ClockSnapshot(continuous: 0, wall: .now)
+        let id = try registry.start(.init(), owner: owner, kind: .task, now: now)
+        let stopped = registry.stop(id, owner: owner, reason: .taskEnded, at: now.wall)
+        #expect(stopped)
+        let status = ServiceStatus(
+            policy: base.policy, power: base.power, sleep: base.sleep,
+            sessions: [], sampledAt: .now, recentEndings: registry.recentEndings)
+        try model.accept(ServiceReply(status: status))
+        #expect(model.lastSessionMessage == "The tracked work ended.")
+    }
+#endif
+
+@Test func aReplacementRetainsItsBackupUntilTheRequiredHelperIsReady() throws {
+    let backup = AppModel.UpdateBackup(name: "test", helperRequired: true)
+    let idle = try protection(nil, [], phase: .recovering)
+    let ready = ServiceStatus(
+        policy: idle.policy, power: idle.power,
+        sleep: .init(phase: .inactive, observed: .allowed, ownsGlobalHold: false, fault: nil),
+        sessions: [], sampledAt: .now)
+    #expect(!backup.canRetire(after: nil))
+    #expect(!backup.canRetire(after: idle))
+    #expect(backup.canRetire(after: ready))
+    #expect(AppModel.UpdateBackup(name: "test", helperRequired: false).canRetire(after: nil))
 }
 
 @Test func commandClickRequiresBothEndpointsInsideTheItemAndRejectsDrags() {

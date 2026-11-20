@@ -18,10 +18,13 @@ final class HelperRuntime {
         sessions = try ServiceSessions()
         journal = try SecureOwnershipJournal()
         controller = SleepController(restoringOwnedHold: try journal.loadOwned())
-        _ = try reconcile(owner: UUID())
+        try reconcile()
     }
 
-    func reconcile(owner: UUID) throws -> ServiceStatus {
+    @discardableResult
+    func reconcile() throws -> (
+        ClockSnapshot, PowerSnapshot, ThermalCondition, SessionEvaluation, SleepReport
+    ) {
         let now = try SystemClock.now()
         expiredOwners.formUnion(
             try sessions.expire(now: now, consoleUser: ConsoleUser.identifier()))
@@ -39,6 +42,11 @@ final class HelperRuntime {
                 wantsAwake: false, now: now,
                 backend: &backend, journal: &journal)
         }
+        return (now, power, thermal, evaluation, report)
+    }
+
+    private func status(owner: UUID) throws -> ServiceStatus {
+        let (now, power, thermal, evaluation, report) = try reconcile()
         return ServiceStatus(
             policy: sessions.registry.policy, power: power, sleep: report,
             sessions: sessions.summaries(for: owner, evaluation: evaluation, now: now),
@@ -46,7 +54,8 @@ final class HelperRuntime {
             removal: sessions.isRemoving ? (removalReady ? .ready : .preparing) : .none,
             sudoTouchID: SudoTouchID.status(), batteryCutoff: sessions.registry.batteryCutoff,
             thermal: thermal, recentEndings: sessions.registry.recentEndings,
-            protectionID: sessions.registry.protectionID)
+            protectionID: sessions.registry.protectionID,
+            policyConfigured: sessions.policyConfigured)
     }
 
     func takeExpiredOwners() -> Set<UUID> {
@@ -58,11 +67,19 @@ final class HelperRuntime {
         do {
             let request = try ServiceWire.decodeRequest(data)
             if case .setSudoTouchID = request.operation { throw ServiceError.unauthorized }
-            let before = try reconcile(owner: owner)
+            let before = try status(owner: owner)
             switch request.operation {
             case .start, .startAgent:
                 if before.thermal == .critical { throw ServiceError.thermalCritical }
                 if controller.fault != nil { throw ServiceError.restorationRequired }
+            case .setAutomation(true) where controller.fault != nil:
+                throw ServiceError.restorationRequired
+            case .cancelUpdate:
+                guard sessions.isPreparingUpdate, before.canRemoveService,
+                    !backend.hasIdleAssertion, try journal.loadOwned() == false
+                else {
+                    throw ServiceError.restorationRequired
+                }
             default: break
             }
             let started = try sessions.apply(
@@ -74,30 +91,33 @@ final class HelperRuntime {
                 try InstalledCLI.install(identity: identity, user: user)
             case .rearm: try controller.rearm()
             case .retryRestoration, .prepareRemoval, .prepareUpdate: controller.retryRestoration()
+            case .cancelUpdate: removalReady = false
             default: break
             }
             if request.operation == .prepareRemoval || request.operation == .prepareUpdate {
                 removalReady = false
-                let status = try reconcile(owner: owner)
+                let status = try status(owner: owner)
                 guard status.canRemoveService, !backend.hasIdleAssertion
                 else { throw ServiceError.restorationRequired }
-                if request.operation == .prepareRemoval, let user = sessions.consoleUser {
-                    try InstalledCLI.remove(user: user)
+                if request.operation == .prepareRemoval {
+                    if let user = sessions.consoleUser { try InstalledCLI.remove(user: user) }
                 }
                 if installedFiles == nil {
                     installedFiles = try InstalledHelperFiles(identity: identity)
                 }
-                try journal.removeUnownedDirectory()
+                if request.operation == .prepareRemoval { try journal.removeUnownedDirectory() }
                 removalReady = true
             }
             if request.operation == .finishRemoval {
-                let status = try reconcile(owner: owner)
-                guard removalReady, journal.isRemoved, status.canRemoveService,
+                let status = try status(owner: owner)
+                guard removalReady, status.canRemoveService,
                     !backend.hasIdleAssertion
                 else { throw ServiceError.restorationRequired }
+                try sessions.commitRemoval()
+                try journal.removeUnownedDirectory()
                 try installedFiles?.remove()
             }
-            let after = try reconcile(owner: owner)
+            let after = try status(owner: owner)
             if let started,
                 after.recentEndings.contains(where: {
                     $0.id == started && $0.reason == .thermalCritical
@@ -114,7 +134,7 @@ final class HelperRuntime {
             case is SleepFault: failure = .restorationRequired
             default: failure = .unavailable
             }
-            return ServiceReply(status: try? reconcile(owner: owner), error: failure)
+            return ServiceReply(status: try? status(owner: owner), error: failure)
         }
     }
 }

@@ -1,4 +1,5 @@
 import LimitlessCore
+import LimitlessSystem
 import ServiceManagement
 import SwiftUI
 
@@ -129,7 +130,7 @@ struct SettingsView: View {
                             }
                         }
                     }
-                }.disabled(!model.canControl && !model.isPreview)
+                }.disabled(!model.canEditPowerPolicy)
                 if model.showsPowerSource {
                     Divider()
                     Text("Closed lid").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -185,7 +186,7 @@ struct SettingsView: View {
                             get: { model.status?.policy.allowsAutomation ?? false },
                             set: { enabled in Task { await model.setAutomation(enabled) } })
                     )
-                    .disabled((!model.canControl && !model.isPreview) || model.busy)
+                    .disabled(!model.canEditPowerPolicy || model.busy)
                     Link(
                         destination: URL(
                             string:
@@ -275,7 +276,9 @@ struct SettingsView: View {
                 HStack {
                     Toggle("Automatic updates", isOn: $model.automaticUpdates)
                         .disabled((!model.trustedBuild && !model.isPreview) || model.updating)
-                    if let update = model.availableUpdate, model.showsUpdateButton {
+                    if model.needsManualUpdate {
+                        Link("Download update", destination: GitHubUpdate.releasesPage)
+                    } else if let update = model.availableUpdate, model.showsUpdateButton {
                         Button("Update") { model.requestUpdate() }
                             .help("Install Limitless \(update.version)")
                             .disabled(!model.canInstallAvailableUpdate())

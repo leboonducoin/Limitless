@@ -85,7 +85,7 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
                 connections.count < ServiceSessions.clientCapacity
             else { return false }
             do {
-                _ = try runtime.reconcile(owner: owner)
+                try runtime.reconcile()
                 try runtime.sessions.connect(
                     owner: owner, user: connection.effectiveUserIdentifier,
                     role: role, now: SystemClock.now())
@@ -143,7 +143,7 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private func tick() {
         guard let runtime else { return }
         do {
-            _ = try runtime.reconcile(owner: UUID())
+            try runtime.reconcile()
             pruneExpired()
             if let stoppingAt {
                 if !runtime.controller.ownsGlobalHold { exit(0) }

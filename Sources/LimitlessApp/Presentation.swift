@@ -154,6 +154,14 @@ struct MenuBarTime: Equatable {
     let bottom: String
     let accessibilityLabel: String
 
+    static func panelDuration(_ remaining: Double?) -> String {
+        guard let remaining else { return "No limit" }
+        guard remaining.isFinite, remaining >= 0 else { return "Time unavailable" }
+        guard remaining <= 99 * 24 * 3_600 else { return "Over 99 days" }
+        return Duration.seconds(remaining).formatted(
+            .units(allowed: [.hours, .minutes, .seconds], width: .abbreviated))
+    }
+
     static func remaining(seconds: Double) -> Self? {
         guard seconds.isFinite, seconds > 0 else { return nil }
         let rounded = ceil(seconds / 60)

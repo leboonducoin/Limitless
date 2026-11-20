@@ -178,22 +178,14 @@ struct MenuPanel: View {
                     Text("Current session")
                     Spacer()
                     TimelineView(.animation(minimumInterval: 1, paused: !model.panelVisible)) { _ in
-                        if let remaining = model.protectionRemainingSeconds {
-                            Text(
-                                Duration.seconds(remaining).formatted(
-                                    .units(
-                                        allowed: [.hours, .minutes, .seconds], width: .abbreviated))
-                            ).monospacedDigit()
-                        } else {
-                            Text("No limit")
-                        }
+                        Text(MenuBarTime.panelDuration(model.protectionRemainingSeconds))
+                            .monospacedDigit()
                     }
                 }.font(.callout).foregroundStyle(.secondary)
-            } else {
+            }
+            if model.status?.sessions.isEmpty != false || model.hasOnlyAgentSessions {
                 StopEditor(model: model)
-                startButton.disabled(
-                    (!model.canControl && !model.isPreview) || model.busy
-                        || model.status?.sleep.fault != nil)
+                startButton.disabled(!model.canStartManualSession)
                 if model.status?.sessions.isEmpty == true, let outcome = model.lastSessionMessage,
                     model.batteryNotice == nil
                 {

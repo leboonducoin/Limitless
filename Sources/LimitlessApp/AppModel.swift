@@ -10,6 +10,21 @@ import UserNotifications
 @MainActor @Observable final class AppModel {
     enum BuildTrust { case checking, trusted, untrusted }
     static let updateHelperRecoveryKey = "restoreHelperAfterUpdate"
+    static let updateBackupKey = "updateBackup"
+    struct UpdateBackup: Codable, Equatable {
+        let name: String
+        let helperRequired: Bool
+
+        func canRetire(after reading: ServiceStatus?) -> Bool {
+            if !helperRequired { return true }
+            guard let reading, reading.policyConfigured, reading.removal == .none,
+                reading.sleep.fault == nil
+            else { return false }
+            let sleep = reading.sleep
+            return (sleep.phase == .inactive && sleep.observed == .allowed && !sleep.ownsGlobalHold)
+                || (sleep.phase == .active && sleep.observed == .disabled && sleep.ownsGlobalHold)
+        }
+    }
     private static let sessionNotificationsKey = "sessionNotifications"
 
     private(set) var status: ServiceStatus?
@@ -111,6 +126,7 @@ import UserNotifications
     private var policyApplication: Task<Void, Never>?
     private var updateMonitoring: Task<Void, Never>?
     private var updateInstallation: Task<Void, Never>?
+    private var retiringUpdateBackup = false
     private var checkingUpdates = false
     private var updateSchedule: UpdateSchedule {
         didSet {
@@ -178,7 +194,7 @@ import UserNotifications
         buildTrust = identity == nil ? .untrusted : .trusted
     }
 
-    func restoreUpdateHelperIfNeeded() async {
+    func restoreUpdateHelperIfNeeded(confirmReady: (() async -> Bool)? = nil) async {
         guard preferences.bool(forKey: Self.updateHelperRecoveryKey), trustedBuild, !isPreview,
             let helper
         else { return }
@@ -190,12 +206,29 @@ import UserNotifications
             guard helperStatus == .enabled || helperStatus == .requiresApproval else {
                 throw ServiceError.unavailable
             }
+            if helperStatus == .enabled {
+                let ready =
+                    if let confirmReady { await confirmReady() } else {
+                        await resumeUpdateAdmission()
+                    }
+                guard ready else { throw ServiceError.restorationRequired }
+            }
             clearUpdateHelperRecovery()
         } catch {
             helperStatus = helper.status
             message =
-                "The update finished, but the helper could not be restored. Enable it again to continue."
+                "Power helper recovery could not be confirmed. Check its status before starting a session."
         }
+    }
+
+    private func resumeUpdateAdmission() async -> Bool {
+        guard let recovery = try? await ServiceClient(role: .application) else { return false }
+        var reading = try? await recovery.send(.status).status
+        if let current = reading, current.removal != .none {
+            reading = try? await recovery.send(.cancelUpdate).status
+        }
+        await recovery.close()
+        return reading?.removal == RemovalState.none
     }
 
     private func clearUpdateHelperRecovery() {
@@ -203,13 +236,33 @@ import UserNotifications
         _ = preferences.synchronize()
     }
 
+    func retireUpdateBackupIfReady() async {
+        guard trustedBuild, !isPreview, !quitting, !retiringUpdateBackup,
+            let data = preferences.data(forKey: Self.updateBackupKey),
+            let backup = try? JSONDecoder().decode(UpdateBackup.self, from: data),
+            backup.canRetire(after: canControl ? status : nil)
+        else { return }
+        retiringUpdateBackup = true
+        defer { retiringUpdateBackup = false }
+        do {
+            try await GitHubUpdate.retirePreviousApplication(named: backup.name)
+            if preferences.data(forKey: Self.updateBackupKey) == data {
+                preferences.removeObject(forKey: Self.updateBackupKey)
+            }
+        } catch {
+            updateMessage =
+                "The previous app is still available. Update recovery could not be cleared."
+        }
+    }
+
     var canControl: Bool {
-        trustedBuild && !isPreview && helperStatus == .enabled && client != nil
+        trustedBuild && !isPreview && helperStatus == .enabled && client != nil && status != nil
             && connectionError == nil && !removalInProgress && !removalComplete
     }
     var showsPowerControls: Bool {
         canControl || (isPreview && helperStatus == .enabled && !removalComplete)
     }
+    var canEditPowerPolicy: Bool { showsPowerControls && status?.policyConfigured == true }
     var showsPowerSource: Bool { showsPowerControls && status?.power.battery != .notPresent }
     var showsBatteryLimit: Bool { showsPowerSource && draft.mode != .external }
     var showsSudoTouchID: Bool {
@@ -229,9 +282,19 @@ import UserNotifications
     }
     var canStartFavorite: Bool {
         guard showsPowerControls, !busy, !updating else { return false }
-        return canExtendSession
-            || (status?.sessions.isEmpty == true && status?.sleep.phase == .inactive
-                && status?.sleep.observed == .allowed)
+        return canExtendSession || canStartManualSession
+    }
+    var hasOnlyAgentSessions: Bool {
+        guard let sessions = status?.sessions, !sessions.isEmpty else { return false }
+        return sessions.allSatisfy { $0.kind == .agent }
+    }
+    var canStartManualSession: Bool {
+        guard showsPowerControls, !busy, !updating, let status, status.policyConfigured,
+            status.sleep.fault == nil
+        else { return false }
+        return hasOnlyAgentSessions && presentation == .active
+            || (status.sessions.isEmpty && status.sleep.phase == .inactive
+                && status.sleep.observed == .allowed)
     }
     func copyDiagnostic() {
         let reading = connectionError == nil ? status?.diagnosticSummary : nil
@@ -266,21 +329,31 @@ import UserNotifications
     }
     var draftChanged: Bool { draft != baseline }
     private var readyToUpdate: Bool {
-        guard connectionError == nil, !removalComplete else { return false }
+        guard connectionError == nil, !removalComplete,
+            preferences.object(forKey: Self.updateBackupKey) == nil
+        else { return false }
         guard let status else { return helperStatus == .notRegistered }
         return status.sessions.isEmpty && !status.sleep.ownsGlobalHold
             && status.sleep.observed == .allowed
             && (status.sleep.phase == .inactive || status.sleep.phase == .blocked)
     }
     func canInstallAvailableUpdate(manual: Bool = false) -> Bool {
-        !busy && !sudoTouchIDBusy && !updating && readyToUpdate
+        !busy && !sudoTouchIDBusy && !updating && readyToUpdate && !needsManualUpdate
             && updateSchedule.canBeginDownload(manual: manual)
     }
+    var needsManualUpdate: Bool {
+        availableUpdate != nil && !isPreview && !GitHubUpdate.canReplaceInstalledApplication
+    }
     var showsUpdateButton: Bool {
-        availableUpdate != nil && !automaticUpdates && updateSchedule.canBeginDownload()
+        availableUpdate != nil && !needsManualUpdate && !automaticUpdates
+            && updateSchedule.canBeginDownload()
     }
     func updateInstallBlockMessage(manual: Bool = false) -> String {
-        !updateSchedule.canBeginDownload(manual: manual)
+        if needsManualUpdate { return "Download the update and replace Limitless in Applications." }
+        if preferences.object(forKey: Self.updateBackupKey) != nil {
+            return "Waiting for the previous update to be confirmed."
+        }
+        return !updateSchedule.canBeginDownload(manual: manual)
             ? "Update postponed. Please try again later."
             : "Stop current sessions to install the update."
     }
@@ -427,8 +500,12 @@ import UserNotifications
         guard trustedBuild, !isPreview, !quitting, !updating, !busy, !sudoTouchIDBusy,
             let availableUpdate
         else { return }
+        guard !needsManualUpdate else {
+            updateMessage = updateInstallBlockMessage()
+            return
+        }
         guard readyToUpdate else {
-            updateMessage = "Stop the current sessions before updating."
+            updateMessage = updateInstallBlockMessage(manual: manual)
             return
         }
         guard updateSchedule.beginDownload(manual: manual) else {
@@ -460,7 +537,8 @@ import UserNotifications
             }
             guard await removeIntegration(forUpdate: true) else {
                 updateMessage = message
-                await restoreUpdateHelperIfNeeded()
+                await Task { await restoreUpdateHelperIfNeeded() }.value
+                await refresh()
                 return
             }
             try GitHubUpdate.launchInstaller(candidate)
@@ -479,7 +557,7 @@ import UserNotifications
                 removalComplete = false
                 monitoring = nil
             }
-            await restoreUpdateHelperIfNeeded()
+            await Task { await restoreUpdateHelperIfNeeded() }.value
             beginMonitoring()
         }
     }
@@ -530,7 +608,6 @@ import UserNotifications
                     return
                 }
                 client = connected
-                restoredAutomationPreference = false
             }
             guard let client else { return }
             var reply = try await client.send(.status)
@@ -538,37 +615,29 @@ import UserNotifications
             if let received = reply.status, received.sleep.fault != nil {
                 preferences.set(false, forKey: "allowsAutomation")
             }
-            if !restoredAutomationPreference {
-                restoredAutomationPreference = true
+            if let received = reply.status,
+                !restoredAutomationPreference || !received.policyConfigured
+            {
                 let saved = preferences.data(forKey: "userPolicy").flatMap {
                     try? JSONDecoder().decode(UserPolicy.self, from: $0)
                 }
-                if let received = reply.status, preferences.bool(forKey: "allowsAutomation"),
+                if !received.policyConfigured, received.removal == .none {
+                    reply = try await client.send(.restorePolicy(saved ?? received.policy))
+                }
+                guard currentRevision == revision, !busy, !quitting else { return }
+                restoredAutomationPreference = true
+                if reply.status?.canRestoreAutomation == true,
+                    preferences.bool(forKey: "allowsAutomation"),
                     let identity = try? await SignedIdentity.current(
                         expectedIdentifier: LimitlessIdentity.application),
                     (try? await GitHubUpdate.currentInstalledApplication(identity: identity)) != nil
                 {
-                    if let restored = try received.automationPolicyToRestore(
-                        saved ?? received.policy)
-                    {
-                        _ = try await client.send(.installCLI)
-                        guard currentRevision == revision, !busy, !quitting else { return }
-                        reply = try await client.send(.configure(restored))
+                    guard currentRevision == revision, !busy, !quitting else { return }
+                    reply = try await client.send(.installCLI)
+                    guard currentRevision == revision, !busy, !quitting else { return }
+                    if reply.status?.canRestoreAutomation == true {
+                        reply = try await client.send(.setAutomation(true))
                     }
-                }
-                guard currentRevision == revision, !busy, !quitting else { return }
-                if let saved, let received = reply.status, received.sessions.isEmpty,
-                    received.removal == .none, received.sleep.fault == nil,
-                    received.policy.keepsDisplayAwake != saved.keepsDisplayAwake
-                {
-                    let policy = received.policy
-                    reply = try await client.send(
-                        .configure(
-                            UserPolicy(
-                                mode: policy.mode, batteryFloor: policy.batteryFloor,
-                                maximumDuration: policy.maximumDuration,
-                                allowsAutomation: policy.allowsAutomation,
-                                keepsDisplayAwake: saved.keepsDisplayAwake)))
                 }
             }
             guard currentRevision == revision, !busy, !quitting else { return }
@@ -588,6 +657,15 @@ import UserNotifications
             guard currentRevision == revision else { return }
             try accept(reply)
             connectionError = nil
+            if !updating, reply.status?.removal == RemovalState.none,
+                reply.status?.policyConfigured == true,
+                preferences.bool(forKey: Self.updateHelperRecoveryKey)
+            {
+                clearUpdateHelperRecovery()
+            }
+            if preferences.object(forKey: Self.updateBackupKey) != nil {
+                Task { await retireUpdateBackupIfReady() }
+            }
         } catch {
             guard currentRevision == revision else { return }
             connectionError =
@@ -608,9 +686,11 @@ import UserNotifications
                     : "Session ended at \(cutoff.percent)% battery (limit: \(cutoff.limit)%)."
             }
         }
-        let receivedDraft = PolicyDraft(received.policy)
-        if !draftChanged, draft != receivedDraft { draft = receivedDraft }
-        if baseline != receivedDraft { baseline = receivedDraft }
+        if received.policyConfigured {
+            let receivedDraft = PolicyDraft(received.policy)
+            if !draftChanged, draft != receivedDraft { draft = receivedDraft }
+            if baseline != receivedDraft { baseline = receivedDraft }
+        }
         status = received
         statusReceivedAt = .now
         if ownSession == nil { watchedProcesses = nil }
@@ -719,12 +799,14 @@ import UserNotifications
     }
 
     private func updateSessionNotices(_ received: ServiceStatus) {
-        let previous = Set(status?.sessions.map(\.id) ?? [])
-        if let ending = received.recentEndings.last(where: { previous.contains($0.id) }) {
-            let text = ending.reason.summary
-            lastSessionMessage = text
-            if received.sessions.isEmpty {
-                notify(title: "Limitless session ended", body: text)
+        if let status {
+            let previous = Set(status.recentEndings.map(\.id))
+            if let ending = received.recentEndings.last(where: { !previous.contains($0.id) }) {
+                let text = ending.reason.summary
+                lastSessionMessage = text
+                if received.sessions.isEmpty {
+                    notify(title: "Limitless session ended", body: text)
+                }
             }
         }
         if sessionNotifications, sessionNotices.shouldRemind(received) {
@@ -800,6 +882,7 @@ import UserNotifications
     }
 
     func startManual(choice: StopChoice? = nil) async {
+        guard canStartManualSession else { return }
         do {
             let end: SessionEnd
             var followed: [ProcessIdentity] = []
@@ -881,7 +964,9 @@ import UserNotifications
         while extendingSession { try? await Task.sleep(for: .milliseconds(20)) }
         _ = await perform(.stopAll)
     }
-    func rearm() async { _ = await perform(.rearm) }
+    func rearm() async {
+        if await perform(.rearm), status?.policyConfigured == false { await refresh() }
+    }
     func retryRestoration() async { _ = await perform(.retryRestoration) }
 
     func applyPolicy() async {
@@ -900,7 +985,8 @@ import UserNotifications
     }
 
     func policyEdited() {
-        guard !isPreview, !quitting, draftChanged, policyApplication == nil else { return }
+        guard !isPreview, canEditPowerPolicy, !quitting, draftChanged, policyApplication == nil
+        else { return }
         policyApplication = Task { [weak self] in
             guard let self else { return }
             defer { policyApplication = nil }
@@ -918,7 +1004,7 @@ import UserNotifications
     }
 
     func setAutomation(_ enabled: Bool) async {
-        guard let policy = status?.policy else { return }
+        guard canControl, status?.policyConfigured == true else { return }
         if enabled {
             guard
                 let identity = try? await SignedIdentity.current(
@@ -934,15 +1020,9 @@ import UserNotifications
                 return
             }
         }
-        do {
-            let updated = try UserPolicy(
-                mode: policy.mode, batteryFloor: policy.batteryFloor,
-                maximumDuration: policy.maximumDuration, allowsAutomation: enabled,
-                keepsDisplayAwake: policy.keepsDisplayAwake)
-            if await perform(.configure(updated)) {
-                preferences.set(enabled, forKey: "allowsAutomation")
-            }
-        } catch { message = "The automation limits could not be validated." }
+        if await perform(.setAutomation(enabled)), status?.policy.allowsAutomation == enabled {
+            preferences.set(enabled, forKey: "allowsAutomation")
+        }
     }
 
     func setSudoTouchID(_ enabled: Bool) async {
@@ -1051,14 +1131,9 @@ import UserNotifications
         }
         quitting = true
         updateEnvironment()
-        if let audioMessage {
+        if forUpdate, let audioMessage {
             quitting = false
             message = audioMessage
-            return false
-        }
-        if !forUpdate, hotspotConfigured, !removeHotspotConfiguration() {
-            quitting = false
-            message = "The hotspot details could not be removed from Keychain. Unlock it and retry."
             return false
         }
         busy = true
@@ -1074,12 +1149,13 @@ import UserNotifications
             let filesRemoved =
                 try SecureOwnershipJournal.isStateDirectoryAbsent()
                 && InstalledHelperFiles.areAbsent()
-            if helperStatus == .enabled, !filesRemoved {
+            let prepared = helperStatus == .enabled && !filesRemoved
+            if prepared {
                 if client == nil { client = try await ServiceClient(role: .application) }
                 guard let client else { throw ServiceError.unavailable }
                 try accept(await client.send(forUpdate ? .prepareUpdate : .prepareRemoval))
                 guard let status, status.removal == .ready, status.canRemoveService,
-                    try SecureOwnershipJournal.isStateDirectoryAbsent()
+                    try forUpdate || SecureOwnershipJournal.isStateDirectoryAbsent()
                 else { throw ServiceError.restorationRequired }
             } else {
                 guard try SecureOwnershipJournal.isStateDirectoryAbsent(),
@@ -1088,15 +1164,32 @@ import UserNotifications
                     throw ServiceError.restorationRequired
                 }
             }
+            if !forUpdate {
+                updateEnvironment()
+                if let audioMessage {
+                    quitting = false
+                    message = audioMessage
+                    return false
+                }
+                if hotspotConfigured, !removeHotspotConfiguration() {
+                    quitting = false
+                    message =
+                        "The hotspot details could not be removed from Keychain. Unlock it and retry."
+                    return false
+                }
+            }
             removalStep = "Removing the sudo component…"
             try await SudoInstallation.remove(forUpdate: forUpdate)
-            if try !InstalledHelperFiles.areAbsent() {
+            if try (forUpdate && prepared) || !InstalledHelperFiles.areAbsent() {
                 await client?.close()
                 client = try await ServiceClient(role: .application)
                 _ = try await client?.send(forUpdate ? .prepareUpdate : .prepareRemoval)
                 _ = try await client?.send(.finishRemoval)
             }
             removalStep = "Removing the helper…"
+            guard try SecureOwnershipJournal.isStateDirectoryAbsent() else {
+                throw ServiceError.restorationRequired
+            }
             if !forUpdate, try InstalledCLI.isAppOwnedLinkPresent() {
                 throw ServiceError.restorationRequired
             }

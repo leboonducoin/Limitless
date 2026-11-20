@@ -7,6 +7,8 @@ public enum ClientRole: Sendable {
 public enum ServiceOperation: Codable, Equatable, Sendable {
     case status
     case configure(UserPolicy)
+    case restorePolicy(UserPolicy)
+    case setAutomation(Bool)
     case start(SessionRequest)
     case startAgent(AgentProvider)
     case stop(UUID)
@@ -17,14 +19,17 @@ public enum ServiceOperation: Codable, Equatable, Sendable {
     case retryRestoration
     case prepareRemoval
     case prepareUpdate
+    case cancelUpdate
     case finishRemoval
     case installCLI
     case setSudoTouchID(Bool)
 
     public var requiresApplication: Bool {
         switch self {
-        case .configure, .extend, .stopAll, .rearm, .retryRestoration, .prepareRemoval,
-            .prepareUpdate,
+        case .configure, .restorePolicy, .setAutomation, .extend, .stopAll, .rearm,
+            .retryRestoration,
+            .prepareRemoval,
+            .prepareUpdate, .cancelUpdate,
             .finishRemoval, .installCLI, .setSudoTouchID:
             true
         case .status, .start, .startAgent, .stop, .heartbeat: false
@@ -83,6 +88,7 @@ public struct SessionSummary: Codable, Equatable, Sendable, Identifiable {
 
 public struct ServiceStatus: Codable, Equatable, Sendable {
     public let policy: UserPolicy
+    public let policyConfigured: Bool
     public let power: PowerSnapshot
     public let sleep: SleepReport
     public let sessions: [SessionSummary]
@@ -120,17 +126,10 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
             """
     }
 
-    public func automationPolicyToRestore(_ saved: UserPolicy) throws -> UserPolicy? {
-        guard !policy.allowsAutomation, sessions.isEmpty, removal == .none,
-            sleep.phase == .inactive, sleep.observed == .allowed, !sleep.ownsGlobalHold,
-            sleep.fault == nil
-        else { return nil }
-        return try UserPolicy(
-            mode: policy.mode == .all ? saved.mode : policy.mode,
-            batteryFloor: max(policy.batteryFloor, saved.batteryFloor),
-            maximumDuration: [policy.maximumDuration, saved.maximumDuration].compactMap { $0 }
-                .min(),
-            allowsAutomation: true, keepsDisplayAwake: saved.keepsDisplayAwake)
+    public var canRestoreAutomation: Bool {
+        policyConfigured && !policy.allowsAutomation && sessions.isEmpty && removal == .none
+            && sleep.phase == .inactive && sleep.observed == .allowed && !sleep.ownsGlobalHold
+            && sleep.fault == nil
     }
 
     public init(
@@ -138,9 +137,10 @@ public struct ServiceStatus: Codable, Equatable, Sendable {
         sessions: [SessionSummary], sampledAt: Date, removal: RemovalState = .none,
         sudoTouchID: SudoTouchIDState = .unavailable, batteryCutoff: BatteryCutoff? = nil,
         thermal: ThermalCondition = .unknown, recentEndings: [SessionEnding] = [],
-        protectionID: UUID? = nil
+        protectionID: UUID? = nil, policyConfigured: Bool = true
     ) {
         self.policy = policy
+        self.policyConfigured = policyConfigured
         self.power = power
         self.sleep = sleep
         self.sessions = sessions
@@ -174,7 +174,7 @@ public struct ServiceReply: Codable, Sendable {
 }
 
 public enum ServiceWire {
-    public static let version = 12
+    public static let version = 13
     public static let maximumMessageBytes = 131_072
 
     private struct Header: Decodable {

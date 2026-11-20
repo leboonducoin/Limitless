@@ -79,7 +79,14 @@ public struct UserPolicy: Codable, Equatable, Sendable {
     }
 
     public static func validateDuration(_ seconds: TimeInterval) throws {
-        guard seconds.isFinite, seconds > 0 else { throw PolicyError.invalidDuration }
+        guard seconds.isFinite, seconds > 0, seconds <= Double(Int64.max / 2)
+        else { throw PolicyError.invalidDuration }
+    }
+
+    func withAutomation(_ allowed: Bool) throws -> Self {
+        try Self(
+            mode: mode, batteryFloor: batteryFloor, maximumDuration: maximumDuration,
+            allowsAutomation: allowed, keepsDisplayAwake: keepsDisplayAwake)
     }
 }
 

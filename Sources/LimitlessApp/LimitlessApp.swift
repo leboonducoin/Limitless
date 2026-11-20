@@ -16,8 +16,25 @@ enum LimitlessApp {
             app.setActivationPolicy(.accessory)
             Task {
                 do {
+                    let preferences = UserDefaults.standard
+                    let backupKey = AppModel.updateBackupKey
+                    guard preferences.object(forKey: backupKey) == nil else {
+                        throw UpdateError.busy
+                    }
+                    let helperRequired = preferences.bool(forKey: AppModel.updateHelperRecoveryKey)
                     let installed = try await GitHubUpdate.finish(
-                        app: URL(fileURLWithPath: args[1]), parentPID: parent)
+                        app: URL(fileURLWithPath: args[1]), parentPID: parent
+                    ) { backupURL in
+                        let preferences = UserDefaults.standard
+                        guard preferences.object(forKey: backupKey) == nil else {
+                            throw UpdateError.busy
+                        }
+                        let backup = AppModel.UpdateBackup(
+                            name: backupURL.lastPathComponent, helperRequired: helperRequired)
+                        preferences.set(
+                            try JSONEncoder().encode(backup), forKey: backupKey)
+                        guard preferences.synchronize() else { throw UpdateError.failed }
+                    }
                     let configuration = NSWorkspace.OpenConfiguration()
                     configuration.createsNewApplicationInstance = true
                     do {
@@ -27,9 +44,10 @@ enum LimitlessApp {
                         _ = try FileManager.default.replaceItemAt(
                             installed.app, withItemAt: installed.backup,
                             options: .usingNewMetadataOnly)
+                        preferences.removeObject(forKey: backupKey)
+                        _ = preferences.synchronize()
                         throw error
                     }
-                    try? FileManager.default.removeItem(at: installed.backup)
                     try? FileManager.default.removeItem(at: installed.staging)
                     exit(0)
                 } catch {
@@ -56,12 +74,11 @@ enum LimitlessApp {
         }
         if CommandLine.arguments.contains("--prepare-uninstall") {
             let options = Array(CommandLine.arguments.dropFirst())
-            guard
-                options == ["--prepare-uninstall"]
-                    || options == ["--prepare-uninstall", "--erase-preferences"]
-            else {
+            guard options == ["--prepare-uninstall"] else {
                 FileHandle.standardError.write(
-                    Data("Usage: LimitlessApp --prepare-uninstall [--erase-preferences]\n".utf8))
+                    Data(
+                        "Usage: LimitlessApp --prepare-uninstall (erases Limitless preferences)\n"
+                            .utf8))
                 exit(64)
             }
         }
@@ -142,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                 model.updateEnvironment()
             }
             model.beginMonitoring()
+            await model.retireUpdateBackupIfReady()
             if model.shouldRequestInitialSessionNotifications {
                 await model.setSessionNotifications(true)
             }

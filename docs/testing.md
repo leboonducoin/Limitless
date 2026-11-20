@@ -61,6 +61,8 @@ macOS version and any steps that fail.
 
 - Enable the helper; verify launch at login turns on. Turn it off and reopen the
   app: it must stay off. Login must never start a session.
+- With CLI access off, configure adapter-only mode and a custom battery reserve.
+  Restart the helper and confirm those limits before starting another session.
 - Restart the Mac and record how long the adaptive helper takes to reconnect after login.
   It must become responsive without manual intervention or weakened client validation.
 - Start a short timer, then try Stop, a date and multiple PIDs.
@@ -103,7 +105,11 @@ macOS version and any steps that fail.
   minutes. The current release must report that it is up to date without contacting
   `api.github.com`. During that delay, verify that the inline **Update** button is absent. Confirm the
   published archive accepts the bundled `Limitless Sudo.app` path. Verify the helper returns after the reopened
-  app; if replacement is deliberately failed, verify the previous app reopens and restores it.
+  app; if opening the replacement is deliberately failed, verify the previous app
+  reopens and restores it. Cancel sudo component cleanup during a prepared update
+  and verify that the old app can start a fresh session with the saved limits.
+  Confirm the previous app stays on disk until the replacement has started and
+  authenticated its helper when required.
   After approving a quarantined update, verify that CLI opt-in is restored even if macOS
   starts the app from a randomized path; the next update must still target the signed app
   in Applications. Do not remove quarantine to make this pass.
@@ -116,6 +122,8 @@ macOS version and any steps that fail.
 - Command-drag the Limitless icon farther right, relaunch the app and verify that macOS restores
   its position.
 - Then uninstall: the app should close and its integrations disappear.
+  With an owned audio mute awaiting a disconnected output, verify that uninstall
+  still stops protection before asking to reconnect the output.
   Cancel the sudo component's administrator prompt, retry removal, and verify both
   helpers disappear. An existing external sudo setting must remain unchanged.
   Repeat after a quarantined update that launches through App Translocation: the

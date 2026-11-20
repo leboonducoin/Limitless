@@ -3,6 +3,32 @@ import Testing
 
 @testable import LimitlessSystem
 
+@Test func automaticReplacementRequiresWriteAccessToTheAppAndParent() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let app = root.appendingPathComponent("Limitless.app", isDirectory: true)
+    let files = FileManager.default
+    try files.createDirectory(at: app, withIntermediateDirectories: true)
+    defer {
+        try? files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+        try? files.removeItem(at: root)
+    }
+    try GitHubUpdate.requireWritableApp(app)
+    try files.setAttributes([.posixPermissions: 0o500], ofItemAtPath: root.path)
+    #expect(throws: UpdateError.unsafeLocation) { try GitHubUpdate.requireWritableApp(app) }
+}
+
+@Test func backupReceiptCanAddressOnlyAnInstallerNamedSibling() throws {
+    let directory = URL(fileURLWithPath: "/private/tmp/limitless-update-test", isDirectory: true)
+    let valid = ".Limitless-previous-" + UUID().uuidString + ".app"
+    let backup = try GitHubUpdate.previousBackupURL(named: valid, in: directory)
+    #expect(backup == directory.appendingPathComponent(valid, isDirectory: true))
+    for name in ["Limitless.app", "../" + valid, valid + "/child", valid.lowercased()] {
+        #expect(throws: UpdateError.unsafeLocation) {
+            try GitHubUpdate.previousBackupURL(named: name, in: directory)
+        }
+    }
+}
+
 @Test func updateResponsesDistinguishMissingReleasesRateLimitsAndServerFailures() throws {
     let now = Date(timeIntervalSince1970: 1_700_000_000)
     func response(_ status: Int, headers: [String: String] = [:]) throws -> HTTPURLResponse {

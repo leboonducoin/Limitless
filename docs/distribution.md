@@ -45,7 +45,10 @@ after five minutes; server retry deadlines still apply. Checks read the publishe
 asset instead of GitHub's rate-limited REST API. Limitless requires its source revision to match
 the signed app's `Build.json`, verifies the download, then installs and reopens the app.
 If the helper was enabled, the reopened version restores it; a failed replacement reopens
-the previous app so the same recovery can run. macOS may run a quarantined update from a
+the previous app so the same recovery can run. The installer records the backup location
+before replacing the app and keeps the backup until the replacement starts and, when required,
+confirms its helper. On an installation your account cannot
+replace automatically, use **Download update** in Options. macOS may run a quarantined update from a
 temporary, randomized location. Limitless verifies the matching signed copy in
 Applications before restoring CLI access, replacing it on the next update or moving it
 to the Trash. If macOS asks for administrator approval during removal, the power and

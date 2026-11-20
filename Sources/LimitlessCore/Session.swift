@@ -28,7 +28,9 @@ public enum SessionEnd: Codable, Equatable, Sendable {
             let end = now.continuous + seconds
             guard end.isFinite, end > now.continuous else { throw PolicyError.invalidDuration }
         case .at(let date):
-            guard date.timeIntervalSince1970.isFinite, date > now.wall else {
+            guard date.timeIntervalSince1970.isFinite,
+                (try? UserPolicy.validateDuration(date.timeIntervalSince(now.wall))) != nil
+            else {
                 throw PolicyError.invalidDate
             }
         }

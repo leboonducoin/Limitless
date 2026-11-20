@@ -324,14 +324,17 @@ private func status(
         preferences.set(true, forKey: AppModel.updateHelperRecoveryKey)
         let model = AppModel(
             preferences: preferences, helper: helper, buildTrust: .trusted)
-        await model.restoreUpdateHelperIfNeeded()
+        await model.restoreUpdateHelperIfNeeded { false }
         #expect(helper.registrations == 1)
         #expect(preferences.bool(forKey: AppModel.updateHelperRecoveryKey))
         #expect(model.message != nil)
         helper.registrationFails = false
-        await model.restoreUpdateHelperIfNeeded()
+        await model.restoreUpdateHelperIfNeeded { false }
         #expect(helper.registrations == 2)
         #expect(helper.status == .enabled)
+        #expect(preferences.bool(forKey: AppModel.updateHelperRecoveryKey))
+        await model.restoreUpdateHelperIfNeeded { true }
+        #expect(helper.registrations == 2)
         #expect(preferences.object(forKey: AppModel.updateHelperRecoveryKey) == nil)
 
         let pending = MockUpdateHelper(status: .requiresApproval)

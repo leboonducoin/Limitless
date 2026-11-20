@@ -15,7 +15,8 @@ import LimitlessSystem
             finishedParent.waitUntilExit()
             do {
                 _ = try await GitHubUpdate.finish(
-                    app: candidate, parentPID: finishedParent.processIdentifier)
+                    app: candidate, parentPID: finishedParent.processIdentifier
+                ) { _ in throw UpdateError.failed }
                 exit(1)
             } catch UpdateError.unsafeLocation {}
             print("PASS signed update \(arguments[0])")
@@ -26,10 +27,17 @@ import LimitlessSystem
             finishedParent.executableURL = URL(fileURLWithPath: "/usr/bin/true")
             try finishedParent.run()
             finishedParent.waitUntilExit()
-            let installed = try await GitHubUpdate.finish(
-                app: candidate, parentPID: finishedParent.processIdentifier)
             let expected = candidate.deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("Limitless.app", isDirectory: true)
+            let installed = try await GitHubUpdate.finish(
+                app: candidate, parentPID: finishedParent.processIdentifier
+            ) { backup in
+                guard backup.deletingLastPathComponent() == expected.deletingLastPathComponent(),
+                    !FileManager.default.fileExists(atPath: backup.path),
+                    FileManager.default.fileExists(atPath: candidate.path),
+                    FileManager.default.fileExists(atPath: expected.path)
+                else { throw UpdateError.failed }
+            }
             guard installed.app == expected, installed.app != current else { exit(1) }
             let info =
                 try PropertyListSerialization.propertyList(

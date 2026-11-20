@@ -134,7 +134,9 @@ public enum GitHubUpdate {
         fileURLWithPath: "/Applications/Limitless.app", isDirectory: true)
     static let latestURL = repository.appendingPathComponent(
         "releases/latest/download/release.json")
+    public static let releasesPage = repository.appendingPathComponent("releases/latest")
     static let maximumArchiveSize = 64 * 1_024 * 1_024
+    private static let backupPrefix = ".Limitless-previous-"
 
     public struct Release: Equatable, Sendable {
         public let version: String
@@ -386,7 +388,11 @@ public enum GitHubUpdate {
         return text
     }
 
-    private static func requireWritableApp(_ app: URL) throws {
+    public static var canReplaceInstalledApplication: Bool {
+        (try? requireWritableApp(installedApplication)) != nil
+    }
+
+    static func requireWritableApp(_ app: URL) throws {
         let values = try app.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
         guard app.lastPathComponent == "Limitless.app", values.isDirectory == true,
             values.isSymbolicLink == false,
@@ -514,7 +520,36 @@ public enum GitHubUpdate {
         try child.run()
     }
 
-    @concurrent public static func finish(app: URL, parentPID: Int32) async throws -> (
+    static func previousBackupURL(named name: String, in directory: URL) throws -> URL {
+        guard name.hasPrefix(backupPrefix), name.hasSuffix(".app"),
+            let id = UUID(uuidString: String(name.dropFirst(backupPrefix.count).dropLast(4))),
+            name == backupPrefix + id.uuidString + ".app"
+        else { throw UpdateError.unsafeLocation }
+        return directory.appendingPathComponent(name, isDirectory: true)
+    }
+
+    @concurrent public static func retirePreviousApplication(named name: String) async throws {
+        let identity = try await SignedIdentity.current(
+            expectedIdentifier: LimitlessIdentity.application)
+        let current = try await currentInstalledApplication(identity: identity)
+        let backup = try previousBackupURL(named: name, in: current.deletingLastPathComponent())
+        guard try !SecureOwnershipJournal.directoryIsAbsent(at: backup.path) else { return }
+        guard try canonical(backup) == backup else { throw UpdateError.unsafeLocation }
+        let details = try identity.verifyExecutable(
+            at: backup, identifier: LimitlessIdentity.application)
+        guard let info = details[kSecCodeInfoPList as String] as? [String: Any],
+            let previousVersion = info["CFBundleShortVersionString"] as? String,
+            let currentVersion = Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleShortVersionString")
+                as? String,
+            try version(previousVersion).lexicographicallyPrecedes(version(currentVersion))
+        else { throw UpdateError.untrustedBuild }
+        try FileManager.default.removeItem(at: backup)
+    }
+
+    @concurrent public static func finish(
+        app: URL, parentPID: Int32, recordBackup: @Sendable (URL) throws -> Void
+    ) async throws -> (
         app: URL, backup: URL, staging: URL
     ) {
         let identity = try SignedIdentity(expectedIdentifier: LimitlessIdentity.application)
@@ -554,8 +589,9 @@ public enum GitHubUpdate {
             try InstalledHelperFiles.areAbsent(kind: .sudo), !SudoInstallation.isRegistered,
             HelperInstallationKind.blessed.service.status == .notRegistered
         else { throw UpdateError.busy }
-        let backupName = ".Limitless-previous-\(UUID().uuidString).app"
+        let backupName = backupPrefix + UUID().uuidString + ".app"
         let backup = current.deletingLastPathComponent().appendingPathComponent(backupName)
+        try recordBackup(backup)
         do {
             _ = try FileManager.default.replaceItemAt(
                 current, withItemAt: app, backupItemName: backupName,

@@ -3,6 +3,17 @@ import Testing
 
 @testable import LimitlessCore
 
+@Test func timedSessionsRejectDurationsThatCannotBeRepresented() throws {
+    let now = try ClockSnapshot(continuous: 10, wall: .now)
+    #expect(throws: PolicyError.invalidDuration) {
+        try SessionEnd.after(seconds: 1e30).validate(at: now)
+    }
+    #expect(throws: PolicyError.invalidDate) {
+        try SessionEnd.at(now.wall.addingTimeInterval(1e30)).validate(at: now)
+    }
+    try SessionEnd.unlimited.validate(at: now)
+}
+
 @Test(arguments: Array(0...80))
 func batteryFloorAllowsEveryInteger(_ floor: Int) throws {
     #expect(try UserPolicy(batteryFloor: floor).batteryFloor == floor)

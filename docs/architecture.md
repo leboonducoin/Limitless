@@ -27,9 +27,10 @@ determines the shared countdown when every request is bounded.
 
 Only the authenticated app owning a manual session can extend its timer or date by
 15 minutes. Extensions preserve the session ID, start time, power limits and original
-duration ceiling. Expired or stopped sessions cannot be extended. Protocol 12 requires
-matching app, CLI and helpers and adds display policy, stop reasons, thermal
-readings and agent provider names.
+duration ceiling. Expired or stopped sessions cannot be extended. Protocol 13 requires
+matching app, CLI and helpers. A fresh helper rejects starts until the app reapplies
+the saved power policy. Toggling CLI access changes consent independently of power
+limits.
 
 ## Power
 
@@ -84,7 +85,9 @@ macOS permission refusals are separate from connection failures. The app offers
 Full Disk Access guidance; it never grants access or retries the write automatically.
 
 AI hooks read lifecycle IDs only. Private markers bind a task to its original
-process and file identity. Setup merges only Limitless hooks, backs up existing
+process and file identity. A worker holds an exclusive lock during its turn.
+Expired, unclaimed markers can be cleaned up after the startup grace period.
+Setup merges only Limitless hooks, backs up existing
 settings and refuses linked, shared-writable or write-ACL-controlled paths. Setup and
 removal roll back the skill, marker and settings together. Removal preserves other integrations.
 
@@ -99,14 +102,19 @@ count. Invalid persisted counters are discarded. Background errors stay quiet. N
 is needed or stored.
 
 Updates verify archive bounds, SHA-256, source metadata and all five executable
-signatures, including the sudo component and helper. They retain quarantine and a rollback backup. Removal closes admission,
+signatures, including the sudo component and helper. They retain quarantine and a rollback
+backup until the replacement starts and verifies the required helper. If the existing
+installation cannot be replaced by the current user, the app offers the release download.
+Removal closes admission,
 confirms sleep restoration, removes the helper and owned CLI link, then clears
 preferences and recycles the matching signed app in Applications, even when macOS
 launched a quarantined copy from App Translocation. The installed copy is verified
 before cleanup and again before recycling. Sudo cleanup runs in its own helper before
-removing its service; updates preserve the setting. An update records whether the power helper
-was enabled, restores it after relaunch and retries from the previous app if replacement fails.
-Failed cleanup stays visible and retryable.
+removing its service; updates preserve the setting. Update preparation can be cancelled by the
+same console user while the power helper's recovery record is still intact. An update records
+whether the power helper was enabled, restores it after relaunch and retries from the previous
+app if opening the replacement fails. Uninstall confirms normal sleep before handling audio
+restoration or Keychain cleanup. Failed cleanup stays visible and retryable.
 
 ## Apple certificate selector
 
