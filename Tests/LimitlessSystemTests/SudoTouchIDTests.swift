@@ -76,6 +76,22 @@ func sudoTouchIDDeniedWritePreservesConfigurationAndAllowsExplicitRetry(enabled:
     #expect(try String(contentsOf: local, encoding: .utf8) == "auth required custom.so\n")
 }
 
+@Test(arguments: [Data("# Local settings\r\n".utf8), Data("# Local settings\0\n".utf8)])
+func sudoTouchIDRejectsUnsupportedFileBytesWithoutChangingTheFile(_ original: Data) throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let directory = root.appendingPathComponent("private/etc/pam.d")
+    try FileManager.default.createDirectory(
+        at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data(sudoPolicy.utf8).write(to: directory.appendingPathComponent("sudo"))
+    let local = directory.appendingPathComponent("sudo_local")
+    try original.write(to: local)
+    #expect(throws: ServiceError.sudoTouchIDFailed) {
+        try SudoTouchID.change(true, root: root, owner: getuid())
+    }
+    #expect(try Data(contentsOf: local) == original)
+}
+
 @Test func sudoTouchIDPreservesPasswordAndOnlyRemovesItsOwnSetting() throws {
     for original: String? in [nil, "", "# Custom heading\n#auth sufficient pam_tid.so\n"] {
         let enabled = try SudoTouchID.transform(sudo: sudoPolicy, local: original, enabled: true)

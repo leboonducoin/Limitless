@@ -48,7 +48,7 @@ public struct SessionRegistry: Sendable {
         try request.validate(policy: policy, kind: kind, now: now)
         guard sessions[id] == nil else { throw PolicyError.duplicateSession }
         guard sessions.count < Self.capacity else { throw PolicyError.sessionLimitReached }
-        if kind == .agent, sessions.values.contains(where: { $0.kind == .manual }) {
+        if kind != .manual, sessions.values.contains(where: { $0.kind == .manual }) {
             throw ServiceError.sessionRejected
         }
         let sharedID = protectionID ?? UUID()
@@ -56,8 +56,8 @@ public struct SessionRegistry: Sendable {
             guard !sessions.values.contains(where: { $0.kind == .manual }) else {
                 throw PolicyError.duplicateSession
             }
-            for agent in sessions.values where agent.kind == .agent {
-                end(agent.id, reason: .manualPriority, at: now.wall)
+            for automation in sessions.values {
+                end(automation.id, reason: .manualPriority, at: now.wall)
             }
         }
         sessions[id] = Session(

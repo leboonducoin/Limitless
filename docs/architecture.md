@@ -22,9 +22,9 @@ Stop, deadlines, battery protection, critical thermal load and owner loss outran
 never resume after login or reboot. The root helper remembers power limits for each account.
 CLI permission lasts for the current helper and console account. A fault revokes it.
 AI uses the selected power sources and at least 20% battery. Manual sessions
-reject or end AI holds. A second app owner cannot create another manual session.
-A stopped task cannot reacquire protection. If Stop ended automated work,
-enable CLI access again before accepting new automated requests. The latest authorized deadline
+reject or end all automated holds. A second app owner cannot create another manual session.
+A stopped task cannot reacquire protection. Stop withdraws CLI consent until
+the user approves it again. The latest authorized deadline
 determines the shared countdown when every request is bounded.
 
 Only the authenticated app owning a manual session can extend its timer or date by

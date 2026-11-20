@@ -296,13 +296,31 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
     var (value, app, task) = try service()
     _ = try value.apply(
         .configure(try UserPolicy(allowsAutomation: true)), owner: app, now: serviceClock(0))
-    let manual = try value.apply(.start(SessionRequest()), owner: app, now: serviceClock(0))
-    _ = try value.apply(.start(SessionRequest()), owner: task, now: serviceClock(0))
+    let now = try serviceClock(0)
+    let second = UUID()
+    try value.connect(owner: second, user: 501, role: .task, now: now)
+    let remaining = try value.apply(.start(.init()), owner: second, now: now)
+    _ = try value.apply(.start(.init()), owner: task, now: now)
     value.disconnect(task)
     #expect(value.registry.sessions.count == 1)
-    #expect(value.registry.sessions.values.first?.id == manual)
-    #expect(throws: PolicyError.duplicateSession) {
-        try value.apply(.start(SessionRequest()), owner: app, now: serviceClock(1))
+    #expect(value.registry.sessions.values.first?.id == remaining)
+    #expect(throws: ServiceError.ownerExpired) {
+        try value.apply(.start(.init()), owner: task, now: serviceClock(1))
+    }
+}
+
+@Test func globalStopWithdrawsAutomationEvenAfterManualProtectionTookPriority() throws {
+    var (value, app, task) = try service()
+    let now = try serviceClock(0)
+    _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
+    _ = try value.apply(.start(.init()), owner: task, now: now)
+    _ = try value.apply(.start(.init()), owner: app, now: now)
+    _ = try value.apply(.stopAll, owner: app, now: now)
+    #expect(value.registry.sessions.isEmpty && !value.registry.policy.allowsAutomation)
+    let replacement = UUID()
+    try value.connect(owner: replacement, user: 501, role: .task, now: now)
+    #expect(throws: PolicyError.automationNotAuthorized) {
+        try value.apply(.start(.init()), owner: replacement, now: now)
     }
 }
 
@@ -420,7 +438,9 @@ func repeatedExtensionsAccumulateOnTheOwnedDeadlineWithoutRestarting(_ end: Sess
     let now = try serviceClock(0)
     _ = try value.apply(.configure(try UserPolicy(allowsAutomation: true)), owner: app, now: now)
     _ = try value.apply(.start(SessionRequest()), owner: task, now: now)
-    _ = try value.apply(.start(SessionRequest()), owner: app, now: now)
+    let second = UUID()
+    try value.connect(owner: second, user: 501, role: .task, now: now)
+    _ = try value.apply(.start(SessionRequest()), owner: second, now: now)
     #expect(throws: ServiceError.sessionRejected) {
         try value.apply(.prepareUpdate, owner: app, now: now)
     }

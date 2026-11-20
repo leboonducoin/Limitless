@@ -150,11 +150,7 @@ public struct ServiceSessions: Sendable {
             else { throw ServiceError.unauthorized }
         case .extend(let id): try registry.extend(id, owner: owner, now: now)
         case .stopAll:
-            if registry.sessions.values.contains(where: { $0.kind != .manual }) {
-                try registry.revokeAutomationAndStop(reason: .requested, at: now.wall)
-            } else {
-                registry.stopAll(at: now.wall)
-            }
+            try registry.revokeAutomationAndStop(reason: .requested, at: now.wall)
         case .prepareRemoval:
             try registry.revokeAutomationAndStop(at: now.wall)
             drain = .removal

@@ -65,14 +65,18 @@ private let external = PowerSnapshot(source: .external, battery: .notPresent)
     #expect(registry.protectionID == sharedID)
 }
 
-@Test func manualPriorityDoesNotRecreateTheSharedProtection() throws {
+@Test(arguments: [SessionKind.agent, SessionKind.task])
+func manualPriorityDoesNotRecreateTheSharedProtection(_ kind: SessionKind) throws {
     var registry = SessionRegistry(policy: try UserPolicy(allowsAutomation: true))
-    let agent = try registry.start(.init(), owner: UUID(), kind: .agent, now: clock(0))
+    let automated = try registry.start(.init(), owner: UUID(), kind: kind, now: clock(0))
     let sharedID = try #require(registry.protectionID)
     let manual = try registry.start(.init(), owner: UUID(), kind: .manual, now: clock(1))
     #expect(registry.protectionID == sharedID)
-    #expect(registry.sessions[manual] != nil && registry.sessions[agent] == nil)
+    #expect(registry.sessions[manual] != nil && registry.sessions[automated] == nil)
     #expect(registry.recentEndings.last?.reason == .manualPriority)
+    #expect(throws: ServiceError.sessionRejected) {
+        try registry.start(.init(), owner: UUID(), kind: kind, now: clock(2))
+    }
 }
 
 @Test func stopAllClearsRequestsAndSharedProtectionForEveryCaller() throws {

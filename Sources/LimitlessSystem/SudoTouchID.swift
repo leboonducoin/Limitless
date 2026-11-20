@@ -143,8 +143,8 @@ public enum SudoTouchID {
             let data =
                 try FileHandle(fileDescriptor: file, closeOnDealloc: false)
                 .read(upToCount: 16_385) ?? Data()
-            guard data.count <= 16_384, let text = String(data: data, encoding: .utf8),
-                !text.contains("\0"), !text.contains("\r")
+            guard data.count <= 16_384, !data.contains(0), !data.contains(13),
+                let text = String(data: data, encoding: .utf8)
             else { throw JournalError.unexpectedContents }
             try SecureOwnershipJournal.requireSameEntry(directory, name: name, descriptor: file)
             return Snapshot(
