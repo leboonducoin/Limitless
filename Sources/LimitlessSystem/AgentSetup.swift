@@ -405,12 +405,12 @@ public enum AgentSetup {
         let owner = geteuid()
         var skillDirectory = try ManagedDirectory.open(
             home: home, components: skillParts, create: false, owner: owner)
+        let existingMarker = try skillDirectory?.read(".limitless-managed")
+        if remove, existingMarker == nil { return }
         var configDirectory = try ManagedDirectory.open(
             home: home, components: Array(configParts.dropLast()), create: false, owner: owner)
         let skillExisted = skillDirectory != nil
         let old = try configDirectory?.read(configName)
-        let existingMarker = try skillDirectory?.read(".limitless-managed")
-        if remove, existingMarker == nil { return }
         let newConfigMarker = Data("Limitless:new-config\n".utf8)
         let savedMarker =
             existingMarker?.data ?? (old == nil ? newConfigMarker : Data("Limitless\n".utf8))
@@ -510,7 +510,7 @@ public enum AgentSetup {
                     activeConfigDirectory, name: configName, previous: old,
                     attempted: writtenConfig, allowMissing: remove && removeConfig)
             }
-            if let backupName, let backup {
+            if rollbackError == nil, let backupName, let backup {
                 attempt { try activeConfigDirectory.remove(backupName, expected: backup) }
             }
             if let rollbackError { throw rollbackError }

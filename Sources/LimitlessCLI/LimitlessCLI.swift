@@ -98,6 +98,10 @@ struct LimitlessCLI {
     ) async throws -> Int32 {
         let client = try await ServiceClient(role: .task)
         do {
+            if let agent, !agent.isAlive {
+                await client.close()
+                return 0
+            }
             let reply = try await client.send(
                 agent.map { .startAgent($0.context.provider) } ?? .start(request))
             guard let id = reply.startedSession, let status = reply.status,
@@ -105,8 +109,8 @@ struct LimitlessCLI {
                 status.sleep.fault == nil
             else { throw ServiceError.sessionRejected }
             if agent != nil {
-                FileHandle.standardOutput.write(Data([1]))
-                try FileHandle.standardOutput.close()
+                try? FileHandle.standardOutput.write(contentsOf: Data([1]))
+                try? FileHandle.standardOutput.close()
             }
             if max(request.batteryFloor ?? 0, status.policy.batteryFloor) == 0 {
                 report("Warning: custom battery protection is disabled (0%).")
@@ -205,6 +209,7 @@ struct LimitlessCLI {
             let context = try JSONDecoder().decode(AgentActivity.Context.self, from: data)
             let activity = try AgentActivity(context)
             defer { activity.finish() }
+            guard activity.isAlive else { return }
             do {
                 _ = try await follow(command: nil, process: nil, request: .init(), agent: activity)
             } catch {

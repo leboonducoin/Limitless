@@ -93,3 +93,34 @@ import Testing
     otherActivity.finish()
     #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty)
 }
+
+@Test func abandonedMarkersCanBeReclaimedWithoutRemovingAWorkerOrAFreshClaim() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let child = Process()
+    child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+    child.arguments = ["30"]
+    try child.run()
+    defer {
+        if child.isRunning { child.terminate() }
+        child.waitUntilExit()
+    }
+    let host = try ProcessIdentity(pid: child.processIdentifier)
+    let event = try AgentEvent(action: .begin, provider: "other", session: "s", task: "a")
+    let first = try #require(try AgentActivity.begin(event, host: host, directory: root))
+    #expect(try AgentActivity.begin(event, host: host, directory: root) == nil)
+    let marker = root.appendingPathComponent(first.name)
+    try FileManager.default.setAttributes(
+        [.modificationDate: Date.now.addingTimeInterval(-30)], ofItemAtPath: marker.path)
+    let reclaimed = try #require(try AgentActivity.begin(event, host: host, directory: root))
+    let worker = try AgentActivity(reclaimed, directory: root)
+    try FileManager.default.setAttributes(
+        [.modificationDate: Date.now.addingTimeInterval(-30)], ofItemAtPath: marker.path)
+    AgentActivity.discardUnclaimed(reclaimed, directory: root)
+    #expect(try AgentActivity.begin(event, host: host, directory: root) == nil)
+    #expect(worker.isAlive)
+    worker.finish()
+    let failed = try #require(try AgentActivity.begin(event, host: host, directory: root))
+    AgentActivity.discardUnclaimed(failed, directory: root)
+    #expect(try AgentActivity.begin(event, host: host, directory: root) != nil)
+}

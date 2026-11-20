@@ -92,6 +92,8 @@ func agentSetupPreservesSettingsIsRepeatableAndRemovesOnlyItsIntegration(_ provi
     #expect(throws: (any Error).self) {
         try AgentSetup.configure("codex", home: root, resources: resources)
     }
+    try AgentSetup.configure("codex", remove: true, home: root, resources: resources)
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: config.path) == outside.path)
     #expect(try Data(contentsOf: outside) == Data("{}".utf8))
 }
 

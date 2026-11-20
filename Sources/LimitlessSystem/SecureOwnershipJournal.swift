@@ -203,7 +203,7 @@ public final class SecureOwnershipJournal: OwnershipJournal {
         retirement = .removed
     }
 
-    static func requireSameEntry(_ parent: Int32, name: String, descriptor: Int32) throws {
+    package static func requireSameEntry(_ parent: Int32, name: String, descriptor: Int32) throws {
         var actual = stat()
         var expected = stat()
         guard fstat(descriptor, &expected) == 0,
