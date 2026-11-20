@@ -13,28 +13,14 @@ final class HelperRuntime {
     private let identity: SignedIdentity
     private var installedFiles: InstalledHelperFiles?
     private var removalReady = false
-    private var faultConsentRevoked = false
-    private var pendingFaultConsentRevocation = false
     private(set) var expiredOwners: Set<UUID> = []
 
     init(identity: SignedIdentity) throws {
         self.identity = identity
         sessions = try ServiceSessions()
         journal = try SecureOwnershipJournal()
-        let interrupted = try journal.loadOwned()
-        controller = SleepController(restoringOwnedHold: interrupted)
-        if interrupted { revokeFaultConsent() }
+        controller = SleepController(restoringOwnedHold: try journal.loadOwned())
         try reconcile()
-    }
-
-    private func revokeFaultConsent() {
-        do {
-            try SavedPowerPolicy.revokeAllAutomation()
-            faultConsentRevoked = true
-            pendingFaultConsentRevocation = false
-        } catch {
-            pendingFaultConsentRevocation = true
-        }
     }
 
     @discardableResult
@@ -53,13 +39,10 @@ final class HelperRuntime {
             backend: &backend, journal: &journal)
         if report.fault != nil {
             try sessions.revokeAutomationAndStop(reason: .powerFault, at: now.wall)
-            if !faultConsentRevoked { revokeFaultConsent() }
             evaluation = sessions.evaluate(power: power, now: now, thermal: thermal)
             report = controller.reconcile(
                 wantsAwake: false, now: now,
                 backend: &backend, journal: &journal)
-        } else {
-            faultConsentRevoked = false
         }
         return (now, power, thermal, evaluation, report)
     }
@@ -92,11 +75,8 @@ final class HelperRuntime {
             case .start, .startAgent:
                 if before.thermal == .critical { throw ServiceError.thermalCritical }
                 if controller.fault != nil { throw ServiceError.restorationRequired }
-            case .setAutomation(true), .rearm:
-                if pendingFaultConsentRevocation { throw ServiceError.restorationRequired }
-                if case .setAutomation(true) = request.operation, controller.fault != nil {
-                    throw ServiceError.restorationRequired
-                }
+            case .setAutomation(true) where controller.fault != nil:
+                throw ServiceError.restorationRequired
             case .cancelUpdate:
                 guard sessions.isPreparingUpdate, before.canRemoveService,
                     !backend.hasIdleAssertion, try journal.loadOwned() == false
@@ -115,23 +95,11 @@ final class HelperRuntime {
             var savedPolicy: UserPolicy?
             if case .restorePolicy = operation, !before.policyConfigured, let user {
                 savedPolicy = try SavedPowerPolicy.load(for: user)
-                if before.sleep.fault != nil || pendingFaultConsentRevocation {
-                    savedPolicy = try savedPolicy?.withAutomation(false)
-                }
             }
-            let changeRequiresPolicyWrite: Bool
-            switch operation {
-            case .setAutomation, .configure: changeRequiresPolicyWrite = true
-            default: changeRequiresPolicyWrite = false
-            }
-            let previousSessions = changeRequiresPolicyWrite ? sessions : nil
+            let previousSessions: ServiceSessions? =
+                if case .configure = operation { sessions } else { nil }
             let started = try sessions.apply(
                 operation, owner: owner, now: SystemClock.now(), savedPolicy: savedPolicy)
-            if operation == .stopAll, before.policy.allowsAutomation,
-                !sessions.registry.policy.allowsAutomation, let user
-            {
-                try SavedPowerPolicy.store(sessions.registry.policy, for: user)
-            }
             if let previousSessions, let user {
                 do {
                     try SavedPowerPolicy.store(sessions.registry.policy, for: user)
@@ -216,10 +184,7 @@ private enum SavedPowerPolicy {
     }
 
     static func load(for user: UInt32) throws -> UserPolicy? {
-        try load(key: key(for: user))
-    }
-
-    private static func load(key: CFString) throws -> UserPolicy? {
+        let key = try key(for: user)
         guard
             let value = CFPreferencesCopyValue(
                 key, domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
@@ -232,30 +197,9 @@ private enum SavedPowerPolicy {
 
     static func store(_ policy: UserPolicy, for user: UInt32) throws {
         let key = try key(for: user)
-        let data = try JSONEncoder().encode(policy) as CFData
+        let data = try JSONEncoder().encode(policy.withAutomation(false)) as CFData
         CFPreferencesSetValue(
             key, data, domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
-        try synchronize()
-    }
-
-    static func revokeAllAutomation() throws {
-        guard geteuid() == 0 else { throw ServiceError.unauthorized }
-        let keys =
-            CFPreferencesCopyKeyList(
-                domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)
-            as? [String] ?? []
-        var updates: [String: Data] = [:]
-        for key in keys {
-            guard let policy = try load(key: key as CFString), policy.allowsAutomation else {
-                continue
-            }
-            updates[key] = try JSONEncoder().encode(policy.withAutomation(false))
-        }
-        if !updates.isEmpty {
-            CFPreferencesSetMultiple(
-                updates as CFDictionary, nil, domain as CFString, kCFPreferencesCurrentUser,
-                kCFPreferencesAnyHost)
-        }
         try synchronize()
     }
 

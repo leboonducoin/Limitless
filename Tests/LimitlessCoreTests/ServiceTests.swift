@@ -52,7 +52,8 @@ private func service() throws -> (ServiceSessions, UUID, UUID) {
     #expect(throws: ServiceError.sessionRejected) {
         try value.apply(.start(.init()), owner: app, now: now)
     }
-    _ = try value.apply(.restorePolicy, owner: app, now: now, savedPolicy: saved)
+    _ = try value.apply(
+        .restorePolicy, owner: app, now: now, savedPolicy: try saved.withAutomation(true))
     #expect(value.policyConfigured && value.registry.policy == saved)
     let second = UUID()
     try value.connect(owner: second, user: 501, role: .application, now: now)

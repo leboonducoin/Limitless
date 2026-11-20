@@ -187,7 +187,11 @@ struct SettingsView: View {
                             get: { model.status?.policy.allowsAutomation ?? false },
                             set: { enabled in Task { await model.setAutomation(enabled) } })
                     )
-                    .disabled(!model.canEditPowerPolicy || model.busy || model.cliMigrationRequired)
+                    .disabled(
+                        !model.canEditPowerPolicy || model.busy
+                            || (model.cliMigrationRequired
+                                && model.status?.policy.allowsAutomation != true)
+                    )
                     Link(
                         destination: URL(
                             string:

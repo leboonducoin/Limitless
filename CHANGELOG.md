@@ -26,7 +26,7 @@
 - `limitless doctor` reports the authenticated helper, active protection, power and thermal readings, and protocol. Copy diagnostics from the menu when reporting a problem.
 - See which agent or provider is keeping the Mac awake, alongside any manual request. The bundled skill explains how lifecycle hooks protect Codex, Claude, Cursor, and Gemini tasks and how their protection ends.
 - Recover abandoned task markers while preserving the markers used by active workers. Disabling or removing a Limitless integration leaves unmanaged agent configuration alone.
-- Changing CLI access leaves the current power limits in place. The helper stores approved access and its limits in protected preferences. Existing installations require one new approval. Protocol 14 requires the app, CLI, and helpers from the same release.
+- Changing CLI access leaves your power limits in place. The helper remembers power limits and requires fresh approval for CLI access after it restarts or the console account changes. Protocol 14 requires the app, CLI, and helpers from the same release.
 
 ### Updates, cleanup, and verification
 

@@ -101,7 +101,7 @@ public struct ServiceSessions: Sendable {
             policyConfigured = true
         case .restorePolicy:
             if !policyConfigured {
-                if let savedPolicy { registry.updatePolicy(savedPolicy) }
+                if let savedPolicy { registry.updatePolicy(try savedPolicy.withAutomation(false)) }
                 policyConfigured = true
             }
         case .setAutomation(let allowed):

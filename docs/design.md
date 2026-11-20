@@ -38,7 +38,8 @@ Values above 80 become 80. Return or leaving the field applies it.
 Explain a blocked start or battery cutoff beside the session controls, with a red warning symbol.
 Only process mode shows the session ceiling; wait for all selected PIDs.
 
-CLI opt-in is remembered without restarting a session. Updates start enabled
+Changing CLI opt-in keeps the manual session. A helper restart requires new
+CLI approval. Updates start enabled
 after helper approval and install only while idle; background check failures do not add text to the menu.
 Manual checks distinguish an up-to-date app, an active cooldown and a network failure.
 Uninstall shows progress and keeps a retryable error if cleanup fails.

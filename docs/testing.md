@@ -116,8 +116,9 @@ macOS version and any steps that fail.
   and verify that the old app can start a fresh session with the saved limits.
   Confirm the previous app stays on disk until the replacement has started and
   authenticated its helper when required.
-  After approving a quarantined update, verify that CLI opt-in is restored even if macOS
-  starts the app from a randomized path; the next update must still target the signed app
+  After approving a quarantined update, verify that power limits are restored and
+  CLI access requires fresh consent. Even if macOS starts the app from a randomized path,
+  the next update must target the signed app
   in Applications. Do not remove quarantine to make this pass.
 - Use Command-click while idle and check the favorite duration. Confirm that
   Command-Return starts, Command-Plus extends, and Command-Period stops from the

@@ -124,7 +124,6 @@ import UserNotifications
     private var processMonitoring: Task<Void, Never>?
     private(set) var watchedProcesses: [ProcessIdentity]?
     private var policyApplication: Task<Void, Never>?
-    private var verifiedPrivateCLI = false
     private(set) var cliMigrationRequired = false
     private var updateMonitoring: Task<Void, Never>?
     private var updateInstallation: Task<Void, Never>?
@@ -647,17 +646,6 @@ import UserNotifications
             guard currentRevision == revision else { return }
             try accept(reply)
             connectionError = nil
-            if status?.policy.allowsAutomation == true, !verifiedPrivateCLI,
-                !InstalledCLI.sharedPathIsProtected
-            {
-                verifiedPrivateCLI = true
-                Task {
-                    do { try await InstalledCLI.refreshPrivateCopy() } catch {
-                        self.message =
-                            "The private CLI could not be refreshed. Enable CLI access again."
-                    }
-                }
-            }
             if !updating, reply.status?.removal == RemovalState.none,
                 reply.status?.policyConfigured == true,
                 preferences.bool(forKey: Self.updateHelperRecoveryKey)
@@ -1043,7 +1031,6 @@ import UserNotifications
                 var privateResources: URL?
                 if !InstalledCLI.sharedPathIsProtected {
                     privateResources = try await InstalledCLI.refreshPrivateCopy()
-                    self.verifiedPrivateCLI = true
                 }
                 guard await self.perform(.installCLI, authorization: grant) else {
                     self.message =

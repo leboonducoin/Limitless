@@ -19,8 +19,8 @@ Disconnect or a missed lease releases them. Heartbeats run every
 5 seconds with a 30-second lease. Relative deadlines use a continuous clock.
 
 Stop, deadlines, battery protection, critical thermal load and owner loss outrank recovery. Sessions
-never resume after login or reboot. The root helper remembers power limits and CLI
-permission for each approved account. Faults revoke CLI permission and preserve the limits.
+never resume after login or reboot. The root helper remembers power limits for each account.
+CLI permission lasts for the current helper and console account. A fault revokes it.
 AI uses the selected power sources and at least 20% battery. Manual sessions
 reject or end AI holds. A second app owner cannot create another manual session.
 A stopped task cannot reacquire protection. If Stop ended automated work,

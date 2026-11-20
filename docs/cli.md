@@ -10,6 +10,10 @@ commands below or define an alias for this shell:
 alias limitless='"$HOME/Library/Application Support/Limitless CLI/Limitless.app/Contents/MacOS/limitless"'
 ```
 
+Enable **Allow CLI & AI tasks** again after a helper restart, including after
+reboot or an update, or after changing console accounts. Your saved power
+limits remain in effect.
+
 Run setup again for each previously configured agent before using its old
 hooks. Explicit setup migrates Limitless entries to the protected command and
 keeps other settings. Closing your agents during migration prevents them from
