@@ -35,8 +35,13 @@ Privacy & Security → Open Anyway**. [Apple’s instructions](https://support.a
 Choose a duration and click **Keep awake**. The orange mark indicates active protection.
 
 Command-click the menu-bar icon to start your favorite duration. Timed sessions
-show their end time beside the orange Limitless mark. Open **Options** for display
+can show their end time beside the orange Limitless mark. Open **Options** for display
 sleep, notifications, audio muting, iPhone hotspot fallback and agent setup.
+
+Concurrent eligible requests share one protection session. Each keeps its
+own limits. Stop ends the shared session.
+
+[Compatibility and validation](docs/compatibility.md) · [Interactive demo source](docs/demo.html)
 
 - Stop after a timer, at a date, or when all selected processes finish.
 - Choose battery, power adapter, or both. Reserve 20% battery by default.

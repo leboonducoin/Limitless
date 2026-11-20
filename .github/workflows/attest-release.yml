@@ -1,0 +1,101 @@
+name: Attest distribution archive
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Draft release tag, such as v1.2.0
+        required: true
+        type: string
+      signed_app_sha256:
+        description: SHA-256 of the signed input zip, computed on the signing Mac
+        required: true
+        type: string
+      apple_team:
+        description: Apple Developer Team ID used to sign the app
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  fetch:
+    if: github.repository == 'leboonducoin/Limitless' && github.ref == 'refs/heads/main' && github.actor == 'leboonducoin' && github.triggering_actor == 'leboonducoin'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Fetch the exact signed and stapled input from the draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          INPUT_SHA256: ${{ inputs.signed_app_sha256 }}
+        run: |
+          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$INPUT_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish --jq '[.isDraft, .targetCommitish] | @tsv')" = "$(printf 'true\t%s' "$GITHUB_SHA")"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern Limitless-Signed-App.zip --dir "$RUNNER_TEMP"
+          printf '%s  %s\n' "$INPUT_SHA256" "$RUNNER_TEMP/Limitless-Signed-App.zip" | sha256sum -c
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Limitless-signed-input
+          path: ${{ runner.temp }}/Limitless-Signed-App.zip
+          retention-days: 1
+          if-no-files-found: error
+
+  package:
+    needs: fetch
+    runs-on: macos-26
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: Limitless-signed-input
+          path: ${{ runner.temp }}
+      - name: Verify the app, package the distribution and check the exported archive
+        shell: bash
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+          TAG: ${{ inputs.tag }}
+          TEAM: ${{ inputs.apple_team }}
+          INPUT_SHA256: ${{ inputs.signed_app_sha256 }}
+        run: |
+          [[ "$TEAM" =~ ^[A-Z0-9]{10}$ ]]
+          [[ "$INPUT_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          printf '%s  %s\n' "$INPUT_SHA256" "$RUNNER_TEMP/Limitless-Signed-App.zip" | shasum -a 256 -c
+          mkdir "$RUNNER_TEMP/signed-input"
+          ditto -x -k "$RUNNER_TEMP/Limitless-Signed-App.zip" "$RUNNER_TEMP/signed-input"
+          swift Tools/ProjectTool.swift package "$RUNNER_TEMP/signed-input/Limitless.app" "$TEAM" "$RUNNER_TEMP/distribution"
+          test -f "$RUNNER_TEMP/distribution/Limitless-${TAG#v}-universal.zip"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Limitless-distribution
+          path: ${{ runner.temp }}/distribution/
+          retention-days: 7
+          if-no-files-found: error
+
+  attest:
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: Limitless-distribution
+      - run: sha256sum -c SHA256SUMS
+      - uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: Limitless-*-universal.zip

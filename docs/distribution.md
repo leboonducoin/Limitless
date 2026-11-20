@@ -71,3 +71,37 @@ gh attestation verify Limitless-Preview.zip --repo leboonducoin/Limitless \
 
 The preview has a separate identity and cannot enable protection. GitHub Releases
 carries the user-installable signed app.
+
+## Attest the distribution package
+
+Run **Attest distribution archive** manually from the exact release commit on
+`main`. The workflow verifies and packages a locally signed and stapled
+Developer ID input. Its attestation describes the GitHub packaging run. The
+signed app's build record supplies the source revision for the local compilation.
+
+1. Pass the release's CI and Security gates and record the
+   [physical acceptance results](compatibility.md).
+2. Create a draft release targeting the full source commit SHA. Prepare a
+   `Limitless-Signed-App.zip` with the verified `Limitless.app` at its root.
+   Upload that input to the draft and record its SHA-256 on the signing Mac.
+3. Dispatch the workflow with the draft tag, input SHA-256 and Apple Team ID.
+   Download the `Limitless-distribution` artifact and verify the ZIP before attaching it.
+
+```sh
+shasum -a 256 -c SHA256SUMS
+gh attestation verify Limitless-VERSION-universal.zip --repo leboonducoin/Limitless \
+  --signer-workflow leboonducoin/Limitless/.github/workflows/attest-release.yml \
+  --source-ref refs/heads/main --source-digest "$COMMIT"
+```
+
+Attach the three verified files from the artifact to the draft. Remove the
+signed input ZIP from the draft before publication. The workflow requires no
+signing key. GitHub requires access to draft releases in the fetch job, which
+only downloads and hashes the input. Packaging and attestation run in separate
+jobs with their own permissions.
+
+## Host the interactive demo
+
+Open [demo.html](demo.html) directly in a browser to preview the three scenarios.
+GitHub Pages can serve it from the repository's `main` branch and `/docs`
+directory. The demo runs without JavaScript or a local Limitless installation.
