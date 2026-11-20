@@ -336,44 +336,89 @@ private enum AppKeychain {
 }
 
 enum HotspotCredentials {
+    private static let credentialService = "hotspot-credential"
+
+    private static func account() -> String? {
+        guard let data = AppKeychain.read(service: "hotspot", account: "reference"),
+            data.count == 36, let value = String(data: data, encoding: .utf8),
+            UUID(uuidString: value)?.uuidString == value
+        else { return nil }
+        return value
+    }
+
     struct Network: Codable, Sendable {
         let ssid: String
+        let bssid: String?
         let password: String
         let automaticJoin: Bool?
 
-        init(ssid: String, password: String, automaticJoin: Bool = false) {
+        init(ssid: String, bssid: String?, password: String, automaticJoin: Bool = false) {
             self.ssid = ssid
+            self.bssid = bssid?.lowercased()
             self.password = password
             self.automaticJoin = automaticJoin
         }
 
         var isValid: Bool {
             (1...32).contains(ssid.utf8.count) && (8...63).contains(password.utf8.count)
+                && (bssid.map {
+                    $0.wholeMatch(of: /[0-9a-f]{2}(:[0-9a-f]{2}){5}/) != nil
+                        && $0 != "00:00:00:00:00:00"
+                } ?? true)
                 && !ssid.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
                 && !password.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
+        }
+
+        func matches(ssidData: Data?, bssid: String?) -> Bool {
+            guard let savedAddress = self.bssid else { return false }
+            return ssidData == Data(ssid.utf8) && bssid?.lowercased() == savedAddress
         }
     }
 
     static func save(_ network: Network) -> Bool {
-        guard network.isValid, let data = try? JSONEncoder().encode(network) else { return false }
-        return AppKeychain.save(data, service: "hotspot", account: "fallback")
+        guard network.isValid, network.bssid != nil, let data = try? JSONEncoder().encode(network)
+        else { return false }
+        let previous = account()
+        let next = UUID().uuidString
+        guard AppKeychain.add(data, service: credentialService, account: next) else { return false }
+        guard AppKeychain.save(Data(next.utf8), service: "hotspot", account: "reference") else {
+            _ = AppKeychain.remove(service: credentialService, account: next)
+            return false
+        }
+        if let previous { _ = AppKeychain.remove(service: credentialService, account: previous) }
+        _ = AppKeychain.remove(service: "hotspot", account: "fallback")
+        return true
     }
 
     static func read() -> Network? {
-        guard let data = AppKeychain.read(service: "hotspot", account: "fallback"),
+        guard let account = account(),
+            let data = AppKeychain.read(service: credentialService, account: account),
             data.count <= 1_024,
-            let network = try? JSONDecoder().decode(Network.self, from: data), network.isValid
+            let network = try? JSONDecoder().decode(Network.self, from: data), network.isValid,
+            network.bssid != nil
         else { return nil }
         return network
     }
 
-    static func remove() -> Bool { AppKeychain.remove(service: "hotspot", account: "fallback") }
+    static func remove() -> Bool {
+        if let account = account(),
+            !AppKeychain.remove(service: credentialService, account: account)
+        {
+            return false
+        }
+        let removedReference = AppKeychain.remove(service: "hotspot", account: "reference")
+        let removedLegacy = AppKeychain.remove(service: "hotspot", account: "fallback")
+        return removedReference && removedLegacy
+    }
 }
 
 enum UpdatePreferences {
     struct Receipt: Equatable, Sendable {
         fileprivate let account: String
         fileprivate let label: String
+        fileprivate var requester: ProcessIdentity? = nil
+
+        var requesterIsStillRunning: Bool { requester?.isAlive == true }
     }
 
     struct BackupReceipt: Equatable, Sendable {
@@ -414,14 +459,19 @@ enum UpdatePreferences {
         guard let item = try AppKeychain.item(service: "updates", account: account) else {
             return nil
         }
-        guard item.data == Data([1]) else { throw CocoaError(.fileReadCorruptFile) }
-        return Receipt(account: account, label: item.label)
+        guard item.data.count <= 1_024 else { throw CocoaError(.fileReadCorruptFile) }
+        let requester =
+            item.data == Data([1])
+            ? nil : try JSONDecoder().decode(ProcessIdentity.self, from: item.data)
+        return Receipt(account: account, label: item.label, requester: requester)
     }
 
     static func requestHelperRecovery() throws -> Receipt {
         let account = "helper-recovery"
-        let label = try AppKeychain.reserve(Data([1]), service: "updates", account: account)
-        return Receipt(account: account, label: label)
+        let requester = try ProcessIdentity.current()
+        let label = try AppKeychain.reserve(
+            JSONEncoder().encode(requester), service: "updates", account: account)
+        return Receipt(account: account, label: label, requester: requester)
     }
 
     static func readBackup() throws -> BackupReceipt? {
@@ -477,6 +527,14 @@ enum UpdatePreferences {
         if location.authorizationStatus == .notDetermined {
             location.requestWhenInUseAuthorization()
         }
+    }
+
+    func connectedAccessPoint(named name: String) -> String? {
+        requestLocationAccess()
+        guard let interface = CWWiFiClient.shared().interface(),
+            interface.ssidData() == Data(name.utf8)
+        else { return nil }
+        return interface.bssid()
     }
 
     func update(eligible: Bool, confirmSession: (@Sendable () async -> Bool)? = nil) {
@@ -545,7 +603,7 @@ enum UpdatePreferences {
                 let name = Data(network.ssid.utf8)
                 let nearby = try interface.scanForNetworks(withSSID: name)
                 let matches = nearby.filter {
-                    $0.ssidData == name
+                    network.matches(ssidData: $0.ssidData, bssid: $0.bssid)
                         && ($0.supportsSecurity(.wpa2Personal)
                             || $0.supportsSecurity(.wpa3Personal))
                 }

@@ -51,12 +51,23 @@ public enum SudoInstallation {
         else {
             throw HelperInstallationError.invalidBundle
         }
-        let bundle = Bundle.main.bundleURL.appendingPathComponent(LimitlessIdentity.sudoBundlePath)
+        let source = Bundle.main.bundleURL.appendingPathComponent(LimitlessIdentity.sudoBundlePath)
+        let bundle = try PrivateApplicationLaunch.copy(source)
+        var running: NSRunningApplication?
+        defer {
+            if running?.isTerminated != false {
+                PrivateApplicationLaunch.remove(bundle)
+            }
+        }
         try verifyBundle(bundle, identity: identity, build: build)
+        try InstalledCLI.requirePrivatePath(
+            bundle.appendingPathComponent("Contents/MacOS/LimitlessSudo"), regularFile: true)
         let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
         configuration.arguments = [register ? "--register" : "--unregister"]
         let app = try await NSWorkspace.shared.openApplication(
             at: bundle, configuration: configuration)
+        running = app
         let deadline = ContinuousClock.now.advanced(by: .seconds(120))
         while !app.isTerminated, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(250))

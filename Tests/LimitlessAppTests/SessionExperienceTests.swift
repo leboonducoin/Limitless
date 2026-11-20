@@ -84,6 +84,29 @@ private func protection(
     #expect(MenuBarTime.panelDuration(.infinity) == "Time unavailable")
 }
 
+@Test @MainActor func displaySleepMuteDoesNotEnableLidClosedMute() throws {
+    let domain = "Limitless.audio-choice-test.\(UUID())"
+    let preferences = try #require(UserDefaults(suiteName: domain))
+    defer { preferences.removePersistentDomain(forName: domain) }
+    preferences.set(true, forKey: "muteWhenScreenSleeps")
+    let model = AppModel(preferences: preferences)
+    #expect(model.muteWhenScreenSleeps)
+    #expect(!model.muteWithClosedLid)
+    model.muteWithClosedLid = true
+    #expect(AppModel(preferences: preferences).muteWithClosedLid)
+}
+
+@Test func hotspotMatchingRequiresTheSavedNameAndAccessPoint() {
+    let network = HotspotCredentials.Network(
+        ssid: "Test fixture", bssid: "0A:10:20:30:40:50", password: "fixture-password")
+    let name = Data("Test fixture".utf8)
+    #expect(network.isValid)
+    #expect(network.matches(ssidData: name, bssid: "0A:10:20:30:40:50"))
+    #expect(!network.matches(ssidData: name, bssid: nil))
+    #expect(!network.matches(ssidData: name, bssid: "0a:10:20:30:40:51"))
+    #expect(!network.matches(ssidData: nil, bssid: "0a:10:20:30:40:50"))
+}
+
 #if DEBUG
     @Test(arguments: [SessionKind.agent, SessionKind.task])
     @MainActor func manualControlsAreAvailableDuringAutomatedProtection(_ kind: SessionKind) throws
@@ -234,6 +257,7 @@ private actor AssociationPermission {
     let legacy = try JSONDecoder().decode(HotspotCredentials.Network.self, from: data)
     #expect(legacy.isValid)
     #expect(legacy.automaticJoin != true)
+    #expect(!legacy.matches(ssidData: Data("Test network".utf8), bssid: nil))
 }
 
 @Test func hotspotRechecksTheAuthenticatedSessionAfterScanning() async throws {

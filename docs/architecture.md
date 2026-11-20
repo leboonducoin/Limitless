@@ -57,12 +57,12 @@ It honors an observed manual unmute until the next wake or session. An ambiguous
 recovery record needs manual attention. Keyboard backlighting and Low Power Mode
 remain under macOS control. Apple's public Low Power Mode API only reads state.
 
-Optional hotspot fallback runs in the user app. It reads credentials from the
-login Keychain, where it also stores permission to join automatically. Credentials
-without explicit approval stay inactive. It looks for one exact WPA2 or WPA3
-Personal match after a network
-outage. It rechecks eligibility before joining. CoreWLAN association already in
-progress completes under macOS control.
+Optional hotspot fallback runs in the user app. The Mac must be connected to the
+hotspot when it is saved. Limitless creates a fresh login Keychain item for the
+password, Wi-Fi identifiers and automatic-join permission. It looks for one WPA2 or
+WPA3 Personal network with the saved name and access point identifier. If that identifier
+changes, connect and save the hotspot again. Limitless rechecks session eligibility
+before association. An association in progress completes under macOS control.
 
 Only owned state is restored. A protected root journal records ownership before
 changes and survives interruption; invalid files fail closed. Competing privileged
@@ -116,7 +116,8 @@ count. Invalid persisted counters are discarded. Background errors stay quiet. N
 is needed or stored.
 
 Updates verify archive bounds, SHA-256, source metadata and all five executable
-signatures, including the sudo component and helper. They retain quarantine and a rollback
+signatures, including the sudo component and helper. Limitless verifies and launches update
+and Touch ID executables from a private copy. Updates retain quarantine and a rollback
 backup until the replacement starts and verifies the required helper. If the existing
 installation cannot be replaced by the current user, the app offers the release download.
 Removal closes admission,
@@ -127,7 +128,8 @@ before cleanup and again before recycling. Sudo cleanup runs in its own helper b
 removing its service; updates preserve the setting. Update preparation can be cancelled by the
 same console user while the power helper's recovery record is still intact. An update records
 whether the power helper was enabled, restores it after relaunch and retries from the previous
-app if opening the replacement fails. Uninstall confirms normal sleep before handling audio
+app if opening the replacement fails. Another app instance leaves recovery to the recorded
+update process while that process is alive. Uninstall confirms normal sleep before handling audio
 restoration or Keychain cleanup. A failed power-helper preflight can reopen admission after
 confirmed restoration. Preparation ends on a console user change. Once system removal starts,
 admission stays closed until cleanup completes. Failed cleanup stays visible and retryable.

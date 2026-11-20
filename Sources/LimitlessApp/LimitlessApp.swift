@@ -45,6 +45,7 @@ enum LimitlessApp {
                         throw error
                     }
                     try? FileManager.default.removeItem(at: installed.staging)
+                    GitHubUpdate.retireInstallerCopy()
                     exit(0)
                 } catch {
                     let configuration = NSWorkspace.OpenConfiguration()

@@ -18,7 +18,7 @@
 - Critical thermal state ends protection and blocks new starts until macOS reports that it has cooled. Battery cutoffs and session deadlines continue to apply.
 - Keep the display awake or let it sleep during a session. Limitless distinguishes a closed lid with an external display from a closed lid without one.
 - Opt in to muting audio when the display sleeps or when the lid closes without an external screen. Limitless restores the mute it applied to the original output and preserves a mute you set yourself.
-- Enable optional iPhone hotspot fallback for a specific password-protected network. Credentials stay in the local Keychain. Limitless checks that the session is still eligible before scanning and again before joining.
+- Enable optional iPhone hotspot fallback for a specific password-protected network. Connect to the hotspot once to save its access point. Credentials stay in the local Keychain. Limitless checks that the session is still eligible before scanning and again before joining.
 - Out-of-range timer values are rejected before a session starts, and old out-of-range values can be displayed safely.
 
 ### CLI and AI integrations
@@ -44,6 +44,7 @@
 - Add regression tests for session ownership and timing, thermal limits, hotspot cancellation, audio restoration, and update recovery. CI checks Swift compilation, sanitizers, dependencies, workflows, and secrets.
 - Add an interactive demo and GitHub workflows that attest inert preview archives and verified distribution packages.
 - Pin release packaging to the project's Apple Developer Team. Reject unsupported PAM file bytes before changing Touch ID for sudo.
+- Verify update and Touch ID components in private copies before launching them. Verify signed archives and their checksums again after export.
 
 ## 1.1.0 — 2026-10-21
 

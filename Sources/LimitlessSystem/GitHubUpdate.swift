@@ -509,8 +509,17 @@ public enum GitHubUpdate {
         }
     }
 
-    public static func launchInstaller(_ staged: Staged) throws {
-        guard let executable = Bundle.main.executableURL else { throw UpdateError.failed }
+    public static func launchInstaller(_ staged: Staged, identity: SignedIdentity) throws {
+        let bundle = try PrivateApplicationLaunch.copy(installedApplication)
+        var launched = false
+        defer {
+            if !launched {
+                PrivateApplicationLaunch.remove(bundle)
+            }
+        }
+        try requireCurrentApplication(bundle, identity: identity)
+        let executable = bundle.appendingPathComponent("Contents/MacOS/LimitlessApp")
+        try InstalledCLI.requirePrivatePath(executable, regularFile: true)
         let child = Process()
         child.executableURL = executable
         child.arguments = ["--finish-update", staged.app.path, String(getpid())]
@@ -518,6 +527,11 @@ public enum GitHubUpdate {
         child.standardOutput = FileHandle.nullDevice
         child.standardError = FileHandle.nullDevice
         try child.run()
+        launched = true
+    }
+
+    public static func retireInstallerCopy() {
+        PrivateApplicationLaunch.remove(Bundle.main.bundleURL)
     }
 
     static func previousBackupURL(named name: String, in directory: URL) throws -> URL {

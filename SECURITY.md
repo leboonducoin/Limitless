@@ -15,9 +15,9 @@ There is no analytics or task-content collection. Update requests go to GitHub;
 downloaded apps must pass integrity and publisher-signature checks. macOS opening
 approvals remain in place.
 
-The optional iPhone hotspot stores only its network name and password in the
-local Keychain. The menu app requests Location Services to read Wi-Fi network names.
-Neither credential appears in diagnostics.
+The optional iPhone hotspot stores the network name, access point identifier,
+password and join preference in the local Keychain. The menu app requests Location
+Services to read the Wi-Fi identifiers. None of this data appears in diagnostics.
 
 Updates are installed only while idle. Uninstall restores sleep before removing
 the helper. If restoration fails, the app keeps the information needed to retry.

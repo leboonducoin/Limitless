@@ -150,7 +150,7 @@ struct SettingsView: View {
                         )
                         .disabled(!model.hotspotConfigured || model.isPreview)
                         Text(
-                            "During a session, after at least 30 seconds offline. Wi-Fi names require Location Services."
+                            "Connect to your iPhone hotspot to save it. Fallback starts after 30 seconds offline during a session."
                         )
                         .font(.caption).foregroundStyle(.secondary)
                         TextField("Hotspot name", text: hotspotName.projectedValue)

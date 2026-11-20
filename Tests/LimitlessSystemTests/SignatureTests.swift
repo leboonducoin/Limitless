@@ -5,6 +5,22 @@ import Testing
 
 @testable import LimitlessSystem
 
+@Test func privateLaunchCopiesAreIndependentAndOwnedByTheUser() throws {
+    let files = FileManager.default
+    let input = files.temporaryDirectory.appendingPathComponent("\(UUID()).app")
+    try files.createDirectory(at: input, withIntermediateDirectories: false)
+    defer { try? files.removeItem(at: input) }
+    let marker = input.appendingPathComponent("fixture")
+    try Data([1]).write(to: marker)
+    let copy = try PrivateApplicationLaunch.copy(input)
+    let directory = copy.deletingLastPathComponent()
+    defer { PrivateApplicationLaunch.remove(copy) }
+    let attributes = try files.attributesOfItem(atPath: directory.path)
+    #expect(attributes[.posixPermissions] as? Int == 0o700)
+    try Data([2]).write(to: marker)
+    #expect(try Data(contentsOf: copy.appendingPathComponent("fixture")) == Data([1]))
+}
+
 @Test func systemChangesRejectMissingOrMalformedAdministratorApproval() throws {
     for operation in [
         ServiceOperation.prepareRemoval, .prepareUpdate, .finishRemoval, .installCLI,

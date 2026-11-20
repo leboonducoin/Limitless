@@ -170,7 +170,7 @@ import UserNotifications
         self.muteWhenScreenSleeps = muteWhenScreenSleeps
         muteWithClosedLid =
             preferences.object(forKey: "muteWithClosedLid") as? Bool
-            ?? muteWhenScreenSleeps
+            ?? false
         hotspotConfigured = false
         hotspotEnabled = false
         let authentication = LAContext()
@@ -232,6 +232,7 @@ import UserNotifications
 
     func restoreUpdateHelperIfNeeded(confirmReady: (() async -> Bool)? = nil) async {
         guard updateRecoveryReadable, updateHelperRecoveryPending, trustedBuild, !isPreview,
+            updateHelperRecoveryReceipt?.requesterIsStillRunning != true,
             let helper
         else { return }
         do {
@@ -588,7 +589,7 @@ import UserNotifications
                 await refresh()
                 return
             }
-            try GitHubUpdate.launchInstaller(candidate)
+            try GitHubUpdate.launchInstaller(candidate, identity: identity)
             launched = true
             NSApp.terminate(nil)
         } catch {
@@ -761,8 +762,12 @@ import UserNotifications
 
     func saveHotspot(name: String, password: String) -> Bool {
         guard trustedBuild, !isPreview else { return false }
+        guard let accessPoint = hotspot.connectedAccessPoint(named: name) else {
+            message = "Connect to your iPhone hotspot and allow Location Services before saving."
+            return false
+        }
         let network = HotspotCredentials.Network(
-            ssid: name, password: password, automaticJoin: hotspotEnabled)
+            ssid: name, bssid: accessPoint, password: password, automaticJoin: hotspotEnabled)
         guard network.isValid else {
             message = "Enter your hotspot name and its password (at least eight characters)."
             return false
@@ -787,7 +792,9 @@ import UserNotifications
         }
         guard let network = HotspotCredentials.read(),
             HotspotCredentials.save(
-                .init(ssid: network.ssid, password: network.password, automaticJoin: enabled))
+                .init(
+                    ssid: network.ssid, bssid: network.bssid, password: network.password,
+                    automaticJoin: enabled))
         else {
             message =
                 enabled
