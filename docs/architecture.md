@@ -66,8 +66,8 @@ before association. An association in progress completes under macOS control.
 
 Only owned state is restored. A protected root journal records ownership before
 changes and survives interruption; invalid files fail closed. Competing privileged
-tools can still change the global flag. Ordinary restart requests can be deferred
-while the app is active; forced restarts remain outside its control.
+tools can still change the global flag. Only a manual session can defer an ordinary
+restart or shutdown. Forced restarts remain outside the app's control.
 
 ## Trust and files
 

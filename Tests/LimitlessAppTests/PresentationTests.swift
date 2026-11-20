@@ -49,15 +49,29 @@ private final class MockUpdateHelper: @unchecked Sendable, HelperInstallation {
     #expect(!AppDelegate.isSystemRestart(NSAppleEventDescriptor(string: "restart")))
 }
 
-@Test @MainActor func restartDeferralEndsWithTheLastLiveProtectedSession() {
-    #expect(AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: [120]))
-    #expect(AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: [0, nil]))
-    #expect(!AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: [0]))
-    #expect(!AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: []))
+@Test @MainActor func onlyALiveManualSessionCanDeferAnOrdinaryRestart() {
+    func session(_ kind: SessionKind, remaining: TimeInterval?, suspended: Bool = false)
+        -> SessionSummary
+    {
+        SessionSummary(
+            id: UUID(), kind: kind, end: .unlimited, startedAt: .distantPast,
+            remainingSeconds: remaining, suspension: suspended ? .powerSource : nil,
+            belongsToClient: kind == .manual)
+    }
+    func deferred(_ sessions: [SessionSummary], while state: PowerPresentation? = .active) -> Bool {
+        AppDelegate.shouldDeferRestart(
+            presentation: state, sessions: sessions, remaining: { $0.remainingSeconds })
+    }
+    #expect(deferred([session(.manual, remaining: 120)]))
+    #expect(deferred([session(.manual, remaining: 0), session(.manual, remaining: nil)]))
+    #expect(!deferred([session(.manual, remaining: 0)]))
+    #expect(!deferred([session(.manual, remaining: nil, suspended: true)]))
+    #expect(!deferred([session(.agent, remaining: nil), session(.task, remaining: 120)]))
+    #expect(!deferred([]))
     for state: PowerPresentation? in [
         nil, .inactive, .suspended, .recovering, .restoring, .attention, .unknown,
     ] {
-        #expect(!AppDelegate.shouldDeferRestart(presentation: state, remainingSessions: [120]))
+        #expect(!deferred([session(.manual, remaining: 120)], while: state))
     }
 }
 

@@ -36,6 +36,7 @@
 - Restore normal sleep during uninstall before handling audio or Keychain errors. Existing external Touch ID settings are preserved during uninstall.
 - Uninstall requires confirmation in the menu. The helpers verify macOS administrator approval before removing system components, granting CLI access, or changing Touch ID for sudo.
 - Reserve space for app controls even when many CLI or agent tasks connect.
+- Automated sessions yield to an ordinary macOS restart or shutdown.
 - Install a protected CLI per account when the shared application or command directories are writable. Use **Migrate CLI & agent hooks…** in Options to retire the old shortcut and update Limitless hooks in that account.
 - Keep hotspot consent with the saved credential in Keychain. Preserve the access restrictions on agent settings and avoid copying extra files into the release.
 - Stop ends the session and withdraws CLI and agent approval. Re-enable CLI access in Options to start new automated work.

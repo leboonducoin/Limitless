@@ -1,6 +1,7 @@
 import AppKit
 import Carbon
 import Darwin
+import LimitlessCore
 import LimitlessSystem
 import Observation
 import SwiftUI
@@ -504,11 +505,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         Task {
             if !model.isPreview && Self.isSystemRestart(quitEvent) {
                 await model.refresh()
-                let remaining =
-                    model.status?.sessions.filter { $0.suspension == nil }
-                    .map { model.remainingSeconds($0) } ?? []
                 if Self.shouldDeferRestart(
-                    presentation: model.presentation, remainingSessions: remaining)
+                    presentation: model.presentation, sessions: model.status?.sessions ?? [],
+                    remaining: model.remainingSeconds)
                 {
                     model.message = "Restart postponed. Stop Limitless before restarting your Mac."
                     terminating = false
@@ -542,9 +541,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     }
 
     static func shouldDeferRestart(
-        presentation: PowerPresentation?, remainingSessions: [TimeInterval?]
+        presentation: PowerPresentation?, sessions: [SessionSummary],
+        remaining: (SessionSummary) -> TimeInterval?
     ) -> Bool {
-        presentation == .active && remainingSessions.contains { $0 == nil || $0! > 0 }
+        presentation == .active
+            && sessions.contains {
+                $0.kind == .manual && $0.suspension == nil && (remaining($0).map { $0 > 0 } ?? true)
+            }
     }
 }
 
