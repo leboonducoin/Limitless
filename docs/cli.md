@@ -22,12 +22,11 @@ account. Pause scripts that use the old shared `limitless` command. Keep
 them closed while you install and open the new app.
 
 In each affected account, open **Options**. If **Migrate CLI & agent hooks…**
-appears, use it to retire any unsafe shortcut and migrate the hooks installed
-by Limitless. Wait for migration to finish before restarting your agents or
-resuming scripts. Use the private CLI path above. If the migration button does not
-appear, rerun setup for each provider
-using the verified CLI before restarting it. For hooks or scripts configured
-manually, update their command paths before running them again.
+appears, use it to migrate the managed skill and existing Limitless hooks, and
+retire any unsafe shortcut. Wait for migration to finish before restarting your
+agents or resuming scripts. Update manually configured hooks and scripts to use
+the private CLI path above. Run setup with that CLI if you want Limitless to
+install the provider's standard hooks.
 
 ## Terminal
 

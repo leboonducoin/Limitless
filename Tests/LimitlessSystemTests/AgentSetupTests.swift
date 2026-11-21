@@ -92,7 +92,7 @@ import Testing
         at: privateResources.deletingLastPathComponent(), withIntermediateDirectories: true)
     try FileManager.default.copyItem(at: resources, to: privateResources)
     for provider in try AgentSetup.legacyProviders(home: home) {
-        try AgentSetup.configure(provider, home: home, resources: privateResources)
+        try AgentSetup.migrateLegacy(provider, resources: privateResources, home: home)
         let skillRoot = provider == "codex" ? ".agents" : ".\(provider)"
         let skill = home.appendingPathComponent(skillRoot + "/skills/limitless/SKILL.md")
         let content = try String(contentsOf: skill, encoding: .utf8)
@@ -105,6 +105,42 @@ import Testing
         #expect(try AgentSetup.isCurrent(provider, home: home, resources: privateResources))
     }
     #expect(try AgentSetup.legacyProviders(home: home).isEmpty)
+}
+
+@Test(arguments: [false, true])
+func legacySkillMigrationPreservesMissingAndUnrelatedHooks(_ keepConfig: Bool) throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let resources = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+            "skills/limitless")
+    let privateResources = InstalledCLI.privateApplication(in: home)
+        .appendingPathComponent("Contents/Resources/limitless-skill")
+    try AgentSetup.configure("codex", home: home, resources: resources)
+    try FileManager.default.createDirectory(
+        at: privateResources.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try FileManager.default.copyItem(at: resources, to: privateResources)
+    let skill = home.appendingPathComponent(".agents/skills/limitless/SKILL.md")
+    try Data("Use `limitless status` to check the session.\n".utf8).write(to: skill)
+    let config = home.appendingPathComponent(".codex/hooks.json")
+    let other = Data(#"{"hooks":{"Stop":[{"hooks":[{"command":"my-local-check"}]}]}}"#.utf8)
+    if keepConfig {
+        try other.write(to: config)
+    } else {
+        try FileManager.default.removeItem(at: config.deletingLastPathComponent())
+    }
+
+    #expect(try AgentSetup.legacyProviders(home: home) == ["codex"])
+    try AgentSetup.migrateLegacy("codex", resources: privateResources, home: home)
+    try AgentSetup.migrateLegacy("codex", resources: privateResources, home: home)
+    #expect(try AgentSetup.legacyProviders(home: home).isEmpty)
+    let text = try String(contentsOf: skill, encoding: .utf8)
+    #expect(text.contains("'\(InstalledCLI.privateExecutable(in: home).path)'"))
+    if keepConfig {
+        #expect(try Data(contentsOf: config) == other)
+    } else {
+        #expect(!FileManager.default.fileExists(atPath: config.deletingLastPathComponent().path))
+    }
 }
 
 @Test(arguments: AgentSetup.providers)
