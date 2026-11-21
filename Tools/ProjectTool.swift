@@ -481,6 +481,16 @@ func materializeSigningSource(_ revision: String, in workspace: URL) throws -> U
     return source
 }
 
+func verifiedReleaseProducts(_ path: String, in workspace: URL) throws -> URL {
+    let products = URL(fileURLWithPath: path, isDirectory: true).resolvingSymlinksInPath()
+    let build = workspace.appendingPathComponent("Build", isDirectory: true)
+        .resolvingSymlinksInPath()
+    try require(
+        products.path.hasPrefix(build.path + "/"),
+        "Release products must be inside the private signing workspace.")
+    return products
+}
+
 func selfTest(developmentApp: URL? = nil) throws {
     let signingWorkspace = try privateDistributionWorkspace()
     defer { try? FileManager.default.removeItem(at: signingWorkspace) }
@@ -509,6 +519,16 @@ func selfTest(developmentApp: URL? = nil) throws {
         } catch {}
         try require(!accepted, "Self-test accepted an invalid release input.")
     }
+    let products = signingWorkspace.appendingPathComponent("Build/Products", isDirectory: true)
+    try FileManager.default.createDirectory(at: products, withIntermediateDirectories: true)
+    let systemAlias = products.path.replacingOccurrences(
+        of: "/private/tmp/", with: "/tmp/", options: .anchored)
+    let resolvedProducts = products.resolvingSymlinksInPath()
+    try require(
+        try verifiedReleaseProducts(products.path, in: signingWorkspace) == resolvedProducts
+            && verifiedReleaseProducts(systemAlias, in: signingWorkspace) == resolvedProducts,
+        "Release products must verify through both system temporary-directory paths.")
+    try rejects { _ = try verifiedReleaseProducts(snapshot.path, in: signingWorkspace) }
     let digest = SHA256.hash(data: Data("abc".utf8)).map { String(format: "%02x", $0) }.joined()
     try require(
         digest == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
@@ -883,18 +903,16 @@ do {
             "/usr/bin/xcrun",
             ["swift", "build", "-c", configuration] + architectures + buildPath + compilerFlags,
             environment: buildEnvironment)
-        let binaryPath = try run(
+        let reportedBinaryPath = try run(
             "/usr/bin/xcrun",
             ["swift", "build", "-c", configuration, "--show-bin-path"] + architectures + buildPath
                 + compilerFlags,
             capture: true, environment: buildEnvironment)
-        if let signingWorkspace {
-            let products = URL(fileURLWithPath: binaryPath).resolvingSymlinksInPath()
-            let build = signingWorkspace.appendingPathComponent("Build", isDirectory: true)
-            try require(
-                products.path.hasPrefix(build.path + "/"),
-                "Release products must be inside the private signing workspace.")
-        }
+        let binaryPath =
+            try signingWorkspace.map {
+                try verifiedReleaseProducts(reportedBinaryPath, in: $0).path
+            }
+            ?? reportedBinaryPath
         let version = info["CFBundleShortVersionString"] as? String ?? ""
         if preview {
             let modules =
