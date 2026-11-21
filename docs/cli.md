@@ -3,7 +3,8 @@
 Move Limitless to Applications and enable **Allow CLI & AI tasks** under **Options**.
 Approve the macOS prompt. A protected system installation exposes `limitless`
 directly. If the app or command directories are writable by a local account,
-Limitless installs a verified private copy for your account. Use its path in the
+Limitless installs a verified private copy for your account on a local volume
+that enforces file ownership. Use its path in the
 commands below or define an alias for this shell:
 
 ```sh

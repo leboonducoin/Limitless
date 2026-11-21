@@ -143,9 +143,13 @@ public enum InstalledCLI {
         func validate(_ fd: Int32, isFile: Bool) throws {
             var info = stat()
             guard fstat(fd, &info) == 0 else { throw JournalError.system(errno) }
+            var volume = statfs()
+            guard fstatfs(fd, &volume) == 0 else { throw JournalError.system(errno) }
             guard info.st_uid == owner || (allowRootAncestors && info.st_uid == 0),
                 info.st_mode & 0o022 == 0,
-                info.st_mode & S_IFMT == (isFile ? S_IFREG : S_IFDIR)
+                info.st_mode & S_IFMT == (isFile ? S_IFREG : S_IFDIR),
+                volume.f_flags & UInt32(MNT_LOCAL) != 0,
+                volume.f_flags & UInt32(MNT_IGNORE_OWNERSHIP) == 0
             else { throw JournalError.insecureDirectory }
             try SecureOwnershipJournal.rejectWriteGrantingAccess(fd)
         }

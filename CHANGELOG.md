@@ -24,6 +24,7 @@ before installing 1.2.
 - Keep the display awake or let it sleep during a session. Limitless distinguishes a closed lid with an external display from a closed lid without one.
 - Opt in to muting audio when the display sleeps or when the lid closes without an external screen. Limitless restores the mute it applied to the original output and preserves a mute you set yourself.
 - Enable optional iPhone hotspot fallback for a specific password-protected network. Connect to the hotspot once to save its access point. Credentials stay in the local Keychain. Limitless checks that the session is still eligible before scanning and again before joining.
+- Remember the hotspot’s Wi-Fi security mode at setup and reject weaker modes. If you saved the hotspot with an older build, reconnect and save it again to enable fallback.
 - Out-of-range timer values are rejected before a session starts, and old out-of-range values can be displayed safely.
 
 ### CLI and AI integrations
@@ -50,6 +51,7 @@ before installing 1.2.
 - Keep hotspot fallback paused across relaunches if Keychain cannot yet save your request to turn it off.
 - Stop ends the session and withdraws CLI and agent approval. Re-enable CLI access in Options to start new automated work.
 - Preserve your automatic-update choice in Keychain when you re-enable the helper. Review your automatic-update preference after upgrading from an older release.
+- Keep automatic updates paused across relaunches while an opt-out is waiting to be stored in Keychain.
 - Respect the choice to disable launch at login. If you quit during helper approval, you can enable launch at login separately in Options.
 - Add regression tests for session ownership and timing, thermal limits, hotspot cancellation, audio restoration, and update recovery. CI checks Swift compilation, sanitizers, dependencies, workflows, and secrets.
 - Add an interactive demo and GitHub workflows that attest inert preview archives and verified distribution packages.

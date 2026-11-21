@@ -1,3 +1,4 @@
+import CoreWLAN
 import Foundation
 import LimitlessCore
 import LimitlessSystem
@@ -105,6 +106,40 @@ private func protection(
     model.pauseHotspotForWithdrawal()
     let freshPreferences = try #require(UserDefaults(suiteName: domain))
     #expect(AppModel(preferences: freshPreferences).hotspotWithdrawalPending)
+}
+
+@Test @MainActor func pendingAutomaticUpdateWithdrawalSurvivesRelaunch() throws {
+    let domain = "Limitless.automatic-update-withdrawal-test.\(UUID())"
+    let preferences = try #require(UserDefaults(suiteName: domain))
+    defer { preferences.removePersistentDomain(forName: domain) }
+    let model = AppModel(preferences: preferences)
+    #expect(!model.automaticUpdateWithdrawalPending)
+    model.pauseAutomaticUpdatesForWithdrawal()
+    let freshPreferences = try #require(UserDefaults(suiteName: domain))
+    #expect(AppModel(preferences: freshPreferences).automaticUpdateWithdrawalPending)
+}
+
+@Test func hotspotFallbackRejectsDowngradesFromSavedSecurity() throws {
+    let wpa2: Set<CWSecurity> = [.wpa2Personal]
+    let transition: Set<CWSecurity> = [.wpa2Personal, .wpa3Personal, .wpa3Transition]
+    let wpa3: Set<CWSecurity> = [.wpa3Personal]
+    let legacy: Set<CWSecurity> = [.wpaPersonalMixed, .wpa2Personal]
+    let mode: (CWSecurity) -> HotspotCredentials.SecurityMode? = HotspotCredentials.SecurityMode
+        .init
+    #expect(mode(.unknown) == nil)
+    #expect(mode(.wpa3Personal)?.accepts(wpa2.contains) == false)
+    #expect(mode(.wpa3Personal)?.accepts(transition.contains) == false)
+    #expect(mode(.wpa3Personal)?.accepts(wpa3.contains) == true)
+    #expect(mode(.wpa3Transition)?.accepts(wpa2.contains) == false)
+    #expect(mode(.wpa3Transition)?.accepts(transition.contains) == true)
+    #expect(mode(.wpa2Personal)?.accepts(wpa2.contains) == true)
+    #expect(mode(.wpa2Personal)?.accepts(legacy.contains) == false)
+    let old = Data(
+        #"{"ssid":"Fixture","bssid":"0a:10:20:30:40:50","password":"fixture-test","automaticJoin":true}"#
+            .utf8)
+    let restored = try JSONDecoder().decode(HotspotCredentials.Network.self, from: old)
+    #expect(restored.securityMode == nil)
+    #expect(!restored.allowsAutomaticJoin)
 }
 
 @Test func hotspotMatchingRequiresTheSavedNameAndAccessPoint() {

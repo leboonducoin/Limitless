@@ -26,6 +26,7 @@ import UserNotifications
     }
     private static let sessionNotificationsKey = "sessionNotifications"
     private static let hotspotWithdrawalKey = "hotspotWithdrawalPending"
+    private static let updateWithdrawalKey = "automaticUpdateWithdrawalPending"
 
     private(set) var status: ServiceStatus?
     private(set) var busy = false
@@ -53,6 +54,9 @@ import UserNotifications
         didSet {
             if !isPreview, automaticUpdates { requestAutomaticUpdateIfReady() }
         }
+    }
+    var automaticUpdateWithdrawalPending: Bool {
+        preferences.bool(forKey: Self.updateWithdrawalKey)
     }
     private var updatesConsentRecorded = false
     private var pendingLoginSetup = false
@@ -202,13 +206,10 @@ import UserNotifications
         buildTrust = identity == nil ? .untrusted : .trusted
         if trustedBuild, let network = HotspotCredentials.read() {
             hotspotConfigured = true
-            hotspotEnabled = network.automaticJoin == true
+            hotspotEnabled = network.allowsAutomaticJoin
         }
         if trustedBuild {
-            if let enabled = UpdatePreferences.readConsent() {
-                updatesConsentRecorded = true
-                automaticUpdates = enabled
-            }
+            restoreAutomaticUpdateConsent()
             if let schedule = UpdatePreferences.readSchedule() { updateSchedule = schedule }
             persistsUpdateState = true
             await readUpdateRecovery()
@@ -562,7 +563,9 @@ import UserNotifications
 
     @discardableResult
     func requestAutomaticUpdateIfReady() -> Bool {
-        guard automaticUpdates, availableUpdate != nil, canInstallAvailableUpdate() else {
+        guard automaticUpdates, !automaticUpdateWithdrawalPending, availableUpdate != nil,
+            canInstallAvailableUpdate()
+        else {
             return false
         }
         return requestUpdate()
@@ -797,12 +800,14 @@ import UserNotifications
     func saveHotspot(name: String, password: String) -> Bool {
         guard trustedBuild, !isPreview else { return false }
         guard let accessPoint = hotspot.connectedAccessPoint(named: name) else {
-            message = "Connect to your iPhone hotspot and allow Location Services before saving."
+            message =
+                "Connect to your protected iPhone hotspot and allow Location Services before saving."
             return false
         }
         let network = HotspotCredentials.Network(
-            ssid: name, bssid: accessPoint, password: password,
-            automaticJoin: hotspotEnabled && !hotspotWithdrawalPending)
+            ssid: name, bssid: accessPoint.bssid, password: password,
+            automaticJoin: hotspotEnabled && !hotspotWithdrawalPending,
+            securityMode: accessPoint.security)
         guard network.isValid else {
             message = "Enter your hotspot name and its password (at least eight characters)."
             return false
@@ -812,22 +817,27 @@ import UserNotifications
             return false
         }
         hotspotConfigured = true
-        hotspotEnabled = network.automaticJoin == true
+        hotspotEnabled = network.allowsAutomaticJoin
         hotspotWithdrawalPending = false
         hotspot.update(eligible: false)
         updateEnvironment()
-        message = "Hotspot details saved in Keychain."
+        reportHotspotSave(success: "Hotspot details saved in Keychain.")
         return true
     }
 
     func setHotspotEnabled(_ enabled: Bool) {
         guard trustedBuild, !isPreview, hotspotConfigured else { return }
         if !enabled { pauseHotspotForWithdrawal() }
-        guard let network = HotspotCredentials.read(),
+        let saved = HotspotCredentials.read()
+        if enabled, let saved, saved.securityMode == nil {
+            message = "Reconnect to your iPhone hotspot and save it again before enabling fallback."
+            return
+        }
+        guard let network = saved,
             HotspotCredentials.save(
                 .init(
                     ssid: network.ssid, bssid: network.bssid, password: network.password,
-                    automaticJoin: enabled))
+                    automaticJoin: enabled, securityMode: network.securityMode))
         else {
             message =
                 enabled
@@ -839,6 +849,14 @@ import UserNotifications
         hotspotEnabled = enabled
         if enabled { hotspot.requestLocationAccess() }
         updateEnvironment()
+        reportHotspotSave(success: nil)
+    }
+
+    private func reportHotspotSave(success: String?) {
+        message =
+            HotspotCredentials.removeLegacy()
+            ? success
+            : "Hotspot settings saved. Unlock Keychain and save again to remove the old password."
     }
 
     func forgetHotspot() {
@@ -1188,14 +1206,7 @@ import UserNotifications
             }
             try await helper.register()
             pendingLoginSetup = true
-            if !updatesConsentRecorded {
-                if let enabled = UpdatePreferences.initializeConsent() {
-                    updatesConsentRecorded = true
-                    automaticUpdates = enabled
-                } else {
-                    updateMessage = "Unlock Keychain to restore your automatic-update setting."
-                }
-            }
+            if !updatesConsentRecorded { restoreAutomaticUpdateConsent(initializeIfMissing: true) }
         } catch UpdateError.busy {
             message = "Another Limitless instance is updating."
         } catch {
@@ -1236,17 +1247,39 @@ import UserNotifications
         try register()
     }
 
+    private func restoreAutomaticUpdateConsent(initializeIfMissing: Bool = false) {
+        if automaticUpdateWithdrawalPending {
+            setAutomaticUpdates(false)
+            return
+        }
+        let saved =
+            initializeIfMissing
+            ? UpdatePreferences.initializeConsent() : UpdatePreferences.readConsent()
+        if let saved {
+            updatesConsentRecorded = true
+            automaticUpdates = saved
+        } else if initializeIfMissing {
+            updateMessage = "Unlock Keychain to restore your automatic-update setting."
+        }
+    }
+
+    func pauseAutomaticUpdatesForWithdrawal() {
+        preferences.set(true, forKey: Self.updateWithdrawalKey)
+        automaticUpdates = false
+    }
+
     func setAutomaticUpdates(_ enabled: Bool) {
         if isPreview {
             automaticUpdates = enabled
             return
         }
         guard trustedBuild else { return }
+        if !enabled { pauseAutomaticUpdatesForWithdrawal() }
         guard UpdatePreferences.saveConsent(enabled) else {
-            if !enabled { automaticUpdates = false }
             updateMessage = "The update setting could not be saved. Unlock Keychain and try again."
             return
         }
+        preferences.removeObject(forKey: Self.updateWithdrawalKey)
         updatesConsentRecorded = true
         automaticUpdates = enabled
     }

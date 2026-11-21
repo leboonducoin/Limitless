@@ -362,18 +362,51 @@ enum HotspotCredentials {
         return value
     }
 
+    enum SecurityMode: String, Codable, Sendable {
+        case wpa2Personal, wpa3Personal, wpa3Transition
+
+        init?(_ mode: CWSecurity) {
+            switch mode {
+            case .wpa2Personal: self = .wpa2Personal
+            case .wpa3Personal: self = .wpa3Personal
+            case .wpa3Transition: self = .wpa3Transition
+            default: return nil
+            }
+        }
+
+        func accepts(_ supports: (CWSecurity) -> Bool) -> Bool {
+            guard ![.none, .WEP, .wpaPersonal, .wpaPersonalMixed].contains(where: supports)
+            else { return false }
+            let wpa3 = supports(.wpa3Personal)
+            let transition = supports(.wpa3Transition)
+            let wpa2 = supports(.wpa2Personal)
+            switch self {
+            case .wpa2Personal: return wpa2 || transition || wpa3
+            case .wpa3Transition: return transition || wpa3
+            case .wpa3Personal: return wpa3 && !transition && !wpa2
+            }
+        }
+    }
+
     struct Network: Codable, Sendable {
         let ssid: String
         let bssid: String?
         let password: String
         let automaticJoin: Bool?
+        let securityMode: SecurityMode?
 
-        init(ssid: String, bssid: String?, password: String, automaticJoin: Bool = false) {
+        init(
+            ssid: String, bssid: String?, password: String, automaticJoin: Bool = false,
+            securityMode: SecurityMode? = nil
+        ) {
             self.ssid = ssid
             self.bssid = bssid?.lowercased()
             self.password = password
             self.automaticJoin = automaticJoin
+            self.securityMode = securityMode
         }
+
+        var allowsAutomaticJoin: Bool { automaticJoin == true && securityMode != nil }
 
         var isValid: Bool {
             (1...32).contains(ssid.utf8.count) && (8...63).contains(password.utf8.count)
@@ -404,7 +437,6 @@ enum HotspotCredentials {
             _ = AppKeychain.remove(service: credentialService, account: next)
             return false
         }
-        _ = AppKeychain.remove(service: "hotspot", account: "fallback")
         return true
     }
 
@@ -418,9 +450,13 @@ enum HotspotCredentials {
         return network
     }
 
+    static func removeLegacy() -> Bool {
+        AppKeychain.remove(service: "hotspot", account: "fallback")
+    }
+
     static func remove() -> Bool {
         let removedReference = AppKeychain.remove(service: "hotspot", account: "reference")
-        let removedLegacy = AppKeychain.remove(service: "hotspot", account: "fallback")
+        let removedLegacy = removeLegacy()
         let removedCredentials = AppKeychain.removeAll(service: credentialService)
         return removedReference && removedLegacy && removedCredentials
     }
@@ -568,12 +604,15 @@ enum UpdatePreferences {
         }
     }
 
-    func connectedAccessPoint(named name: String) -> String? {
+    func connectedAccessPoint(named name: String) -> (
+        bssid: String, security: HotspotCredentials.SecurityMode
+    )? {
         requestLocationAccess()
         guard let interface = CWWiFiClient.shared().interface(),
-            interface.ssidData() == Data(name.utf8)
+            interface.ssidData() == Data(name.utf8), let bssid = interface.bssid(),
+            let security = HotspotCredentials.SecurityMode(interface.security())
         else { return nil }
-        return interface.bssid()
+        return (bssid, security)
     }
 
     func update(eligible: Bool, confirmSession: (@Sendable () async -> Bool)? = nil) {
@@ -636,15 +675,14 @@ enum UpdatePreferences {
         do {
             let result = try await associateIfCurrent(canJoin: canJoin) {
                 guard let network = HotspotCredentials.read(),
-                    network.automaticJoin == true,
+                    network.allowsAutomaticJoin, let securityMode = network.securityMode,
                     let interface = CWWiFiClient.shared().interface()
                 else { throw JoinError.missingCredentials }
                 let name = Data(network.ssid.utf8)
                 let nearby = try interface.scanForNetworks(withSSID: name)
                 let matches = nearby.filter {
                     network.matches(ssidData: $0.ssidData, bssid: $0.bssid)
-                        && ($0.supportsSecurity(.wpa2Personal)
-                            || $0.supportsSecurity(.wpa3Personal))
+                        && securityMode.accepts($0.supportsSecurity)
                 }
                 guard matches.count == 1, let target = matches.first else { return nil }
                 return { try interface.associate(to: target, password: network.password) }
