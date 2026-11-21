@@ -607,6 +607,10 @@ enum UpdatePreferences {
     private let location = CLLocationManager()
     private(set) var message: String?
 
+    func waitForAssociation() async {
+        await attempt?.value
+    }
+
     func requestLocationAccess() {
         if location.authorizationStatus == .notDetermined {
             location.requestWhenInUseAuthorization()

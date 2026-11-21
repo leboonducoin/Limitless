@@ -132,7 +132,7 @@ struct SettingsView: View {
                         }
                     }
                 }.disabled(!model.canEditPowerPolicy)
-                if model.showsPowerSource {
+                if model.showsLidControls {
                     Divider()
                     Text("Closed lid").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     Toggle("Mute audio with the lid closed", isOn: $model.muteWithClosedLid)
@@ -146,12 +146,17 @@ struct SettingsView: View {
                             "Join if the network drops",
                             isOn: Binding(
                                 get: { model.hotspotEnabled },
-                                set: { model.setHotspotEnabled($0) })
+                                set: { enabled in Task { await model.setHotspotEnabled(enabled) } })
                         )
-                        .disabled(!model.hotspotConfigured || model.isPreview)
+                        .disabled(
+                            !model.hotspotConfigured || model.hotspotChanging || model.isPreview)
                         if model.hotspotWithdrawalPending {
-                            Text("Hotspot fallback is paused. Unlock Keychain to finish.")
-                                .font(.caption).foregroundStyle(.secondary)
+                            Text(
+                                model.hotspotChanging
+                                    ? "Finishing the last hotspot attempt…"
+                                    : "Hotspot fallback is paused. Unlock Keychain to finish."
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
                         }
                         Text(
                             "Connect to your iPhone hotspot to save it. Fallback starts after 30 seconds offline during a session."
@@ -170,10 +175,11 @@ struct SettingsView: View {
                                 }
                             }
                             .disabled(
-                                model.isPreview || hotspotName.wrappedValue.isEmpty
+                                model.isPreview || model.hotspotChanging
+                                    || hotspotName.wrappedValue.isEmpty
                                     || hotspotPassword.wrappedValue.isEmpty)
-                            Button("Forget hotspot") { model.forgetHotspot() }
-                                .disabled(model.isPreview)
+                            Button("Forget hotspot") { Task { await model.forgetHotspot() } }
+                                .disabled(model.isPreview || model.hotspotChanging)
                         }
                     }
                     .padding(.top, 6)

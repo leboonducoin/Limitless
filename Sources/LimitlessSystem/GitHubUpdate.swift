@@ -584,7 +584,7 @@ public enum GitHubUpdate {
         let backup = try previousBackupURL(named: name, in: current.deletingLastPathComponent())
         if try SecureOwnershipJournal.directoryIsAbsent(at: backup.path) { return true }
         guard mayRetire else { return false }
-        guard try canonical(backup) == backup else { throw UpdateError.unsafeLocation }
+        try requireProtectedLaunchPath(backup)
         let details = try identity.verifyExecutable(
             at: backup, identifier: LimitlessIdentity.application)
         guard let info = details[kSecCodeInfoPList as String] as? [String: Any],

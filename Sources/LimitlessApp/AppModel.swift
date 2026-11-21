@@ -85,6 +85,7 @@ import UserNotifications
     private(set) var hotspotMessage: String?
     private(set) var hotspotConfigured: Bool
     private(set) var hotspotEnabled: Bool
+    private(set) var hotspotChanging = false
     private(set) var hotspotWithdrawalPending: Bool {
         didSet {
             if !isPreview {
@@ -333,8 +334,11 @@ import UserNotifications
         canControl || (isPreview && helperStatus == .enabled && !removalComplete)
     }
     var canEditPowerPolicy: Bool { showsPowerControls && status?.policyConfigured == true }
-    var showsPowerSource: Bool { showsPowerControls && status?.power.battery != .notPresent }
-    var showsBatteryLimit: Bool { showsPowerSource && draft.mode != .external }
+    var showsLidControls: Bool { showsPowerControls && status?.power.battery != .notPresent }
+    var showsPowerSource: Bool {
+        showsLidControls || (showsPowerControls && status?.policy.mode != .all)
+    }
+    var showsBatteryLimit: Bool { showsLidControls && draft.mode != .external }
     var showsSudoTouchID: Bool {
         showsPowerControls
             && (hasTouchID || status?.sudoTouchID == .enabled || status?.sudoTouchID == .external)
@@ -707,20 +711,6 @@ import UserNotifications
                 reply = try await client.send(.restorePolicy)
             }
             guard currentRevision == revision, !busy, !quitting else { return }
-            if let received = reply.status, received.power.battery == .notPresent,
-                received.policy.mode != .all, received.removal == .none
-            {
-                let policy = received.policy
-                reply = try await client.send(
-                    .configure(
-                        try UserPolicy(
-                            mode: .all,
-                            batteryFloor: policy.batteryFloor,
-                            maximumDuration: policy.maximumDuration,
-                            allowsAutomation: policy.allowsAutomation,
-                            keepsDisplayAwake: policy.keepsDisplayAwake)))
-            }
-            guard currentRevision == revision else { return }
             try accept(reply)
             connectionError = nil
             if !updating, reply.status?.removal == RemovalState.none,
@@ -798,7 +788,7 @@ import UserNotifications
     }
 
     func saveHotspot(name: String, password: String) -> Bool {
-        guard trustedBuild, !isPreview else { return false }
+        guard trustedBuild, !isPreview, !hotspotChanging, !quitting else { return false }
         guard let accessPoint = hotspot.connectedAccessPoint(named: name) else {
             message =
                 "Connect to your protected iPhone hotspot and allow Location Services before saving."
@@ -826,8 +816,11 @@ import UserNotifications
         return true
     }
 
-    func setHotspotEnabled(_ enabled: Bool) {
-        guard trustedBuild, !isPreview, hotspotConfigured else { return }
+    func setHotspotEnabled(_ enabled: Bool) async {
+        guard trustedBuild, !isPreview, hotspotConfigured, !hotspotChanging, !quitting
+        else { return }
+        hotspotChanging = true
+        defer { hotspotChanging = false }
         if !enabled { pauseHotspotForWithdrawal() }
         let saved = HotspotCredentials.read()
         if enabled, let saved, saved.securityMode == nil {
@@ -841,6 +834,7 @@ import UserNotifications
                         ssid: network.ssid, bssid: network.bssid, password: network.password,
                         automaticJoin: enabled, securityMode: network.securityMode))
             } ?? .failed
+        if !enabled { await hotspot.waitForAssociation() }
         guard outcome != .failed else {
             message =
                 enabled
@@ -862,9 +856,11 @@ import UserNotifications
             : success
     }
 
-    func forgetHotspot() {
-        guard trustedBuild, !isPreview else { return }
-        guard removeHotspotConfiguration() else {
+    func forgetHotspot() async {
+        guard trustedBuild, !isPreview, !hotspotChanging, !quitting else { return }
+        hotspotChanging = true
+        defer { hotspotChanging = false }
+        guard await removeHotspotConfiguration() else {
             message = "The hotspot details could not be removed from Keychain."
             return
         }
@@ -876,9 +872,11 @@ import UserNotifications
         hotspot.update(eligible: false)
     }
 
-    private func removeHotspotConfiguration() -> Bool {
+    private func removeHotspotConfiguration() async -> Bool {
         pauseHotspotForWithdrawal()
-        guard HotspotCredentials.remove() else { return false }
+        let removed = HotspotCredentials.remove()
+        await hotspot.waitForAssociation()
+        guard removed else { return false }
         hotspotConfigured = false
         hotspotEnabled = false
         hotspotWithdrawalPending = false
@@ -1371,7 +1369,7 @@ import UserNotifications
                     message = audioMessage
                     return false
                 }
-                if !removeHotspotConfiguration() {
+                if !(await removeHotspotConfiguration()) {
                     quitting = false
                     message =
                         "The hotspot details could not be removed from Keychain. Unlock it and retry."

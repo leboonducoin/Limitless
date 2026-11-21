@@ -255,6 +255,19 @@ private func status(
         #expect(unreadable.showsPowerSource && unreadable.showsBatteryLimit)
     }
 
+    @Test @MainActor func missingBatteryReadingLeavesRestrictedPowerSourceEditable() throws {
+        let model = AppModel.preview("desktop")
+        let desktop = try #require(model.status)
+        let response = ServiceStatus(
+            policy: try UserPolicy(mode: .battery), power: desktop.power, sleep: desktop.sleep,
+            sessions: [], sampledAt: Date())
+        try model.accept(ServiceReply(status: response))
+        #expect(model.draft.mode == .battery)
+        #expect(model.showsPowerSource)
+        #expect(!model.showsBatteryLimit)
+        #expect(!model.showsLidControls)
+    }
+
     @Test @MainActor func setupHidesPowerControlsUntilTheHelperIsAvailable() {
         #expect(!AppModel().showsPowerControls)
         for state in ["setup", "removed"] {

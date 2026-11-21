@@ -21,6 +21,7 @@ before installing 1.2.
 - Concurrent CLI and AI requests share one keep-awake session while keeping their own deadlines and limits. A manual session takes priority so automated requests cannot extend it.
 - The helper restores approved power limits after a restart, including when CLI access is off. After upgrading from 1.1 or earlier, review your power limits in Options once.
 - Critical thermal state ends protection and blocks new starts until macOS reports that it has cooled. Battery cutoffs and session deadlines continue to apply.
+- Keep the saved power-source restriction when macOS temporarily reports no battery.
 - Keep the display awake or let it sleep during a session. Limitless distinguishes a closed lid with an external display from a closed lid without one.
 - Opt in to muting audio when the display sleeps or when the lid closes without an external screen. Limitless restores the mute it applied to the original output and preserves a mute you set yourself.
 - Enable optional iPhone hotspot fallback for a specific password-protected network. Connect to the hotspot once to save its access point. Credentials stay in the local Keychain. Limitless checks that the session is still eligible before scanning and again before joining.
@@ -50,6 +51,7 @@ before installing 1.2.
 - Remove both current and older saved hotspot credentials when forgetting a hotspot or uninstalling Limitless.
 - Create a fresh protected Keychain record when saving hotspot settings and report if cleanup of older records needs a retry.
 - Keep hotspot fallback paused across relaunches if Keychain cannot yet save your request to turn it off.
+- Wait for an in-progress hotspot connection attempt to finish before confirming disablement or cleanup.
 - Stop ends the session and withdraws CLI and agent approval. Re-enable CLI access in Options to start new automated work.
 - Preserve your automatic-update choice in Keychain when you re-enable the helper. Review your automatic-update preference after upgrading from an older release.
 - Keep automatic updates paused across relaunches while an opt-out is waiting to be stored in Keychain.
