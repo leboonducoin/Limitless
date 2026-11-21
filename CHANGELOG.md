@@ -2,9 +2,10 @@
 
 ## 1.2.0 — Unreleased
 
-If you use Limitless with a terminal or AI agent, follow the
+Upgrading from 1.1 or earlier requires a manual download. If you use Limitless
+with a terminal or AI agent, follow the
 [CLI migration instructions](https://github.com/leboonducoin/Limitless/blob/main/docs/cli.md#upgrading-from-11-or-earlier)
-before updating from 1.1 or earlier.
+before installing 1.2.
 
 ### Menu bar and keyboard
 

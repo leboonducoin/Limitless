@@ -133,7 +133,7 @@ public enum GitHubUpdate {
     private static let installedApplication = URL(
         fileURLWithPath: "/Applications/Limitless.app", isDirectory: true)
     static let latestURL = repository.appendingPathComponent(
-        "releases/latest/download/release.json")
+        "releases/latest/download/release-v2.json")
     public static let releasesPage = repository.appendingPathComponent("releases/latest")
     static let maximumArchiveSize = 64 * 1_024 * 1_024
     private static let backupPrefix = ".Limitless-previous-"
@@ -179,7 +179,7 @@ public enum GitHubUpdate {
         guard try version(currentVersion).lexicographicallyPrecedes(version(candidate)) else {
             return nil
         }
-        let archive = "Limitless-\(candidate)-universal.zip"
+        let archive = "Limitless-\(candidate)-macos-universal.zip"
         guard manifest.archive == archive,
             manifest.sourceRevision.utf8.count == 40,
             manifest.sourceRevision.utf8.allSatisfy({

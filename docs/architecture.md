@@ -111,7 +111,8 @@ removal roll back the skill, marker and settings together. Removal preserves oth
 Checks and download attempts wait eight hours, persisted across launches. A detected update
 starts downloading immediately while the app is idle. A manual check resets the eight-hour
 clock and can retry a delayed download after a five-minute cooldown. Version checks fetch the
-published `release.json` asset rather than GitHub's rate-limited REST API. Server retry deadlines
+published `release-v2.json` asset. Version 1.2 uses a new asset name and archive
+name so older versions require manual installation and CLI migration. Server retry deadlines
 remain mandatory. Failures back off to seven days, and a verified download resets its failure
 count. Invalid persisted counters are discarded. Background errors stay quiet. No GitHub token
 is needed or stored.

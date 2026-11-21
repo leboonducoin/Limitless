@@ -661,7 +661,7 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         try files.createDirectory(
             at: output, withIntermediateDirectories: false,
             attributes: [.posixPermissions: 0o700])
-        let zip = output.appendingPathComponent("Limitless-\(version)-universal.zip")
+        let zip = output.appendingPathComponent("Limitless-\(version)-macos-universal.zip")
         try archive(app, to: zip)
         let extracted = workspace.appendingPathComponent("Extracted", isDirectory: true)
         try files.createDirectory(at: extracted, withIntermediateDirectories: false)
@@ -687,8 +687,9 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
             ? arguments[2].lowercased() : arguments[2]
         let metadata = try JSONSerialization.data(
             withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
+        let manifestName = "release-v2.json"
         try metadata.write(
-            to: output.appendingPathComponent("release.json"), options: .withoutOverwriting)
+            to: output.appendingPathComponent(manifestName), options: .withoutOverwriting)
         try files.moveItem(at: output, to: destination)
         try require(
             try SHA256.hash(
@@ -696,7 +697,7 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
                     contentsOf: destination.appendingPathComponent(zip.lastPathComponent),
                     options: .mappedIfSafe)) == digest
                 && Data(contentsOf: destination.appendingPathComponent("SHA256SUMS")) == checksums
-                && Data(contentsOf: destination.appendingPathComponent("release.json")) == metadata,
+                && Data(contentsOf: destination.appendingPathComponent(manifestName)) == metadata,
             "The archive or its metadata changed during export.")
         print(
             "Verified archive, digest and manifest: \(destination.path)\nNothing published."

@@ -74,7 +74,9 @@ jobs:
           mkdir "$RUNNER_TEMP/signed-input"
           ditto -x -k "$RUNNER_TEMP/Limitless-Signed-App.zip" "$RUNNER_TEMP/signed-input"
           swift Tools/ProjectTool.swift package "$RUNNER_TEMP/signed-input/Limitless.app" "$TEAM" "$RUNNER_TEMP/distribution"
-          test -f "$RUNNER_TEMP/distribution/Limitless-${TAG#v}-universal.zip"
+          test -f "$RUNNER_TEMP/distribution/Limitless-${TAG#v}-macos-universal.zip"
+          test -f "$RUNNER_TEMP/distribution/release-v2.json"
+          test ! -e "$RUNNER_TEMP/distribution/release.json"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Limitless-distribution
@@ -100,4 +102,4 @@ jobs:
       - run: sha256sum -c SHA256SUMS
       - uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
-          subject-path: Limitless-*-universal.zip
+          subject-path: Limitless-*-macos-universal.zip

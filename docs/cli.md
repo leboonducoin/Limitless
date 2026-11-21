@@ -16,7 +16,8 @@ limits remain in effect.
 
 ### Upgrading from 1.1 or earlier
 
-Before updating, quit agents that use Limitless in every affected macOS
+The upgrade requires a manual download from [GitHub Releases](https://github.com/leboonducoin/Limitless/releases).
+Before installing it, quit agents that use Limitless in every affected macOS
 account. Pause scripts that use the old shared `limitless` command. Keep
 them closed while you install and open the new app.
 

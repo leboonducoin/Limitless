@@ -37,7 +37,8 @@ This remains a broad macOS permission, held by the separate sudo helper.
 
 ## Updates and removal
 
-Automatic updates turn on when you first enable the helper and can be disabled.
+Starting with 1.2, automatic updates turn on when you first enable the helper and
+can be disabled.
 Limitless saves this choice in Keychain. After upgrading from an older release,
 review the automatic-update setting in Options. Limitless checks every eight
 hours and starts installing a detected update immediately while idle. Otherwise, an **Update**
@@ -45,7 +46,7 @@ button appears when a version is available and disappears during the retry delay
 the menu-bar icon → **Check for Updates** to perform a fresh check and install an available
 update while idle. A manual check resets the eight-hour timer and can retry a delayed download
 after five minutes; server retry deadlines still apply. The login Keychain stores the retry schedule
-and your automatic-update choice. Checks read the published `release.json`
+and your automatic-update choice. Checks read the published `release-v2.json`
 asset instead of GitHub's rate-limited REST API. Limitless requires its source revision to match
 the signed app's `Build.json`, verifies the download, then installs and reopens the app.
 If the helper was enabled, the reopened version restores it; a failed replacement reopens
@@ -65,7 +66,8 @@ if recovery stays unavailable. The download is available even when the power
 helper is disabled. Uninstall preserves unreadable update records and reports
 them after removing the system components.
 
-Before upgrading from 1.1 or earlier, follow the
+Upgrade from 1.1 or earlier by downloading the new archive from GitHub Releases
+and replacing the app in Applications. Before upgrading, follow the
 [CLI and agent migration instructions](cli.md#upgrading-from-11-or-earlier)
 if you use an integration. After upgrading, enable the power helper again
 if requested in Options and review Power. Limitless leaves the older updater's
@@ -115,13 +117,15 @@ metadata again at the export destination.
 
 ```sh
 shasum -a 256 -c SHA256SUMS
-gh attestation verify Limitless-VERSION-universal.zip --repo leboonducoin/Limitless \
+gh attestation verify Limitless-VERSION-macos-universal.zip --repo leboonducoin/Limitless \
   --signer-workflow leboonducoin/Limitless/.github/workflows/attest-release.yml \
   --source-ref refs/heads/main --source-digest "$COMMIT"
 ```
 
-Attach the three verified files from the artifact to the draft. Remove the
-signed input ZIP from the draft before publication. The workflow requires no
+Attach the verified `Limitless-VERSION-macos-universal.zip`, `SHA256SUMS`
+and `release-v2.json` from the artifact to the draft. Use these filenames
+for future releases so 1.1 and earlier continue to require manual migration.
+Remove the signed input ZIP from the draft before publication. The workflow requires no
 signing key. GitHub requires access to draft releases in the fetch job, which
 only downloads and hashes the input. Packaging and attestation run in separate
 jobs with their own permissions. Runs for the same tag cannot overlap.

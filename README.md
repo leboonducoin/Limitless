@@ -22,6 +22,10 @@ Original soundtrack: [MP3 & WAV](assets/music/)
 [GitHub Releases](https://github.com/leboonducoin/Limitless/releases) is the only
 download location.
 
+Upgrading from 1.1 or earlier requires a manual download and installation.
+If you use the CLI or AI hooks, follow the
+[migration steps](docs/cli.md#upgrading-from-11-or-earlier) before updating.
+
 Unzip the archive, drag **Limitless.app** to **Applications**, then open it.
 The icon appears in your menu bar. Click **Enable Limitless** and approve the
 macOS administrator prompt. Your password is never stored.

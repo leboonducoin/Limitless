@@ -34,10 +34,7 @@ import Testing
     func response(_ status: Int, headers: [String: String] = [:]) throws -> HTTPURLResponse {
         try #require(
             HTTPURLResponse(
-                url: URL(
-                    string:
-                        "https://github.com/leboonducoin/Limitless/releases/latest/download/release.json"
-                )!,
+                url: GitHubUpdate.latestURL,
                 statusCode: status, httpVersion: "HTTP/2", headerFields: headers))
     }
     #expect(try GitHubUpdate.validateResponse(response(200), limit: 100))
@@ -233,7 +230,7 @@ private func releaseData(
     var manifest: [String: Any] = [
         "version": version,
         "sourceRevision": sourceRevision,
-        "archive": archive ?? "Limitless-0.2.0-universal.zip",
+        "archive": archive ?? "Limitless-0.2.0-macos-universal.zip",
         "channel": channel,
         "notarized": notarized,
     ]
@@ -245,7 +242,7 @@ private func releaseData(
     #expect(GitHubUpdate.latestURL.host == "github.com")
     #expect(
         GitHubUpdate.latestURL.path
-            == "/leboonducoin/Limitless/releases/latest/download/release.json")
+            == "/leboonducoin/Limitless/releases/latest/download/release-v2.json")
     let data = try releaseData()
     let parsed = try GitHubUpdate.release(from: data, currentVersion: "0.1.0")
     let release = try #require(parsed)
@@ -253,13 +250,13 @@ private func releaseData(
     #expect(release.sourceRevision == String(repeating: "b", count: 40))
     #expect(
         release.url.absoluteString
-            == "https://github.com/leboonducoin/Limitless/releases/download/v0.2.0/Limitless-0.2.0-universal.zip"
+            == "https://github.com/leboonducoin/Limitless/releases/download/v0.2.0/Limitless-0.2.0-macos-universal.zip"
     )
     #expect(try GitHubUpdate.release(from: data, currentVersion: "0.2.0") == nil)
     #expect(try GitHubUpdate.release(from: data, currentVersion: "0.10.0") == nil)
     for invalid in [
         try releaseData(digest: nil), try releaseData(digest: "wrong"),
-        try releaseData(archive: "another.zip"),
+        try releaseData(archive: "Limitless-0.2.0-universal.zip"),
         try releaseData(sourceRevision: "wrong"),
         try releaseData(channel: "other"),
         try releaseData(notarized: true),
