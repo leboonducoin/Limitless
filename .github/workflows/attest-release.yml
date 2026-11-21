@@ -39,7 +39,7 @@ jobs:
           test "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish --jq '[.isDraft, .targetCommitish] | @tsv')" = "$(printf 'true\t%s' "$GITHUB_SHA")"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern Limitless-Signed-App.zip --dir "$RUNNER_TEMP"
           printf '%s  %s\n' "$INPUT_SHA256" "$RUNNER_TEMP/Limitless-Signed-App.zip" | sha256sum -c
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limitless-signed-input
           path: ${{ runner.temp }}/Limitless-Signed-App.zip
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: Limitless-signed-input
           path: ${{ runner.temp }}
@@ -77,7 +77,7 @@ jobs:
           test -f "$RUNNER_TEMP/distribution/Limitless-${TAG#v}-macos-universal.zip"
           test -f "$RUNNER_TEMP/distribution/release-v2.json"
           test ! -e "$RUNNER_TEMP/distribution/release.json"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Limitless-distribution
           path: ${{ runner.temp }}/distribution/
@@ -96,10 +96,10 @@ jobs:
       contents: read
       id-token: write # Obtain the OIDC token used to sign the provenance.
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: Limitless-distribution
       - run: sha256sum -c SHA256SUMS
-      - uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: Limitless-*-macos-universal.zip
