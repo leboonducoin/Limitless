@@ -104,7 +104,8 @@ process and file identity. A worker holds an exclusive lock during its turn.
 Expired, unclaimed markers can be cleaned up after the startup grace period.
 Setup merges only Limitless hooks, backs up existing
 settings and refuses linked, shared-writable or write-ACL-controlled paths. Setup and
-removal roll back the skill, marker and settings together. Removal preserves other integrations.
+removal roll back the skill, marker and settings together. Managed hooks and skills always use
+a verified private CLI for the account. Removal preserves other integrations.
 
 ## Updates and removal
 

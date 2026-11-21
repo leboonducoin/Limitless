@@ -461,6 +461,26 @@ func privateDistributionWorkspace() throws -> URL {
     return URL(fileURLWithPath: workspace, isDirectory: true)
 }
 
+func materializeSigningSource(_ revision: String, in workspace: URL) throws -> URL {
+    let tree = try run(
+        "/usr/bin/git", ["--no-replace-objects", "ls-tree", "-rz", "--full-tree", revision],
+        capture: true)
+    try require(
+        !tree.isEmpty
+            && tree.split(separator: "\0").allSatisfy {
+                ["100644", "100755"].contains(String($0.prefix(6)))
+            },
+        "Release inputs must be regular files tracked directly in the selected revision.")
+    let source = workspace.appendingPathComponent("Source", isDirectory: true)
+    let archive = workspace.appendingPathComponent("Source.tar")
+    try FileManager.default.createDirectory(at: source, withIntermediateDirectories: false)
+    _ = try run(
+        "/usr/bin/git",
+        ["--no-replace-objects", "archive", "--format=tar", "--output", archive.path, revision])
+    _ = try run("/usr/bin/tar", ["-xf", archive.path, "-C", source.path])
+    return source
+}
+
 func selfTest(developmentApp: URL? = nil) throws {
     let signingWorkspace = try privateDistributionWorkspace()
     defer { try? FileManager.default.removeItem(at: signingWorkspace) }
@@ -469,6 +489,18 @@ func selfTest(developmentApp: URL? = nil) throws {
         lstat(signingWorkspace.path, &workspace) == 0 && workspace.st_uid == geteuid()
             && workspace.st_mode & 0o777 == 0o700,
         "Release signing workspace must be private to the current user.")
+    let revision = try run("/usr/bin/git", ["rev-parse", "--verify", "HEAD"], capture: true)
+    let snapshot = try materializeSigningSource(revision, in: signingWorkspace)
+    let committedPackage = try run(
+        "/usr/bin/git", ["--no-replace-objects", "show", revision + ":Package.swift"],
+        capture: true)
+    let packagedManifest = try String(
+        contentsOf: snapshot.appendingPathComponent("Package.swift"), encoding: .utf8)
+    try require(
+        packagedManifest.trimmingCharacters(in: .whitespacesAndNewlines) == committedPackage
+            && !FileManager.default.fileExists(
+                atPath: snapshot.appendingPathComponent(".git").path),
+        "Release source must contain the committed package without Git metadata.")
     func rejects(_ operation: () throws -> Void) throws {
         var accepted = false
         do {
@@ -755,8 +787,12 @@ do {
     let sdkVersion = try run(
         "/usr/bin/xcrun", ["--sdk", sdkPath, "--show-sdk-version"], capture: true)
     let signingWorkspace = signing ? try privateDistributionWorkspace() : nil
+    let initialDirectory = FileManager.default.currentDirectoryPath
     defer {
-        if let signingWorkspace { try? FileManager.default.removeItem(at: signingWorkspace) }
+        if let signingWorkspace {
+            _ = FileManager.default.changeCurrentDirectoryPath(initialDirectory)
+            try? FileManager.default.removeItem(at: signingWorkspace)
+        }
     }
     let scratchDirectory =
         signingWorkspace?.appendingPathComponent("Build", isDirectory: true).path
@@ -790,6 +826,12 @@ do {
                 "Limitless-\(UUID().uuidString)", isDirectory: true)
         guard !manager.fileExists(atPath: requestedOutput.path) else {
             throw CocoaError(.fileWriteFileExists)
+        }
+        if let signingWorkspace, let sourceRevision {
+            let source = try materializeSigningSource(sourceRevision, in: signingWorkspace)
+            try require(
+                manager.changeCurrentDirectoryPath(source.path),
+                "Could not enter the verified signing source.")
         }
         let output =
             signingWorkspace?.appendingPathComponent("Bundle", isDirectory: true)
@@ -953,12 +995,14 @@ do {
                 to: skillResources.appendingPathComponent(file))
         }
         let record = BuildRecord(
-            sourceRevision: try run(
-                "/usr/bin/git", ["rev-parse", "--verify", "HEAD"], capture: true),
+            sourceRevision: try sourceRevision
+                ?? run("/usr/bin/git", ["rev-parse", "--verify", "HEAD"], capture: true),
             configuration: configuration,
-            sourceClean: try run(
-                "/usr/bin/git", ["status", "--porcelain", "--untracked-files=all"], capture: true
-            ).isEmpty)
+            sourceClean: try sourceRevision != nil
+                || run(
+                    "/usr/bin/git", ["status", "--porcelain", "--untracked-files=all"],
+                    capture: true
+                ).isEmpty)
         try JSONEncoder().encode(record).write(
             to: contents.appendingPathComponent("Resources/Build.json"),
             options: .withoutOverwriting)
@@ -978,11 +1022,6 @@ do {
                 "-c", "icns", iconset.path, "-o",
                 contents.appendingPathComponent("Resources/Limitless.icns").path,
             ])
-        if let sourceRevision {
-            try require(
-                try cleanRevision() == sourceRevision && record.sourceRevision == sourceRevision,
-                "Source changed during the release build.")
-        }
         try manager.copyItem(
             at: contents.appendingPathComponent("Resources/Limitless.icns"),
             to: contents.appendingPathComponent(
