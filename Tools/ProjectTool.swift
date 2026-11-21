@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 import MachO
 import Security
@@ -446,7 +447,28 @@ func archive(_ app: URL, to destination: URL) throws {
         ["-c", "-k", "--sequesterRsrc", "--keepParent", app.path, destination.path])
 }
 
+func privateDistributionWorkspace() throws -> URL {
+    var parent = stat()
+    try require(
+        lstat("/private/tmp", &parent) == 0 && parent.st_uid == 0
+            && parent.st_mode & S_IFMT == S_IFDIR && parent.st_mode & S_ISVTX != 0,
+        "Distribution requires the system's sticky temporary directory.")
+    var path = Array("/private/tmp/limitless-distribution-XXXXXX".utf8CString)
+    guard path.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress) != nil }) else {
+        throw CocoaError(.fileWriteUnknown)
+    }
+    let workspace = path.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+    return URL(fileURLWithPath: workspace, isDirectory: true)
+}
+
 func selfTest(developmentApp: URL? = nil) throws {
+    let signingWorkspace = try privateDistributionWorkspace()
+    defer { try? FileManager.default.removeItem(at: signingWorkspace) }
+    var workspace = stat()
+    try require(
+        lstat(signingWorkspace.path, &workspace) == 0 && workspace.st_uid == geteuid()
+            && workspace.st_mode & 0o777 == 0o700,
+        "Release signing workspace must be private to the current user.")
     func rejects(_ operation: () throws -> Void) throws {
         var accepted = false
         do {
@@ -623,21 +645,26 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         try require(
             try cleanRevision() == record.sourceRevision,
             "Generate release metadata from the same clean source revision as the app.")
-        let output = URL(fileURLWithPath: arguments[3], isDirectory: true)
+        let destination = URL(fileURLWithPath: arguments[3], isDirectory: true)
         try require(
-            !output.resolvingSymlinksInPath().path.hasPrefix(
+            !destination.resolvingSymlinksInPath().path.hasPrefix(
                 app.resolvingSymlinksInPath().path + "/"),
             "Archive output must be outside the signed app.")
         try require(
-            !FileManager.default.fileExists(atPath: output.path), "Output directory already exists."
+            !FileManager.default.fileExists(atPath: destination.path),
+            "Output directory already exists."
         )
-        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: false)
-        let zip = output.appendingPathComponent("Limitless-\(version)-universal.zip")
+        let files = FileManager.default
+        let workspace = try privateDistributionWorkspace()
+        defer { try? files.removeItem(at: workspace) }
+        let output = workspace.appendingPathComponent("Output", isDirectory: true)
+        try files.createDirectory(
+            at: output, withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700])
+        let zip = output.appendingPathComponent("Limitless-\(version)-macos-universal.zip")
         try archive(app, to: zip)
-        let extracted = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "Limitless-verify-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: extracted, withIntermediateDirectories: false)
-        defer { try? FileManager.default.removeItem(at: extracted) }
+        let extracted = workspace.appendingPathComponent("Extracted", isDirectory: true)
+        try files.createDirectory(at: extracted, withIntermediateDirectories: false)
         _ = try run("/usr/bin/ditto", ["-x", "-k", zip.path, extracted.path])
         let (exportVersion, exportRecord) = try verifyRelease(
             extracted.appendingPathComponent("Limitless.app"), identity: identity,
@@ -645,25 +672,35 @@ func distributionCommand(_ arguments: [String]) throws -> Bool {
         try require(
             exportVersion == version && exportRecord == record, "Exported archive metadata changed."
         )
-        let digest = SHA256.hash(data: try Data(contentsOf: zip, options: .mappedIfSafe)).map {
-            String(format: "%02x", $0)
-        }.joined()
-        try Data("\(digest)  \(zip.lastPathComponent)\n".utf8).write(
+        let digest = SHA256.hash(data: try Data(contentsOf: zip, options: .mappedIfSafe))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        let checksums = Data("\(hex)  \(zip.lastPathComponent)\n".utf8)
+        try checksums.write(
             to: output.appendingPathComponent("SHA256SUMS"), options: .withoutOverwriting)
         var manifest: [String: Any] = [
             "version": version, "sourceRevision": record.sourceRevision,
-            "archive": zip.lastPathComponent, "sha256": digest,
+            "archive": zip.lastPathComponent, "sha256": hex,
             "channel": community ? "community" : "developer-id", "notarized": notarized,
         ]
         manifest[community ? "certificateSHA1" : "teamID"] =
             community
             ? arguments[2].lowercased() : arguments[2]
-        try JSONSerialization.data(
-            withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys]
-        )
-        .write(to: output.appendingPathComponent("release.json"), options: .withoutOverwriting)
+        let metadata = try JSONSerialization.data(
+            withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
+        let manifestName = "release-v2.json"
+        try metadata.write(
+            to: output.appendingPathComponent(manifestName), options: .withoutOverwriting)
+        try files.moveItem(at: output, to: destination)
+        try require(
+            try SHA256.hash(
+                data: Data(
+                    contentsOf: destination.appendingPathComponent(zip.lastPathComponent),
+                    options: .mappedIfSafe)) == digest
+                && Data(contentsOf: destination.appendingPathComponent("SHA256SUMS")) == checksums
+                && Data(contentsOf: destination.appendingPathComponent(manifestName)) == metadata,
+            "The archive or its metadata changed during export.")
         print(
-            "Verified archive, digest and manifest: \(output.path)\nNothing published."
+            "Verified archive, digest and manifest: \(destination.path)\nNothing published."
         )
     } else {
         print(
@@ -717,10 +754,16 @@ do {
         ?? run("/usr/bin/xcrun", ["--sdk", "macosx", "--show-sdk-path"], capture: true)
     let sdkVersion = try run(
         "/usr/bin/xcrun", ["--sdk", sdkPath, "--show-sdk-version"], capture: true)
+    let signingWorkspace = signing ? try privateDistributionWorkspace() : nil
+    defer {
+        if let signingWorkspace { try? FileManager.default.removeItem(at: signingWorkspace) }
+    }
+    let scratchDirectory =
+        signingWorkspace?.appendingPathComponent("Build", isDirectory: true).path
+        ?? ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]
     let buildPath =
         ["--sdk", sdkPath]
-        + (ProcessInfo.processInfo.environment["LIMITLESS_BUILD_PATH"]
-            .map { ["--scratch-path", $0] } ?? [])
+        + (scratchDirectory.map { ["--scratch-path", $0] } ?? [])
     if URL(fileURLWithPath: developer).lastPathComponent == "CommandLineTools",
         FileManager.default.fileExists(atPath: plugin)
     {
@@ -740,15 +783,18 @@ do {
             ["debug", "release"].contains(configuration),
             "LIMITLESS_CONFIGURATION must be debug or release.")
         let manager = FileManager.default
-        let output =
+        let requestedOutput =
             ProcessInfo.processInfo.environment["LIMITLESS_OUTPUT_DIR"]
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? manager.temporaryDirectory.appendingPathComponent(
                 "Limitless-\(UUID().uuidString)", isDirectory: true)
-        let app = output.appendingPathComponent("Limitless.app", isDirectory: true)
-        guard !manager.fileExists(atPath: output.path) else {
+        guard !manager.fileExists(atPath: requestedOutput.path) else {
             throw CocoaError(.fileWriteFileExists)
         }
+        let output =
+            signingWorkspace?.appendingPathComponent("Bundle", isDirectory: true)
+            ?? requestedOutput
+        let app = output.appendingPathComponent("Limitless.app", isDirectory: true)
         try manager.createDirectory(at: output, withIntermediateDirectories: false)
         var info = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
         if preview { info["LimitlessPreviewState"] = "active" }
@@ -768,6 +814,8 @@ do {
             buildEnvironment["LIMITLESS_HELPER_METADATA"] = directory.path
         }
         var sudoInfo = try propertyList(URL(fileURLWithPath: "Packaging/Info.plist"))
+        sudoInfo.removeValue(forKey: "NSLocationUsageDescription")
+        sudoInfo.removeValue(forKey: "NSLocationWhenInUseUsageDescription")
         sudoInfo["CFBundleIdentifier"] = "io.github.leboonducoin.Limitless.sudo"
         sudoInfo["CFBundleExecutable"] = "LimitlessSudo"
         sudoInfo["CFBundleName"] = "Limitless — Touch ID for sudo"
@@ -798,6 +846,13 @@ do {
             ["swift", "build", "-c", configuration, "--show-bin-path"] + architectures + buildPath
                 + compilerFlags,
             capture: true, environment: buildEnvironment)
+        if let signingWorkspace {
+            let products = URL(fileURLWithPath: binaryPath).resolvingSymlinksInPath()
+            let build = signingWorkspace.appendingPathComponent("Build", isDirectory: true)
+            try require(
+                products.path.hasPrefix(build.path + "/"),
+                "Release products must be inside the private signing workspace.")
+        }
         let version = info["CFBundleShortVersionString"] as? String ?? ""
         if preview {
             let modules =
@@ -816,6 +871,7 @@ do {
                 [
                     "swiftc", "-DDEBUG", "-swift-version", "6", "-I", modules,
                     "Sources/LimitlessApp/AppModel.swift", "Sources/LimitlessApp/BrandArt.swift",
+                    "Sources/LimitlessApp/EnvironmentActions.swift",
                     "Sources/LimitlessApp/MenuPanel.swift",
                     "Sources/LimitlessApp/Presentation.swift",
                     "Sources/LimitlessApp/SettingsView.swift", "Tools/ExportPreview.swift",
@@ -885,9 +941,17 @@ do {
         try manager.copyItem(
             at: URL(fileURLWithPath: "THIRD_PARTY_NOTICES.md"),
             to: contents.appendingPathComponent("Resources/THIRD_PARTY_NOTICES.md"))
-        try manager.copyItem(
-            at: URL(fileURLWithPath: "skills/limitless"),
-            to: contents.appendingPathComponent("Resources/limitless-skill"))
+        let skillResources = contents.appendingPathComponent("Resources/limitless-skill")
+        try manager.createDirectory(
+            at: skillResources.appendingPathComponent("hooks"), withIntermediateDirectories: true)
+        for file in [
+            "SKILL.md", "hooks/claude.json", "hooks/codex.json", "hooks/cursor.json",
+            "hooks/gemini.json",
+        ] {
+            try manager.copyItem(
+                at: URL(fileURLWithPath: "skills/limitless/\(file)"),
+                to: skillResources.appendingPathComponent(file))
+        }
         let record = BuildRecord(
             sourceRevision: try run(
                 "/usr/bin/git", ["rev-parse", "--verify", "HEAD"], capture: true),
@@ -968,9 +1032,14 @@ do {
             try verifyCompatibility(contents, helperPath: identity.helperPath)
         }
         if signing {
-            _ = try verifyRelease(app, identity: identity, notarized: false)
+            let signed = try verifyRelease(app, identity: identity, notarized: false)
+            try manager.moveItem(at: output, to: requestedOutput)
+            let exported = requestedOutput.appendingPathComponent("Limitless.app")
+            try require(
+                try verifyRelease(exported, identity: identity, notarized: false) == signed,
+                "The signed build changed during export.")
             print(
-                "\(community ? "Community" : "Developer ID") bundle: \(app.path)\nNot installed, not notarized, not published."
+                "\(community ? "Community" : "Developer ID") bundle: \(exported.path)\nNot installed, not notarized, not published."
             )
         } else {
             try selfTest(developmentApp: app)

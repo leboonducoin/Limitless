@@ -3,15 +3,56 @@ import Testing
 
 @testable import LimitlessSystem
 
+@Test func automaticReplacementRequiresAProtectedWritableLaunchPath() throws {
+    let files = FileManager.default
+    let root = try GitHubUpdate.canonical(files.temporaryDirectory)
+        .appendingPathComponent(UUID().uuidString)
+    let app = root.appendingPathComponent("Limitless.app", isDirectory: true)
+    let macOS = app.appendingPathComponent("Contents/MacOS")
+    try files.createDirectory(at: macOS, withIntermediateDirectories: true)
+    let info = app.appendingPathComponent("Contents/Info.plist")
+    let executable = macOS.appendingPathComponent("LimitlessApp")
+    defer {
+        try? files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+        try? files.removeItem(at: root)
+    }
+    for file in [info, executable] { try Data().write(to: file) }
+    try GitHubUpdate.requireWritableApp(app)
+    for path in [root, app, macOS, info, executable] {
+        let permissions = try files.attributesOfItem(atPath: path.path)[.posixPermissions]
+        try files.setAttributes([.posixPermissions: 0o770], ofItemAtPath: path.path)
+        #expect(throws: UpdateError.unsafeLocation) {
+            try GitHubUpdate.requireWritableApp(app)
+        }
+        #expect(throws: UpdateError.unsafeLocation) {
+            try GitHubUpdate.requireProtectedLaunchPath(app)
+        }
+        try files.setAttributes(
+            [.posixPermissions: try #require(permissions)], ofItemAtPath: path.path)
+    }
+    try files.setAttributes([.posixPermissions: 0o500], ofItemAtPath: root.path)
+    #expect(throws: UpdateError.unsafeLocation) { try GitHubUpdate.requireWritableApp(app) }
+    try GitHubUpdate.requireProtectedLaunchPath(app)
+}
+
+@Test func backupReceiptCanAddressOnlyAnInstallerNamedSibling() throws {
+    let directory = URL(fileURLWithPath: "/private/tmp/limitless-update-test", isDirectory: true)
+    let valid = ".Limitless-previous-" + UUID().uuidString + ".app"
+    let backup = try GitHubUpdate.previousBackupURL(named: valid, in: directory)
+    #expect(backup == directory.appendingPathComponent(valid, isDirectory: true))
+    for name in ["Limitless.app", "../" + valid, valid + "/child", valid.lowercased()] {
+        #expect(throws: UpdateError.unsafeLocation) {
+            try GitHubUpdate.previousBackupURL(named: name, in: directory)
+        }
+    }
+}
+
 @Test func updateResponsesDistinguishMissingReleasesRateLimitsAndServerFailures() throws {
     let now = Date(timeIntervalSince1970: 1_700_000_000)
     func response(_ status: Int, headers: [String: String] = [:]) throws -> HTTPURLResponse {
         try #require(
             HTTPURLResponse(
-                url: URL(
-                    string:
-                        "https://github.com/leboonducoin/Limitless/releases/latest/download/release.json"
-                )!,
+                url: GitHubUpdate.latestURL,
                 statusCode: status, httpVersion: "HTTP/2", headerFields: headers))
     }
     #expect(try GitHubUpdate.validateResponse(response(200), limit: 100))
@@ -207,7 +248,7 @@ private func releaseData(
     var manifest: [String: Any] = [
         "version": version,
         "sourceRevision": sourceRevision,
-        "archive": archive ?? "Limitless-0.2.0-universal.zip",
+        "archive": archive ?? "Limitless-0.2.0-macos-universal.zip",
         "channel": channel,
         "notarized": notarized,
     ]
@@ -219,7 +260,7 @@ private func releaseData(
     #expect(GitHubUpdate.latestURL.host == "github.com")
     #expect(
         GitHubUpdate.latestURL.path
-            == "/leboonducoin/Limitless/releases/latest/download/release.json")
+            == "/leboonducoin/Limitless/releases/latest/download/release-v2.json")
     let data = try releaseData()
     let parsed = try GitHubUpdate.release(from: data, currentVersion: "0.1.0")
     let release = try #require(parsed)
@@ -227,13 +268,13 @@ private func releaseData(
     #expect(release.sourceRevision == String(repeating: "b", count: 40))
     #expect(
         release.url.absoluteString
-            == "https://github.com/leboonducoin/Limitless/releases/download/v0.2.0/Limitless-0.2.0-universal.zip"
+            == "https://github.com/leboonducoin/Limitless/releases/download/v0.2.0/Limitless-0.2.0-macos-universal.zip"
     )
     #expect(try GitHubUpdate.release(from: data, currentVersion: "0.2.0") == nil)
     #expect(try GitHubUpdate.release(from: data, currentVersion: "0.10.0") == nil)
     for invalid in [
         try releaseData(digest: nil), try releaseData(digest: "wrong"),
-        try releaseData(archive: "another.zip"),
+        try releaseData(archive: "Limitless-0.2.0-universal.zip"),
         try releaseData(sourceRevision: "wrong"),
         try releaseData(channel: "other"),
         try releaseData(notarized: true),

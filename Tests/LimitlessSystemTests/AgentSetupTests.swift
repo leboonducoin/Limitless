@@ -4,6 +4,55 @@ import Testing
 
 @testable import LimitlessSystem
 
+@Test func agentSetupLeavesConfigurationThatHasAFileACLUnchanged() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let folder = root.appendingPathComponent(".codex")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let resource = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+            "skills/limitless")
+    let config = folder.appendingPathComponent("hooks.json")
+    let contents = Data("{}".utf8)
+    try contents.write(to: config)
+    let acl = Process()
+    acl.executableURL = URL(fileURLWithPath: "/bin/chmod")
+    acl.arguments = ["+a", "everyone deny write", config.path]
+    try acl.run()
+    acl.waitUntilExit()
+    try #require(acl.terminationStatus == 0)
+    #expect(throws: JournalError.extendedAccess) {
+        try AgentSetup.configure("codex", home: root, resources: resource)
+    }
+    #expect(try Data(contentsOf: config) == contents)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["hooks.json"])
+}
+
+@Test func agentSetupReplacesLegacyCommandsWithAnEscapedPrivatePath() throws {
+    let template = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("skills/limitless/hooks/codex.json")
+    let original = try Data(contentsOf: template)
+    let executable = URL(fileURLWithPath: "/Users/Test Person's folder/limitless")
+    let migrated = try AgentSetup.merged(
+        original, template: original, provider: "codex", remove: false,
+        privateExecutable: executable, usePrivate: true)
+    let object = try #require(JSONSerialization.jsonObject(with: migrated) as? [String: Any])
+    let hooks = try #require(object["hooks"] as? [String: [[String: Any]]])
+    let groups = try #require(hooks["UserPromptSubmit"])
+    #expect(groups.count == 1)
+    let commands = try #require(groups.first?["hooks"] as? [[String: Any]])
+    #expect(
+        commands.first?["command"] as? String
+            == "'/Users/Test Person'\"'\"'s folder/limitless' hook codex")
+
+    let removed = try AgentSetup.merged(
+        migrated, template: original, provider: "codex", remove: true,
+        privateExecutable: executable)
+    let remaining = try #require(JSONSerialization.jsonObject(with: removed) as? [String: Any])
+    #expect(remaining.isEmpty)
+}
+
 @Test func freshAgentSetupNeedsNoPreexistingDirectoriesAndRemovesItsEmptyConfiguration() throws {
     let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: home) }
@@ -19,6 +68,43 @@ import Testing
         #expect(
             !FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path))
     }
+}
+
+@Test func legacyDetectionRequiresAnOwnedMarkerAndClearsAfterMigration() throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let resources = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+            "skills/limitless")
+    for provider in AgentSetup.providers {
+        try AgentSetup.configure(provider, home: home, resources: resources)
+    }
+    #expect(try AgentSetup.legacyProviders(home: home) == AgentSetup.providers)
+    let marker = home.appendingPathComponent(".agents/skills/limitless/.limitless-managed")
+    let owned = try Data(contentsOf: marker)
+    try Data("Foreign skill\n".utf8).write(to: marker)
+    #expect(try AgentSetup.legacyProviders(home: home) == ["claude", "cursor", "gemini"])
+    try owned.write(to: marker)
+
+    let privateResources = InstalledCLI.privateApplication(in: home)
+        .appendingPathComponent("Contents/Resources/limitless-skill")
+    try FileManager.default.createDirectory(
+        at: privateResources.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try FileManager.default.copyItem(at: resources, to: privateResources)
+    for provider in try AgentSetup.legacyProviders(home: home) {
+        try AgentSetup.configure(provider, home: home, resources: privateResources)
+        let skillRoot = provider == "codex" ? ".agents" : ".\(provider)"
+        let skill = home.appendingPathComponent(skillRoot + "/skills/limitless/SKILL.md")
+        let content = try String(contentsOf: skill, encoding: .utf8)
+        let executable = InstalledCLI.privateExecutable(in: home)
+        #expect(content.contains("'\(executable.path)'"))
+        #expect(!content.contains("{{LIMITLESS_CLI}}"))
+        try Data(contentsOf: resources.appendingPathComponent("SKILL.md")).write(to: skill)
+        #expect(try !AgentSetup.isCurrent(provider, home: home, resources: privateResources))
+        try AgentSetup.configure(provider, home: home, resources: privateResources)
+        #expect(try AgentSetup.isCurrent(provider, home: home, resources: privateResources))
+    }
+    #expect(try AgentSetup.legacyProviders(home: home).isEmpty)
 }
 
 @Test(arguments: AgentSetup.providers)
@@ -43,8 +129,11 @@ func agentSetupPreservesSettingsIsRepeatableAndRemovesOnlyItsIntegration(_ provi
         "theme": "custom", "hooks": [event: [other]],
     ])
     try original.write(to: config)
+    #expect(try !AgentSetup.isCurrent(provider, home: home, resources: resources))
     try AgentSetup.configure(provider, home: home, resources: resources)
     let installed = try Data(contentsOf: config)
+    #expect(try AgentSetup.isCurrent(provider, home: home, resources: resources))
+    #expect(try Data(contentsOf: config) == installed)
     let object = try #require(JSONSerialization.jsonObject(with: installed) as? [String: Any])
     #expect(object["theme"] as? String == "custom")
     #expect((object["hooks"] as? [String: [[String: Any]]])?[event]?.count == 2)
@@ -89,6 +178,8 @@ func agentSetupPreservesSettingsIsRepeatableAndRemovesOnlyItsIntegration(_ provi
     #expect(throws: (any Error).self) {
         try AgentSetup.configure("codex", home: root, resources: resources)
     }
+    try AgentSetup.configure("codex", remove: true, home: root, resources: resources)
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: config.path) == outside.path)
     #expect(try Data(contentsOf: outside) == Data("{}".utf8))
 }
 

@@ -23,6 +23,23 @@ enum ProcessSelection {
     }
 }
 
+extension SessionStopReason {
+    var summary: String {
+        switch self {
+        case .expired: "The session reached its time limit."
+        case .batteryFloor: "The battery reached the reserved limit."
+        case .thermalCritical: "macOS reported a critical thermal state."
+        case .automationRevoked: "Automation or helper access was withdrawn."
+        case .policyChanged: "The session no longer met the power limits."
+        case .requested: "The session was stopped."
+        case .taskEnded: "The tracked work ended."
+        case .ownerLost: "The session lost contact with its owner."
+        case .manualPriority: "A manual session took priority."
+        case .powerFault: "Limitless could not verify keep-awake protection."
+        }
+    }
+}
+
 enum PowerPresentation: Equatable {
     case active, inactive, suspended, recovering, restoring, attention, unknown
 
@@ -77,6 +94,7 @@ struct PolicyDraft: Equatable {
     var batteryFloor = 20
     var limitsDuration = false
     var maximumMinutes: Double = 120
+    var keepsDisplayAwake = true
 
     init() {}
     init(_ policy: UserPolicy) {
@@ -84,13 +102,14 @@ struct PolicyDraft: Equatable {
         batteryFloor = policy.batteryFloor
         limitsDuration = policy.maximumDuration != nil
         maximumMinutes = (policy.maximumDuration ?? 7_200) / 60
+        keepsDisplayAwake = policy.keepsDisplayAwake
     }
 
     func policy(allowsAutomation: Bool) throws -> UserPolicy {
         try UserPolicy(
             mode: mode, batteryFloor: batteryFloor,
             maximumDuration: limitsDuration ? maximumMinutes * 60 : nil,
-            allowsAutomation: allowsAutomation)
+            allowsAutomation: allowsAutomation, keepsDisplayAwake: keepsDisplayAwake)
     }
 }
 
@@ -98,6 +117,93 @@ enum StopChoice: Hashable {
     case unlimited
     case preset(Int)
     case custom, date, process
+}
+
+enum MenuBarStyle: String, CaseIterable {
+    case remainingTime, icon
+    case endTime = "timer"
+
+    var label: String {
+        switch self {
+        case .remainingTime: "Time remaining"
+        case .icon: "Icon only"
+        case .endTime: "End time"
+        }
+    }
+}
+
+struct StatusCommandClick {
+    private var origin: CGPoint?
+    var isTracking: Bool { origin != nil }
+
+    mutating func begin(at point: CGPoint, within bounds: CGRect) {
+        origin = bounds.contains(point) ? point : nil
+    }
+
+    mutating func cancel() { origin = nil }
+
+    mutating func finish(at point: CGPoint, within bounds: CGRect) -> Bool {
+        defer { cancel() }
+        guard let origin, bounds.contains(point) else { return false }
+        return hypot(point.x - origin.x, point.y - origin.y) < 4
+    }
+}
+
+struct MenuBarTime: Equatable {
+    let top: String
+    let bottom: String
+    let accessibilityLabel: String
+
+    static func panelDuration(_ remaining: Double?) -> String {
+        guard let remaining else { return "No limit" }
+        guard remaining.isFinite, remaining >= 0 else { return "Time unavailable" }
+        guard remaining <= 99 * 24 * 3_600 else { return "Over 99 days" }
+        return Duration.seconds(remaining).formatted(
+            .units(allowed: [.hours, .minutes, .seconds], width: .abbreviated))
+    }
+
+    static func remaining(seconds: Double) -> Self? {
+        guard seconds.isFinite, seconds > 0 else { return nil }
+        let rounded = ceil(seconds / 60)
+        guard rounded < 100 * 24 * 60 else {
+            return Self(top: "99+", bottom: "d", accessibilityLabel: "Over 99 days remaining")
+        }
+        let minutes = Int(rounded)
+        let hours = minutes / 60
+        let label = Duration.seconds(minutes * 60).formatted(
+            .units(allowed: [.days, .hours, .minutes], width: .wide))
+        if hours >= 100 {
+            return Self(top: "\(hours / 24)", bottom: "d", accessibilityLabel: "\(label) remaining")
+        }
+        return Self(
+            top: hours == 0 ? "00h" : "\(hours)h", bottom: String(format: "%02d", minutes % 60),
+            accessibilityLabel: "\(label) remaining")
+    }
+
+    static func end(at deadline: Date, calendar: Calendar = .current) -> Self {
+        let clock = calendar.dateComponents([.hour, .minute], from: deadline)
+        return Self(
+            top: String(format: "%02d:", clock.hour ?? 0),
+            bottom: String(format: "%02d", clock.minute ?? 0),
+            accessibilityLabel: "Ends at \(deadline.formatted(date: .omitted, time: .shortened))")
+    }
+}
+
+struct SessionNotices {
+    private var remindedID: UUID?
+
+    mutating func shouldRemind(_ status: ServiceStatus) -> Bool {
+        guard status.sleep.phase == .active, let id = status.protectionID,
+            let remaining = status.protectionRemainingSeconds, remaining > 0
+        else { return false }
+        if remaining > 5 * 60 {
+            if remindedID == id { remindedID = nil }
+            return false
+        }
+        guard remindedID != id else { return false }
+        remindedID = id
+        return true
+    }
 }
 
 enum DurationUnit: String, CaseIterable, Identifiable {

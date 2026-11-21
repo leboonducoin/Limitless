@@ -3,6 +3,46 @@ import Foundation
 
 public enum InstalledCLI {
     public static let target = "/Applications/Limitless.app/Contents/MacOS/limitless"
+    private static let privatePath = "Library/Application Support/Limitless CLI/Limitless.app"
+
+    static func privateApplication(
+        in home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> URL {
+        home.appendingPathComponent(privatePath, isDirectory: true)
+    }
+
+    static func privateExecutable(
+        in home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> URL {
+        privateApplication(in: home).appendingPathComponent("Contents/MacOS/limitless")
+    }
+
+    static func requirePrivatePath(_ url: URL, regularFile: Bool = false) throws {
+        let user = geteuid()
+        guard user != 0 else { throw JournalError.administratorRequired }
+        try requireProtectedPath(
+            root: URL(fileURLWithPath: "/"), components: Array(url.pathComponents.dropFirst()),
+            regularFile: regularFile, owner: user, allowRootAncestors: true)
+    }
+
+    public static func verifiedLaunchExecutable(for identity: SignedIdentity) throws -> URL {
+        let executable = identity.executableURL
+        try requirePrivatePath(executable, regularFile: true)
+        try identity.verifyExecutable(at: executable, identifier: LimitlessIdentity.commandLine)
+        return executable
+    }
+
+    public static var sharedPathIsProtected: Bool {
+        let root = URL(fileURLWithPath: "/")
+        return
+            (try? requireProtectedPath(
+                root: root,
+                components: ["Applications", "Limitless.app", "Contents", "MacOS", "limitless"],
+                regularFile: true, owner: 0)) != nil
+            && (try? requireProtectedPath(
+                root: root, components: ["usr", "local", "bin"], regularFile: false, owner: 0))
+                != nil
+    }
 
     public static func isAppOwnedLinkPresent() throws -> Bool {
         let path = "/usr/local/bin/limitless"
@@ -17,6 +57,10 @@ public enum InstalledCLI {
 
     public static func install(identity: SignedIdentity, user: uid_t) throws {
         guard geteuid() == 0 else { throw JournalError.administratorRequired }
+        if !sharedPathIsProtected {
+            if try isAppOwnedLinkPresent() { try remove(user: user) }
+            return
+        }
         try identity.verifyExecutable(
             at: URL(fileURLWithPath: target), identifier: LimitlessIdentity.commandLine)
         try change(root: URL(fileURLWithPath: "/"), user: user, install: true)
@@ -25,6 +69,100 @@ public enum InstalledCLI {
     public static func remove(user: uid_t) throws {
         guard geteuid() == 0 else { throw JournalError.administratorRequired }
         try change(root: URL(fileURLWithPath: "/"), user: user, install: false)
+    }
+
+    @discardableResult
+    @concurrent public static func refreshPrivateCopy() async throws -> URL {
+        let identity = try await SignedIdentity.current(
+            expectedIdentifier: LimitlessIdentity.application)
+        let source = try await GitHubUpdate.currentInstalledApplication(identity: identity)
+        let manager = FileManager.default
+        let destination = privateApplication()
+        let directory = destination.deletingLastPathComponent()
+        try requirePrivatePath(directory.deletingLastPathComponent())
+        try manager.createDirectory(
+            at: directory, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        try requirePrivatePath(directory)
+        try manager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        let record = "Contents/Resources/Build.json"
+        let expected = try Data(contentsOf: Bundle.main.bundleURL.appendingPathComponent(record))
+        let exists = try !SecureOwnershipJournal.directoryIsAbsent(at: destination.path)
+        if exists {
+            try requirePrivatePath(destination)
+            try identity.verifyExecutable(
+                at: destination, identifier: LimitlessIdentity.application)
+            if try Data(contentsOf: destination.appendingPathComponent(record)) == expected {
+                try requirePrivatePath(privateExecutable(), regularFile: true)
+                return try AgentSetup.protectedResources(in: destination, usePrivate: true)
+            }
+        }
+        let staging = directory.appendingPathComponent(".staging-\(UUID().uuidString)")
+        try manager.createDirectory(
+            at: staging, withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700])
+        defer { try? manager.removeItem(at: staging) }
+        let copy = staging.appendingPathComponent("Limitless.app", isDirectory: true)
+        try manager.copyItem(at: source, to: copy)
+        try identity.verifyExecutable(at: copy, identifier: LimitlessIdentity.application)
+        try identity.verifyExecutable(
+            at: copy.appendingPathComponent("Contents/MacOS/limitless"),
+            identifier: LimitlessIdentity.commandLine)
+        try requirePrivatePath(
+            copy.appendingPathComponent("Contents/MacOS/limitless"), regularFile: true)
+        _ = try AgentSetup.protectedResources(in: copy, usePrivate: true)
+        guard try Data(contentsOf: copy.appendingPathComponent(record)) == expected else {
+            throw SignatureError.untrustedIdentity
+        }
+        try Task.checkCancellation()
+        if exists {
+            _ = try manager.replaceItemAt(destination, withItemAt: copy)
+        } else {
+            try manager.moveItem(at: copy, to: destination)
+        }
+        return try AgentSetup.protectedResources(in: destination, usePrivate: true)
+    }
+
+    @concurrent public static func removePrivateCopy() async throws {
+        let destination = privateApplication()
+        guard try !SecureOwnershipJournal.directoryIsAbsent(at: destination.path) else { return }
+        try requirePrivatePath(destination)
+        let identity = try await SignedIdentity.current(
+            expectedIdentifier: LimitlessIdentity.application)
+        try identity.verifyExecutable(at: destination, identifier: LimitlessIdentity.application)
+        try FileManager.default.removeItem(at: destination)
+    }
+
+    static func requireProtectedPath(
+        root: URL, components: [String], regularFile: Bool, owner: uid_t,
+        allowRootAncestors: Bool = false
+    ) throws {
+        var descriptor = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        guard descriptor >= 0 else { throw JournalError.system(errno) }
+        defer { close(descriptor) }
+        func validate(_ fd: Int32, isFile: Bool) throws {
+            var info = stat()
+            guard fstat(fd, &info) == 0 else { throw JournalError.system(errno) }
+            var volume = statfs()
+            guard fstatfs(fd, &volume) == 0 else { throw JournalError.system(errno) }
+            guard info.st_uid == owner || (allowRootAncestors && info.st_uid == 0),
+                info.st_mode & 0o022 == 0,
+                info.st_mode & S_IFMT == (isFile ? S_IFREG : S_IFDIR),
+                volume.f_flags & UInt32(MNT_LOCAL) != 0,
+                volume.f_flags & UInt32(MNT_IGNORE_OWNERSHIP) == 0
+            else { throw JournalError.insecureDirectory }
+            try SecureOwnershipJournal.rejectWriteGrantingAccess(fd)
+        }
+        try validate(descriptor, isFile: false)
+        for (index, component) in components.enumerated() {
+            let isFile = regularFile && index == components.count - 1
+            let flags = O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC | (isFile ? 0 : O_DIRECTORY)
+            let child = openat(descriptor, component, flags)
+            guard child >= 0 else { throw JournalError.system(errno) }
+            close(descriptor)
+            descriptor = child
+            try validate(descriptor, isFile: isFile)
+        }
     }
 
     static func change(root: URL, user: uid_t, install: Bool) throws {

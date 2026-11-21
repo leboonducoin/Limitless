@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Try the Limitless menu for Mac, including a shared session and its two menu bar styles.">
+  <title>Try Limitless for Mac</title>
+  <style>
+    :root { color-scheme: dark; font: 16px/1.5 system-ui, sans-serif; }
+    body { margin: 0; background: #111728; color: #f4f6ff; }
+    main { max-width: 50rem; margin: auto; padding: clamp(1rem, 6vw, 4rem); }
+    h1 { margin: 0; font-size: clamp(2.2rem, 8vw, 4rem); letter-spacing: -.045em; }
+    p { max-width: 39rem; }
+    a { color: #b8cbff; }
+    fieldset { border: 1px solid #59647e; border-radius: .75rem; margin: 0 0 1rem; padding: .75rem 1rem; }
+    label { display: inline-block; margin: .3rem .85rem .3rem 0; cursor: pointer; }
+    input { accent-color: #f0873e; }
+    summary { cursor: pointer; padding: .4rem 0; }
+    :focus-visible { outline: 2px solid #b8cbff; outline-offset: 4px; }
+    .stage { padding: .8rem; background: #181e30; border: 1px solid #59647e; border-radius: 1rem; }
+    .bar { display: flex; justify-content: flex-end; padding: .5rem; border-bottom: 1px solid #59647e; }
+    .mark { color: #ff9f66; font-weight: 800; }
+    .time { font-variant-numeric: tabular-nums; font-weight: 650; }
+    .time .mark { font-size: .7em; vertical-align: sub; }
+    .menu { max-width: 25rem; margin: .75rem 0 0 auto; padding: 1rem; background: #252c41; border: 1px solid #687490; border-radius: .7rem; }
+    .menu h2 { margin: 0; font-size: 1.24rem; }
+    .menu p { margin: .5rem 0; }
+    .state { color: #cbd5ed; }
+    .idle, .shared, .closed, .icon { display: none; }
+    .demo:has(#idle:checked) .idle,
+    .demo:has(#shared:checked) .shared,
+    .demo:has(#closed:checked) .closed { display: block; }
+    .demo:has(#icon:checked) .bar .time { display: none; }
+    .demo:has(#icon:checked) .bar .icon { display: inline; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Limitless</h1>
+    <p>Keep your Mac awake while work is running.</p>
+  </header>
+  <section class="demo" aria-label="Interactive menu example">
+    <fieldset>
+      <legend>Preview a scenario</legend>
+      <label><input id="idle" name="scenario" type="radio" checked> Ready</label>
+      <label><input id="shared" name="scenario" type="radio"> Two tasks</label>
+      <label><input id="closed" name="scenario" type="radio"> Lid closed</label>
+    </fieldset>
+    <fieldset>
+      <legend>Menu bar appearance</legend>
+      <label><input id="timer" name="appearance" type="radio" checked> End time and icon</label>
+      <label><input id="icon" name="appearance" type="radio"> Icon only</label>
+    </fieldset>
+    <div class="stage">
+      <div class="bar" aria-label="Example menu bar">
+        <span class="idle" aria-label="Limitless ready">∞</span>
+        <span class="shared closed">
+          <span class="time">18:45 <span class="mark" aria-hidden="true">∞</span></span>
+          <span class="icon mark" aria-label="Limitless active">∞</span>
+        </span>
+      </div>
+      <div class="menu">
+        <h2>Limitless</h2>
+        <div class="idle">
+          <p><strong>Ready when you are</strong></p>
+          <p class="state">Choose a duration or follow a task.</p>
+        </div>
+        <div class="shared">
+          <p><strong>Staying awake</strong></p>
+          <p>Current session · until 18:45</p>
+          <p class="state">Two tracked tasks. Each keeps its own limits.</p>
+        </div>
+        <div class="closed">
+          <p><strong>Staying awake</strong></p>
+          <p>Lid closed · no external display</p>
+          <p class="state">Audio can mute during the session if you enable it in Options.</p>
+        </div>
+        <details>
+          <summary>Options</summary>
+          <p>Choose a favorite duration, display behavior, session alerts and agent access.</p>
+        </details>
+      </div>
+    </div>
+    <p>This browser preview simulates the menu. Download the native app to run a session.</p>
+  </section>
+  <p><a href="https://github.com/leboonducoin/Limitless/releases">GitHub Releases</a> ·
+    <a href="https://github.com/leboonducoin/Limitless">Source and documentation</a></p>
+</main>
+</body>
+</html>

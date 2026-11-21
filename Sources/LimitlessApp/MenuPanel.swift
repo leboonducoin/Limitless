@@ -7,24 +7,23 @@ struct MenuPanel: View {
     @Bindable var model: AppModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
-    private var contentHeight = SwiftUI.State<CGFloat>(wrappedValue: 320)
+    private static let logo = BrandArt.appIcon(size: 64)
 
     init(model: AppModel) {
         self.model = model
     }
 
     var body: some View {
+        if #available(macOS 15, *) {
+            panel.allowsWindowActivationEvents()
+        } else {
+            panel
+        }
+    }
+
+    private var panel: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                panelContent.fixedSize(horizontal: false, vertical: true)
-                    .onGeometryChange(for: CGFloat.self) {
-                        ceil($0.size.height)
-                    } action: {
-                        if contentHeight.wrappedValue != $0 { contentHeight.wrappedValue = $0 }
-                    }
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(height: min(contentHeight.wrappedValue, maximumBodyHeight))
+            panelContent.fixedSize(horizontal: false, vertical: true)
             Divider()
             HStack(spacing: 8) {
                 HStack(spacing: 0) {
@@ -56,35 +55,72 @@ struct MenuPanel: View {
         .transaction { $0.animation = nil }
     }
 
-    private var maximumBodyHeight: CGFloat {
-        max(200, (NSScreen.main?.visibleFrame.height ?? 740) - 100)
-    }
-
     private var panelContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Image(nsImage: BrandArt.appIcon(size: 64)).resizable()
+                Image(nsImage: Self.logo).resizable()
                     .frame(width: 32, height: 32).accessibilityHidden(true)
                 Text("Limitless").font(.system(size: 21, weight: .semibold))
                 Spacer()
+                if model.isPreview {
+                    Text("Preview").font(.caption).foregroundStyle(.secondary)
+                }
             }
             statusOverview
+                .padding(10)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
             if model.removalInProgress {
                 Text("Uninstall pending. Right-click the icon to retry.").font(.callout)
             }
-            Divider()
             if model.showsPowerControls {
                 sessionControls
             } else {
                 setupControls
             }
-            Divider()
-            SettingsView(model: model)
             if let message = model.message {
                 Text(message).font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }.padding(20)
+            VStack(alignment: .leading, spacing: 4) {
+                Divider()
+                Button {
+                    model.optionsExpanded.toggle()
+                } label: {
+                    HStack {
+                        Label("Options", systemImage: "slider.horizontal.3")
+                        Spacer()
+                        Image(systemName: model.optionsExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .accessibilityHidden(true)
+                    }
+                    .font(.callout.weight(.medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(model.optionsExpanded ? "Expanded" : "Collapsed")
+                if model.optionsExpanded {
+                    ScrollView {
+                        SettingsView(model: model)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 8)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(
+                        height: Self.optionsHeight(screenHeight: NSScreen.main?.visibleFrame.height)
+                    )
+                }
+            }
+        }
+        .padding([.top, .horizontal], 18)
+        .padding(.bottom, 8)
+        .onChange(of: model.draft) { model.policyEdited() }
+    }
+
+    static func optionsHeight(screenHeight: CGFloat?) -> CGFloat {
+        min(250, (screenHeight ?? 750) / 3)
     }
 
     private var statusOverview: some View {
@@ -107,6 +143,19 @@ struct MenuPanel: View {
             if let error = model.connectionError ?? model.status?.sleep.fault?.guidance {
                 Text(error).font(.caption).fixedSize(horizontal: false, vertical: true)
             }
+            if model.status?.thermal == .serious || model.status?.thermal == .critical {
+                Label("High thermal load", systemImage: "thermometer.high")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+            if let lid = model.lidDisplayState.label {
+                Label(lid, systemImage: "laptopcomputer").font(.caption)
+            }
+            if let audio = model.audioMessage {
+                Label(audio, systemImage: "speaker.slash").font(.caption)
+            }
+            if let hotspot = model.hotspotMessage {
+                Label(hotspot, systemImage: "wifi.exclamationmark").font(.caption)
+            }
             if model.connectionError != nil {
                 Button("Reconnect") { Task { await model.refresh() } }.disabled(model.busy)
             }
@@ -124,27 +173,24 @@ struct MenuPanel: View {
                         .disabled(!model.canControl || model.busy)
                 }
             }
-            if let session = model.ownSession {
+            if model.status?.sessions.isEmpty == false {
                 HStack {
                     Text("Current session")
                     Spacer()
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        if let remaining = model.remainingSeconds(session) {
-                            Text(
-                                Duration.seconds(remaining).formatted(
-                                    .units(
-                                        allowed: [.hours, .minutes, .seconds], width: .abbreviated))
-                            ).monospacedDigit()
-                        } else {
-                            Text("No limit")
-                        }
+                    TimelineView(.animation(minimumInterval: 1, paused: !model.panelVisible)) { _ in
+                        Text(MenuBarTime.panelDuration(model.protectionRemainingSeconds))
+                            .monospacedDigit()
                     }
                 }.font(.callout).foregroundStyle(.secondary)
-            } else {
+            }
+            if model.status?.sessions.isEmpty != false || model.hasOnlyAutomatedSessions {
                 StopEditor(model: model)
-                startButton.disabled(
-                    (!model.canControl && !model.isPreview) || model.busy
-                        || model.status?.sleep.fault != nil)
+                startButton.disabled(!model.canStartManualSession)
+                if model.status?.sessions.isEmpty == true, let outcome = model.lastSessionMessage,
+                    model.batteryNotice == nil
+                {
+                    Text(outcome).font(.caption).foregroundStyle(.secondary)
+                }
             }
             if (model.status?.sessions.count ?? 0) > 0 {
                 HStack(spacing: 8) {
@@ -157,6 +203,7 @@ struct MenuPanel: View {
                         ).frame(maxWidth: .infinity)
                     }
                     .help("End all Limitless sessions; running commands continue.")
+                    .keyboardShortcut(".", modifiers: .command)
                     .controlSize(.large).buttonStyle(.bordered)
                     .disabled(
                         (!model.canControl && !model.isPreview) || model.stoppingSessions
@@ -169,6 +216,7 @@ struct MenuPanel: View {
                                 .frame(width: 28, height: 28).contentShape(Circle())
                         }
                         .buttonStyle(.bordered).buttonBorderShape(.circle)
+                        .keyboardShortcut("+", modifiers: .command)
                         .accessibilityLabel("Add 15 minutes").help("Add 15 minutes")
                         .disabled(
                             (!model.canControl && !model.isPreview) || !model.canExtendSession
@@ -177,10 +225,22 @@ struct MenuPanel: View {
                 }
             }
             if model.showsTaskCount {
-                Label(
-                    "\(model.taskCount) tracked \(model.taskCount == 1 ? "task" : "tasks")",
-                    systemImage: "terminal"
-                ).font(.caption)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(
+                        "\(model.taskCount) tracked \(model.taskCount == 1 ? "task" : "tasks")",
+                        systemImage: "terminal"
+                    )
+                    if let sessions = model.status?.sessions {
+                        let providers = Set(sessions.compactMap(\.agent))
+                        if !providers.isEmpty {
+                            Text(
+                                AgentProvider.allCases.filter(providers.contains).map(\.displayName)
+                                    .formatted(.list(type: .and))
+                            )
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                }.font(.caption)
             }
             if let processes = model.watchedProcesses, !processes.isEmpty {
                 ScrollView {
@@ -212,6 +272,7 @@ struct MenuPanel: View {
             Label(model.busy ? "Verifying…" : "Keep awake", systemImage: "power")
                 .frame(maxWidth: .infinity)
         }.controlSize(.large)
+            .keyboardShortcut(.return, modifiers: .command)
         if reduceTransparency || contrast == .increased {
             button.buttonStyle(.borderedProminent)
         } else if #available(macOS 26, *) {

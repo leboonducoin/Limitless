@@ -8,7 +8,7 @@ import os
 
 final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private let queue = DispatchQueue(label: "io.github.leboonducoin.Limitless.helper")
-    private let pending = OSAllocatedUnfairLock(initialState: 0)
+    private let pending = OSAllocatedUnfairLock(initialState: (total: 0, tasks: 0, admissions: 0))
     private let logger = Logger(subsystem: LimitlessIdentity.helper, category: "service")
     private let identity: SignedIdentity
     private let control = NSXPCListener(machServiceName: LimitlessIdentity.controlService)
@@ -18,6 +18,7 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private var watchdog: (any DispatchSourceTimer)?
     private var signals: [any DispatchSourceSignal] = []
     private var notificationTokens: [Int32] = []
+    private var thermalObserver: (any NSObjectProtocol)?
     private var stoppingAt: TimeInterval?
 
     init(identity: SignedIdentity) {
@@ -49,6 +50,12 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
                     logger.error("Power notification unavailable; watchdog remains active.")
                 }
             }
+            thermalObserver = NotificationCenter.default.addObserver(
+                forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: nil
+            ) { [weak self] _ in
+                guard let self else { return }
+                queue.async { self.tick() }
+            }
             for number in [SIGTERM, SIGINT] {
                 signal(number, SIG_IGN)
                 let source = DispatchSource.makeSignalSource(signal: number, queue: queue)
@@ -65,6 +72,17 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
         -> Bool
     {
         let role: ClientRole = listener === control ? .application : .task
+        if role == .task {
+            let admitted = pending.withLock { count in
+                guard count.admissions < 4 else { return false }
+                count.admissions += 1
+                return true
+            }
+            guard admitted else { return false }
+        }
+        defer {
+            if role == .task { pending.withLock { $0.admissions -= 1 } }
+        }
         let identifier =
             role == .application ? LimitlessIdentity.application : LimitlessIdentity.commandLine
         guard let requirement = try? identity.requirement(for: identifier),
@@ -78,7 +96,7 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
                 connections.count < ServiceSessions.clientCapacity
             else { return false }
             do {
-                _ = try runtime.reconcile(owner: owner)
+                try runtime.reconcile()
                 try runtime.sessions.connect(
                     owner: owner, user: connection.effectiveUserIdentifier,
                     role: role, now: SystemClock.now())
@@ -88,19 +106,22 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
         }
         guard accepted else { return false }
         connection.exportedInterface = NSXPCInterface(with: LimitlessXPC.self)
-        connection.exportedObject = Endpoint(server: self, owner: owner)
+        connection.exportedObject = Endpoint(server: self, owner: owner, role: role)
         connection.invalidationHandler = { [weak self] in self?.disconnect(owner) }
         connection.interruptionHandler = { [weak connection] in connection?.invalidate() }
         connection.activate()
         return true
     }
 
-    func submit(_ data: Data, owner: UUID, reply: @escaping @Sendable (Data) -> Void) {
+    func submit(
+        _ data: Data, owner: UUID, role: ClientRole, reply: @escaping @Sendable (Data) -> Void
+    ) {
         let admitted = pending.withLock { count in
-            guard count < ServiceSessions.clientCapacity,
+            guard count.total < ServiceSessions.clientCapacity, role != .task || count.tasks < 8,
                 data.count <= ServiceWire.maximumMessageBytes
             else { return false }
-            count += 1
+            count.total += 1
+            if role == .task { count.tasks += 1 }
             return true
         }
         guard admitted else {
@@ -108,7 +129,12 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
             return
         }
         queue.async { [self] in
-            defer { pending.withLock { $0 -= 1 } }
+            defer {
+                pending.withLock { count in
+                    count.total -= 1
+                    if role == .task { count.tasks -= 1 }
+                }
+            }
             guard stoppingAt == nil, let runtime, connections[owner] != nil else {
                 reply(Self.encode(ServiceReply(error: .ownerExpired)))
                 return
@@ -121,7 +147,7 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private func disconnect(_ owner: UUID) {
         queue.async { [self] in
             connections.removeValue(forKey: owner)
-            runtime?.sessions.disconnect(owner)
+            runtime?.sessions.disconnect(owner, at: Date())
             tick()
         }
     }
@@ -136,7 +162,7 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     private func tick() {
         guard let runtime else { return }
         do {
-            _ = try runtime.reconcile(owner: UUID())
+            try runtime.reconcile()
             pruneExpired()
             if let stoppingAt {
                 if !runtime.controller.ownsGlobalHold { exit(0) }
@@ -170,11 +196,13 @@ final class HelperServer: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
 private final class Endpoint: NSObject, LimitlessXPC {
     let server: HelperServer
     let owner: UUID
-    init(server: HelperServer, owner: UUID) {
+    let role: ClientRole
+    init(server: HelperServer, owner: UUID, role: ClientRole) {
         self.server = server
         self.owner = owner
+        self.role = role
     }
     func request(_ data: Data, reply: @escaping @Sendable (Data) -> Void) {
-        server.submit(data, owner: owner, reply: reply)
+        server.submit(data, owner: owner, role: role, reply: reply)
     }
 }

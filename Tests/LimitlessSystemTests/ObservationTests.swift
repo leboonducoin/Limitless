@@ -14,6 +14,9 @@ import Testing
     var display = active
     display[kIOPMAssertionTypeKey] = kIOPMAssertionTypePreventUserIdleDisplaySleep
     #expect(CaffeinateAssertion.containsIdleAssertion([active, display]))
+    #expect(CaffeinateAssertion.containsIdleAssertion([active], keepingDisplayAwake: false))
+    #expect(
+        !CaffeinateAssertion.containsIdleAssertion([active, display], keepingDisplayAwake: false))
     #expect(!CaffeinateAssertion.containsIdleAssertion([active]))
     #expect(!CaffeinateAssertion.containsIdleAssertion([display]))
     #expect(!CaffeinateAssertion.containsIdleAssertion(nil))

@@ -6,9 +6,10 @@ public enum SleepObservation: String, Codable, Sendable {
 
 public protocol SleepBackend {
     var hasIdleAssertion: Bool { get }
+    var keepsDisplayAwake: Bool { get }
     mutating func observe() -> SleepObservation
     mutating func setSleepDisabled(_ disabled: Bool) throws
-    mutating func setIdleAssertion(_ held: Bool) throws
+    mutating func setIdleAssertion(_ held: Bool, keepingDisplayAwake: Bool) throws
 }
 
 public protocol OwnershipJournal {
@@ -70,7 +71,7 @@ public struct SleepController: Sendable {
     }
 
     public mutating func reconcile(
-        wantsAwake: Bool, now: ClockSnapshot,
+        wantsAwake: Bool, keepsDisplayAwake: Bool = true, now: ClockSnapshot,
         backend: inout some SleepBackend, journal: inout some OwnershipJournal
     ) -> SleepReport {
         if let lastTime, now.continuous < lastTime {
@@ -82,6 +83,9 @@ public struct SleepController: Sendable {
         let observed = backend.observe()
 
         if !wantsAwake || fault != nil {
+            if !ownsGlobalHold {
+                return report(fault == nil ? .inactive : .blocked, observed)
+            }
             return restore(now: now.continuous, backend: &backend, journal: &journal)
         }
         guard observed != .unknown else {
@@ -101,7 +105,9 @@ public struct SleepController: Sendable {
                 return report(.blocked, observed)
             }
         } else if observed == .disabled, backend.hasIdleAssertion {
-            return report(.active, observed)
+            if backend.keepsDisplayAwake == keepsDisplayAwake {
+                return report(.active, observed)
+            }
         } else {
             guard recoveryAttempts < Self.retryLimit else {
                 fault = .recoveryExhausted
@@ -112,9 +118,10 @@ public struct SleepController: Sendable {
         }
 
         do {
-            try backend.setIdleAssertion(true)
-            guard backend.hasIdleAssertion else { throw SleepFault.activationFailed }
-            try backend.setSleepDisabled(true)
+            try backend.setIdleAssertion(true, keepingDisplayAwake: keepsDisplayAwake)
+            guard backend.hasIdleAssertion, backend.keepsDisplayAwake == keepsDisplayAwake
+            else { throw SleepFault.activationFailed }
+            if observed != .disabled { try backend.setSleepDisabled(true) }
             let applied = backend.observe()
             guard applied == .disabled else { throw SleepFault.activationFailed }
             recoveryAt = now.continuous + pow(2, Double(recoveryAttempts))
@@ -142,7 +149,7 @@ public struct SleepController: Sendable {
         restorationAt = now + pow(2, Double(restorationAttempts))
         var assertionReleased = false
         do {
-            try backend.setIdleAssertion(false)
+            try backend.setIdleAssertion(false, keepingDisplayAwake: false)
             assertionReleased = !backend.hasIdleAssertion
         } catch {
         }

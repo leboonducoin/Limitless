@@ -49,15 +49,29 @@ private final class MockUpdateHelper: @unchecked Sendable, HelperInstallation {
     #expect(!AppDelegate.isSystemRestart(NSAppleEventDescriptor(string: "restart")))
 }
 
-@Test @MainActor func restartDeferralEndsWithTheLastLiveProtectedSession() {
-    #expect(AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: [120]))
-    #expect(AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: [0, nil]))
-    #expect(!AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: [0]))
-    #expect(!AppDelegate.shouldDeferRestart(presentation: .active, remainingSessions: []))
+@Test @MainActor func onlyALiveManualSessionCanDeferAnOrdinaryRestart() {
+    func session(_ kind: SessionKind, remaining: TimeInterval?, suspended: Bool = false)
+        -> SessionSummary
+    {
+        SessionSummary(
+            id: UUID(), kind: kind, end: .unlimited, startedAt: .distantPast,
+            remainingSeconds: remaining, suspension: suspended ? .powerSource : nil,
+            belongsToClient: kind == .manual)
+    }
+    func deferred(_ sessions: [SessionSummary], while state: PowerPresentation? = .active) -> Bool {
+        AppDelegate.shouldDeferRestart(
+            presentation: state, sessions: sessions, remaining: { $0.remainingSeconds })
+    }
+    #expect(deferred([session(.manual, remaining: 120)]))
+    #expect(deferred([session(.manual, remaining: 0), session(.manual, remaining: nil)]))
+    #expect(!deferred([session(.manual, remaining: 0)]))
+    #expect(!deferred([session(.manual, remaining: nil, suspended: true)]))
+    #expect(!deferred([session(.agent, remaining: nil), session(.task, remaining: 120)]))
+    #expect(!deferred([]))
     for state: PowerPresentation? in [
         nil, .inactive, .suspended, .recovering, .restoring, .attention, .unknown,
     ] {
-        #expect(!AppDelegate.shouldDeferRestart(presentation: state, remainingSessions: [120]))
+        #expect(!deferred([session(.manual, remaining: 120)], while: state))
     }
 }
 
@@ -241,6 +255,19 @@ private func status(
         #expect(unreadable.showsPowerSource && unreadable.showsBatteryLimit)
     }
 
+    @Test @MainActor func missingBatteryReadingLeavesRestrictedPowerSourceEditable() throws {
+        let model = AppModel.preview("desktop")
+        let desktop = try #require(model.status)
+        let response = ServiceStatus(
+            policy: try UserPolicy(mode: .battery), power: desktop.power, sleep: desktop.sleep,
+            sessions: [], sampledAt: Date())
+        try model.accept(ServiceReply(status: response))
+        #expect(model.draft.mode == .battery)
+        #expect(model.showsPowerSource)
+        #expect(!model.showsBatteryLimit)
+        #expect(!model.showsLidControls)
+    }
+
     @Test @MainActor func setupHidesPowerControlsUntilTheHelperIsAvailable() {
         #expect(!AppModel().showsPowerControls)
         for state in ["setup", "removed"] {
@@ -272,45 +299,27 @@ private func status(
         #expect(model.status == nil && !model.removalComplete)
     }
 
-    @Test @MainActor func helperApprovalEnablesLoginOnceWithoutOverridingLaterChoices() throws {
+    @Test @MainActor func oldPreferencesCannotReenableLaunchAtLogin() throws {
         let suite = "Limitless-login-test-\(UUID().uuidString)"
         let preferences = try #require(UserDefaults(suiteName: suite))
         defer { preferences.removePersistentDomain(forName: suite) }
         preferences.set(true, forKey: "enableLoginAfterHelperApproval")
         let model = AppModel(preferences: preferences)
         var registrations = 0
-        for status: SMAppService.Status in [.notRegistered, .requiresApproval, .notFound] {
+        for status: SMAppService.Status in [.notRegistered, .requiresApproval, .notFound, .enabled]
+        {
             try model.completeLoginSetup(helperStatus: status) { registrations += 1 }
         }
         #expect(registrations == 0)
-        let reopened = AppModel(preferences: preferences)
-        try reopened.completeLoginSetup(helperStatus: .enabled) { registrations += 1 }
-        try reopened.completeLoginSetup(helperStatus: .enabled) { registrations += 1 }
-        #expect(registrations == 1)
-        #expect(reopened.status == nil)
-        preferences.set(true, forKey: "enableLoginAfterHelperApproval")
-        #expect(throws: CocoaError.self) {
-            try reopened.completeLoginSetup(helperStatus: .enabled) {
-                throw CocoaError(.userCancelled)
-            }
-        }
-        try reopened.completeLoginSetup(helperStatus: .enabled) { registrations += 1 }
-        #expect(registrations == 1)
     }
 
-    @Test @MainActor func helperApprovalEnablesUpdatesOnlyWhenNoChoiceWasSaved() throws {
+    @Test @MainActor func generalPreferencesCannotEnableAutomaticUpdates() throws {
         let suite = "Limitless-updates-test-\(UUID().uuidString)"
         let preferences = try #require(UserDefaults(suiteName: suite))
         defer { preferences.removePersistentDomain(forName: suite) }
+        preferences.set(true, forKey: "automaticUpdates")
         let model = AppModel(preferences: preferences)
-        model.completeUpdateSetup(helperStatus: .requiresApproval)
         #expect(!model.automaticUpdates)
-        model.completeUpdateSetup(helperStatus: .enabled)
-        #expect(model.automaticUpdates)
-        model.automaticUpdates = false
-        let reopened = AppModel(preferences: preferences)
-        reopened.completeUpdateSetup(helperStatus: .enabled)
-        #expect(!reopened.automaticUpdates)
     }
 
     @Test @MainActor func updateHelperRecoveryRetriesFailuresAndAcceptsPendingApproval()
@@ -321,27 +330,40 @@ private func status(
         defer { preferences.removePersistentDomain(forName: suite) }
         let helper = MockUpdateHelper(status: .notRegistered)
         helper.registrationFails = true
-        preferences.set(true, forKey: AppModel.updateHelperRecoveryKey)
-        let model = AppModel(
+        preferences.set(true, forKey: "restoreHelperAfterUpdate")
+        let oldPreferences = AppModel(
             preferences: preferences, helper: helper, buildTrust: .trusted)
-        await model.restoreUpdateHelperIfNeeded()
+        await oldPreferences.restoreUpdateHelperIfNeeded(confirmReady: { true })
+        #expect(helper.registrations == 0 && !oldPreferences.updateHelperRecoveryPending)
+        let model = AppModel(
+            preferences: preferences, helper: helper, buildTrust: .trusted,
+            updateHelperRecoveryPending: true)
+        await model.restoreUpdateHelperIfNeeded(
+            ownerIsStillRunning: { true }, confirmReady: { false })
+        #expect(model.waitingForUpdateInstaller && helper.registrations == 0)
+        await model.restoreUpdateHelperIfNeeded(
+            ownerIsStillRunning: { false }, confirmReady: { false })
+        #expect(!model.waitingForUpdateInstaller)
         #expect(helper.registrations == 1)
-        #expect(preferences.bool(forKey: AppModel.updateHelperRecoveryKey))
+        #expect(model.updateHelperRecoveryPending)
         #expect(model.message != nil)
         helper.registrationFails = false
-        await model.restoreUpdateHelperIfNeeded()
+        await model.restoreUpdateHelperIfNeeded(confirmReady: { false })
         #expect(helper.registrations == 2)
         #expect(helper.status == .enabled)
-        #expect(preferences.object(forKey: AppModel.updateHelperRecoveryKey) == nil)
+        #expect(model.updateHelperRecoveryPending)
+        await model.restoreUpdateHelperIfNeeded(confirmReady: { true })
+        #expect(helper.registrations == 2)
+        #expect(!model.updateHelperRecoveryPending)
 
         let pending = MockUpdateHelper(status: .requiresApproval)
-        preferences.set(true, forKey: AppModel.updateHelperRecoveryKey)
         let reopened = AppModel(
-            preferences: preferences, helper: pending, buildTrust: .trusted)
+            preferences: preferences, helper: pending, buildTrust: .trusted,
+            updateHelperRecoveryPending: true)
         await reopened.restoreUpdateHelperIfNeeded()
         #expect(pending.registrations == 0)
         #expect(reopened.helperStatus == .requiresApproval)
-        #expect(preferences.object(forKey: AppModel.updateHelperRecoveryKey) == nil)
+        #expect(!reopened.updateHelperRecoveryPending)
     }
 
     @Test @MainActor func sudoTouchIDPermissionFeedbackPreservesSessionState() throws {
@@ -394,9 +416,6 @@ private func status(
         #expect(model.isPreview && !model.canControl)
         await model.prepareForLaunch()
         #expect(model.buildTrust == .untrusted)
-        await model.stopAll()
-        await model.extendSession()
-        #expect(!model.extendingSession && !model.stoppingSessions)
         await model.setAutomation(false)
         await model.setSudoTouchID(true)
         await model.setSudoTouchID(false)
@@ -432,8 +451,8 @@ private func status(
         var schedule = UpdateSchedule()
         let beganDownload = schedule.beginDownload()
         #expect(beganDownload)
-        preferences.set(try JSONEncoder().encode(schedule), forKey: "updateSchedule")
-        let manual = AppModel(preferences: preferences, helper: nil, buildTrust: .trusted)
+        let manual = AppModel(
+            preferences: preferences, helper: nil, buildTrust: .trusted, updateSchedule: schedule)
         #expect(!manual.recordDetectedUpdate(update, manual: true))
         #expect(!manual.showsUpdateButton)
         #expect(!manual.canInstallAvailableUpdate(manual: true))
@@ -464,8 +483,8 @@ private func status(
         var schedule = UpdateSchedule()
         let beganCheck = schedule.beginCheck()
         #expect(beganCheck)
-        preferences.set(try JSONEncoder().encode(schedule), forKey: "updateSchedule")
-        let model = AppModel(preferences: preferences, helper: nil, buildTrust: .trusted)
+        let model = AppModel(
+            preferences: preferences, helper: nil, buildTrust: .trusted, updateSchedule: schedule)
         let update = await model.checkForUpdates(manual: true)
         #expect(update == nil)
         #expect(model.updateMessage?.hasPrefix("The next update check is available after ") == true)

@@ -1,7 +1,14 @@
 import Foundation
 
 public enum SessionStopReason: String, Codable, Sendable {
-    case expired, batteryFloor, automationRevoked, policyChanged
+    case expired, batteryFloor, automationRevoked, policyChanged, thermalCritical
+    case requested, taskEnded, ownerLost, manualPriority, powerFault
+}
+
+public struct SessionEnding: Codable, Equatable, Sendable {
+    public let id: UUID
+    public let reason: SessionStopReason
+    public let date: Date
 }
 
 public enum SuspensionReason: String, Codable, Sendable {
@@ -24,7 +31,9 @@ public struct BatteryCutoff: Codable, Equatable, Sendable {
 public struct SessionRegistry: Sendable {
     public private(set) var policy: UserPolicy
     public private(set) var sessions: [UUID: Session] = [:]
+    public private(set) var protectionID: UUID?
     public private(set) var batteryCutoff: BatteryCutoff?
+    public private(set) var recentEndings: [SessionEnding] = []
     public static let capacity = 256
 
     public init(policy: UserPolicy) { self.policy = policy }
@@ -34,27 +43,38 @@ public struct SessionRegistry: Sendable {
     @discardableResult
     public mutating func start(
         _ request: SessionRequest, owner: UUID, kind: SessionKind,
-        now: ClockSnapshot, id: UUID = UUID()
+        now: ClockSnapshot, id: UUID = UUID(), agent: AgentProvider? = nil
     ) throws -> UUID {
         try request.validate(policy: policy, kind: kind, now: now)
         guard sessions[id] == nil else { throw PolicyError.duplicateSession }
         guard sessions.count < Self.capacity else { throw PolicyError.sessionLimitReached }
-        if kind == .agent, sessions.values.contains(where: { $0.kind == .manual }) {
+        if kind != .manual, sessions.values.contains(where: { $0.kind == .manual }) {
             throw ServiceError.sessionRejected
         }
-        if kind == .manual { sessions = sessions.filter { $0.value.kind != .agent } }
+        let sharedID = protectionID ?? UUID()
+        if kind == .manual {
+            guard !sessions.values.contains(where: { $0.kind == .manual }) else {
+                throw PolicyError.duplicateSession
+            }
+            for automation in sessions.values {
+                end(automation.id, reason: .manualPriority, at: now.wall)
+            }
+        }
         sessions[id] = Session(
-            id: id, owner: owner, kind: kind, request: request,
+            id: id, owner: owner, kind: kind, request: request, agent: agent,
             started: now, authorizedDuration: policy.maximumDuration
         )
+        protectionID = sharedID
         batteryCutoff = nil
         return id
     }
 
     @discardableResult
-    public mutating func stop(_ id: UUID, owner: UUID) -> Bool {
+    public mutating func stop(
+        _ id: UUID, owner: UUID, reason: SessionStopReason = .requested, at date: Date? = nil
+    ) -> Bool {
         guard sessions[id]?.owner == owner else { return false }
-        sessions.removeValue(forKey: id)
+        end(id, reason: reason, at: date)
         return true
     }
 
@@ -88,32 +108,48 @@ public struct SessionRegistry: Sendable {
             mode: session.request.mode, batteryFloor: session.request.batteryFloor, end: end)
         try request.validate(policy: policy, kind: session.kind, now: now)
         sessions[id] = Session(
-            id: id, owner: owner, kind: session.kind, request: request,
+            id: id, owner: owner, kind: session.kind, request: request, agent: session.agent,
             started: session.started, authorizedDuration: session.authorizedDuration)
     }
 
-    public mutating func releaseOwner(_ owner: UUID) {
-        sessions = sessions.filter { $0.value.owner != owner }
+    public mutating func releaseOwner(_ owner: UUID, at date: Date? = nil) {
+        for session in sessions.values where session.owner == owner {
+            end(session.id, reason: .ownerLost, at: date)
+        }
     }
 
-    public mutating func stopAll() {
-        sessions.removeAll()
+    public mutating func stopAll(reason: SessionStopReason = .requested, at date: Date? = nil) {
+        if date == nil {
+            sessions.removeAll()
+            protectionID = nil
+        } else {
+            for id in sessions.keys { end(id, reason: reason, at: date) }
+        }
     }
 
-    public mutating func revokeAutomationAndStop() throws {
-        stopAll()
+    public mutating func revokeAutomationAndStop(
+        reason: SessionStopReason = .automationRevoked, at date: Date? = nil
+    ) throws {
+        stopAll(reason: reason, at: date)
         policy = try UserPolicy(
             mode: policy.mode, batteryFloor: policy.batteryFloor,
-            maximumDuration: policy.maximumDuration, allowsAutomation: false
+            maximumDuration: policy.maximumDuration, allowsAutomation: false,
+            keepsDisplayAwake: policy.keepsDisplayAwake
         )
     }
 
-    public mutating func evaluate(power: PowerSnapshot, now: ClockSnapshot) -> SessionEvaluation {
+    public mutating func evaluate(
+        power: PowerSnapshot, now: ClockSnapshot, thermal: ThermalCondition = .nominal
+    ) -> SessionEvaluation {
         var eligible: Set<UUID> = []
         var suspended: [UUID: SuspensionReason] = [:]
         var stopped: [UUID: SessionStopReason] = [:]
 
         for session in sessions.values {
+            if thermal == .critical {
+                stopped[session.id] = .thermalCritical
+                continue
+            }
             if session.kind != .manual, !policy.allowsAutomation {
                 stopped[session.id] = .automationRevoked
                 continue
@@ -153,7 +189,15 @@ public struct SessionRegistry: Sendable {
             }
             eligible.insert(session.id)
         }
-        for id in stopped.keys { sessions.removeValue(forKey: id) }
+        for (id, reason) in stopped { end(id, reason: reason, at: now.wall) }
         return SessionEvaluation(eligible: eligible, suspended: suspended, stopped: stopped)
+    }
+
+    private mutating func end(_ id: UUID, reason: SessionStopReason, at date: Date?) {
+        sessions.removeValue(forKey: id)
+        if sessions.isEmpty { protectionID = nil }
+        guard let date else { return }
+        if recentEndings.count == 32 { recentEndings.removeFirst() }
+        recentEndings.append(SessionEnding(id: id, reason: reason, date: date))
     }
 }

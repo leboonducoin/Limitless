@@ -101,7 +101,7 @@ jobs:
         run: |
           swiftc Tools/ProjectTool.swift -o "$RUNNER_TEMP/limitless-project-tool"
           swiftc Sources/LimitlessApp/BrandArt.swift Tools/ExportIcon.swift -o "$RUNNER_TEMP/limitless-export-icon"
-          swiftc -DDEBUG -swift-version 6 -parse-as-library -whole-module-optimization -I "$(swift build --show-bin-path)/Modules" -c Sources/LimitlessApp/AppModel.swift Sources/LimitlessApp/BrandArt.swift Sources/LimitlessApp/MenuPanel.swift Sources/LimitlessApp/Presentation.swift Sources/LimitlessApp/SettingsView.swift Tools/ExportPreview.swift -o "$RUNNER_TEMP/limitless-export-preview.o"
+          swiftc -DDEBUG -swift-version 6 -parse-as-library -whole-module-optimization -I "$(swift build --show-bin-path)/Modules" -c Sources/LimitlessApp/AppModel.swift Sources/LimitlessApp/BrandArt.swift Sources/LimitlessApp/EnvironmentActions.swift Sources/LimitlessApp/MenuPanel.swift Sources/LimitlessApp/Presentation.swift Sources/LimitlessApp/SettingsView.swift Tools/ExportPreview.swift -o "$RUNNER_TEMP/limitless-export-preview.o"
           swiftc -swift-version 6 -parse-as-library Sources/LimitlessSystem/SignedConnection.swift Tests/SignedXPC/Probe.swift -o "$RUNNER_TEMP/limitless-xpc-probe"
           swiftc -swift-version 6 Tests/SignedXPC/Run.swift -o "$RUNNER_TEMP/limitless-xpc-test-runner"
           swiftc -swift-version 6 Tests/SignedUpdate/Run.swift -o "$RUNNER_TEMP/limitless-update-test-runner"

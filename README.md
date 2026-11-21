@@ -22,6 +22,10 @@ Original soundtrack: [MP3 & WAV](assets/music/)
 [GitHub Releases](https://github.com/leboonducoin/Limitless/releases) is the only
 download location.
 
+Upgrading from 1.1 or earlier requires a manual download and installation.
+If you use the CLI or AI hooks, follow the
+[migration steps](docs/cli.md#upgrading-from-11-or-earlier) before updating.
+
 Unzip the archive, drag **Limitless.app** to **Applications**, then open it.
 The icon appears in your menu bar. Click **Enable Limitless** and approve the
 macOS administrator prompt. Your password is never stored.
@@ -32,7 +36,17 @@ Privacy & Security → Open Anyway**. [Apple’s instructions](https://support.a
 
 ## Use it
 
-Choose a duration and click **Keep awake**. The orange dot means it is active.
+Choose a duration and click **Keep awake**. The orange mark indicates active protection.
+
+Command-click the menu-bar icon to start your favorite duration or add 15 minutes
+to your running timer. The menu bar shows remaining time by default, with options
+for the end time or the icon alone. Open **Options** for display
+sleep, notifications, audio muting, iPhone hotspot fallback and agent setup.
+
+Concurrent eligible requests share one protection session. Each keeps its
+own limits. Stop ends the shared session.
+
+[Compatibility and validation](docs/compatibility.md) · [Interactive demo source](docs/demo.html)
 
 - Stop after a timer, at a date, or when all selected processes finish.
 - Choose battery, power adapter, or both. Reserve 20% battery by default.
@@ -48,6 +62,7 @@ For the terminal and AI integrations, enable **Allow CLI & AI tasks** in the app
 ```sh
 limitless --help
 limitless status
+limitless doctor
 ```
 
 [CLI and one-command AI setup →](docs/cli.md)

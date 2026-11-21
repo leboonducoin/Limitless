@@ -51,12 +51,23 @@ public enum SudoInstallation {
         else {
             throw HelperInstallationError.invalidBundle
         }
-        let bundle = Bundle.main.bundleURL.appendingPathComponent(LimitlessIdentity.sudoBundlePath)
+        let source = Bundle.main.bundleURL.appendingPathComponent(LimitlessIdentity.sudoBundlePath)
+        let bundle = try PrivateApplicationLaunch.copy(source)
+        var running: NSRunningApplication?
+        defer {
+            if running?.isTerminated != false {
+                PrivateApplicationLaunch.remove(bundle)
+            }
+        }
         try verifyBundle(bundle, identity: identity, build: build)
+        try InstalledCLI.requirePrivatePath(
+            bundle.appendingPathComponent("Contents/MacOS/LimitlessSudo"), regularFile: true)
         let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
         configuration.arguments = [register ? "--register" : "--unregister"]
         let app = try await NSWorkspace.shared.openApplication(
             at: bundle, configuration: configuration)
+        running = app
         let deadline = ContinuousClock.now.advanced(by: .seconds(120))
         while !app.isTerminated, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(250))
@@ -70,7 +81,7 @@ public enum SudoInstallation {
         if !isRegistered { try await openConfigurator(register: true) }
     }
 
-    @MainActor public static func remove(forUpdate: Bool) async throws {
+    @MainActor public static func remove(forUpdate: Bool, authorization: Data?) async throws {
         if !isRegistered {
             guard try InstalledHelperFiles.areAbsent(kind: .sudo) else {
                 throw HelperInstallationError.unconfirmedRemoval
@@ -81,8 +92,9 @@ public enum SudoInstallation {
         if try !InstalledHelperFiles.areAbsent(kind: .sudo) {
             let client = try await ServiceClient(role: .application, sudo: true)
             do {
-                _ = try await client.send(forUpdate ? .prepareUpdate : .prepareRemoval)
-                _ = try await client.send(.finishRemoval)
+                _ = try await client.send(
+                    forUpdate ? .prepareUpdate : .prepareRemoval, authorization: authorization)
+                _ = try await client.send(.finishRemoval, authorization: authorization)
                 await client.close()
             } catch {
                 await client.close()

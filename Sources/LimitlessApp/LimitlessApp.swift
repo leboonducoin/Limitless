@@ -1,6 +1,7 @@
 import AppKit
 import Carbon
 import Darwin
+import LimitlessCore
 import LimitlessSystem
 import Observation
 import SwiftUI
@@ -11,37 +12,54 @@ enum LimitlessApp {
         guard geteuid() != 0 else { exit(1) }
         if CommandLine.arguments.dropFirst().first == "--finish-update" {
             let args = Array(CommandLine.arguments.dropFirst())
-            guard args.count == 3, let parent = Int32(args[2]) else { exit(64) }
+            guard args.count == 4, let parent = Int32(args[2]), ["0", "1"].contains(args[3])
+            else { exit(64) }
+            let helperRequired = args[3] == "1"
             let app = NSApplication.shared
             app.setActivationPolicy(.accessory)
             Task {
                 do {
+                    guard try UpdatePreferences.readBackup() == nil else {
+                        throw UpdateError.busy
+                    }
+                    let installer = try ProcessIdentity.current()
                     let installed = try await GitHubUpdate.finish(
-                        app: URL(fileURLWithPath: args[1]), parentPID: parent)
+                        app: URL(fileURLWithPath: args[1]), parentPID: parent
+                    ) { backupURL in
+                        guard try UpdatePreferences.readBackup() == nil else {
+                            throw UpdateError.busy
+                        }
+                        let pendingRecovery = try UpdatePreferences.helperRecovery() != nil
+                        let backup = AppModel.UpdateBackup(
+                            name: backupURL.lastPathComponent,
+                            helperRequired: helperRequired || pendingRecovery,
+                            installer: installer)
+                        return try UpdatePreferences.reserveBackup(backup)
+                    }
                     let configuration = NSWorkspace.OpenConfiguration()
                     configuration.createsNewApplicationInstance = true
+                    try GitHubUpdate.requireProtectedLaunchPath(installed.app)
                     do {
                         _ = try await NSWorkspace.shared.openApplication(
                             at: installed.app, configuration: configuration)
                     } catch {
+                        try GitHubUpdate.requireProtectedLaunchPath(installed.backup)
                         _ = try FileManager.default.replaceItemAt(
                             installed.app, withItemAt: installed.backup,
                             options: .usingNewMetadataOnly)
+                        _ = UpdatePreferences.clearReceipt(installed.receipt)
                         throw error
                     }
-                    try? FileManager.default.removeItem(at: installed.backup)
                     try? FileManager.default.removeItem(at: installed.staging)
+                    GitHubUpdate.retireInstallerCopy()
                     exit(0)
                 } catch {
                     let configuration = NSWorkspace.OpenConfiguration()
                     configuration.createsNewApplicationInstance = true
-                    let recoveryApp =
-                        (try? await GitHubUpdate.currentInstalledApplication(
-                            identity: SignedIdentity(
-                                expectedIdentifier: LimitlessIdentity.application)))
-                        ?? Bundle.main.bundleURL
-                    _ = try? await NSWorkspace.shared.openApplication(
-                        at: recoveryApp, configuration: configuration)
+                    if let recoveryApp = await GitHubUpdate.recoveryApplication() {
+                        _ = try? await NSWorkspace.shared.openApplication(
+                            at: recoveryApp, configuration: configuration)
+                    }
                     let alert = NSAlert()
                     alert.messageText = "Update incomplete"
                     alert.informativeText = error.localizedDescription
@@ -54,17 +72,6 @@ enum LimitlessApp {
             app.run()
             return
         }
-        if CommandLine.arguments.contains("--prepare-uninstall") {
-            let options = Array(CommandLine.arguments.dropFirst())
-            guard
-                options == ["--prepare-uninstall"]
-                    || options == ["--prepare-uninstall", "--erase-preferences"]
-            else {
-                FileHandle.standardError.write(
-                    Data("Usage: LimitlessApp --prepare-uninstall [--erase-preferences]\n".utf8))
-                exit(64)
-            }
-        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
@@ -75,13 +82,18 @@ enum LimitlessApp {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSMenuItemValidation {
     let model: AppModel
-    private var previewWindow: NSWindow?
     private var terminating = false
     private var statusItem: NSStatusItem?
     private var lastPresentation: PowerPresentation?
-    private let activeDot = StatusDot()
+    private var lastMenuBarTime: MenuBarTime?
+    #if DEBUG
+        private var previewTick: Task<Void, Never>?
+    #endif
+    private let activeMark = StatusMark()
+    private var commandClick = StatusCommandClick()
+    private var closesPanelOnStatusClick = false
+    private var statusClickMonitors: [Any] = []
     private let popover = NSPopover()
-    private var outsideClickMonitor: Any?
     private var removalWindow: NSWindow?
 
     override init() {
@@ -105,39 +117,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         NSApp.applicationIconImage = BrandArt.appIcon(size: 256)
-        if !CommandLine.arguments.contains("--prepare-uninstall") { installStatusItem() }
-        Task {
-            await model.prepareForLaunch()
-            if CommandLine.arguments.contains("--prepare-uninstall") {
-                let success = await model.removeIntegration()
-                let output = (model.message ?? "Removal was not confirmed.") + "\n"
-                (success ? FileHandle.standardOutput : FileHandle.standardError).write(
-                    Data(output.utf8))
-                exit(success ? 0 : 1)
-            }
-            await model.restoreUpdateHelperIfNeeded()
-            model.beginMonitoring()
-        }
         #if DEBUG
-            if model.isPreview {
-                if CommandLine.arguments.contains("--light") {
-                    NSApp.appearance = NSAppearance(
-                        named: CommandLine.arguments.contains("--contrast")
-                            ? .accessibilityHighContrastAqua : .aqua)
-                }
-                let window = NSWindow(
-                    contentRect: NSRect(x: 0, y: 0, width: 360, height: 620),
-                    styleMask: [.titled, .closable], backing: .buffered, defer: false)
-                window.title = "Limitless — Read-only preview"
-                window.contentView = NSHostingView(rootView: MenuPanel(model: model))
-                window.center()
-                window.makeKeyAndOrderFront(nil)
-                window.makeFirstResponder(nil)
-                NSApp.activate()
-                previewWindow = window
+            if model.isPreview, CommandLine.arguments.contains("--light") {
+                NSApp.appearance = NSAppearance(
+                    named: CommandLine.arguments.contains("--contrast")
+                        ? .accessibilityHighContrastAqua : .aqua)
             }
         #endif
+        installStatusItem()
+        Task {
+            await model.prepareForLaunch()
+            await model.restoreUpdateHelperIfNeeded()
+            if model.trustedBuild && !model.isPreview {
+                let workspace = NSWorkspace.shared.notificationCenter
+                workspace.addObserver(
+                    self, selector: #selector(screensSlept),
+                    name: NSWorkspace.screensDidSleepNotification, object: nil)
+                workspace.addObserver(
+                    self, selector: #selector(screensWoke),
+                    name: NSWorkspace.screensDidWakeNotification, object: nil)
+                NotificationCenter.default.addObserver(
+                    self, selector: #selector(displaysChanged),
+                    name: NSApplication.didChangeScreenParametersNotification, object: nil)
+                model.updateEnvironment()
+            }
+            model.beginMonitoring()
+            await model.retireUpdateBackupIfReady()
+            if model.shouldRequestInitialSessionNotifications {
+                await model.setSessionNotifications(true)
+            }
+        }
     }
+
+    @objc private func screensSlept(_ notice: Notification) { model.setScreensAsleep(true) }
+    @objc private func screensWoke(_ notice: Notification) { model.setScreensAsleep(false) }
+    @objc private func displaysChanged(_ notice: Notification) { model.updateEnvironment() }
 
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -149,23 +163,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         item.button?.action = #selector(clickStatusItem)
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         item.button?.setAccessibilityHelp(
-            "Click to open. Right-click for updates, uninstall and quit.")
+            "Click to open. Command-click to start your favorite or add 15 minutes. Right-click for app actions."
+        )
         if let button = item.button {
-            activeDot.frame = NSRect(
-                x: button.bounds.midX + 6,
-                y: button.isFlipped ? button.bounds.maxY - 8 : 3, width: 5, height: 5)
-            activeDot.isHidden = true
-            activeDot.wantsLayer = true
-            activeDot.layer?.backgroundColor =
-                NSColor(srgbRed: 0.85, green: 0.36, blue: 0.04, alpha: 1).cgColor
-            activeDot.layer?.cornerRadius = 2.5
-            activeDot.setAccessibilityElement(false)
-            button.addSubview(activeDot)
+            activeMark.image = BrandArt.menuOrange
+            activeMark.isHidden = true
+            activeMark.setAccessibilityElement(false)
+            activeMark.frame = NSRect(
+                x: max(0, button.bounds.midX + 3),
+                y: button.bounds.midY + (button.isFlipped ? 3 : -10),
+                width: 8, height: 7)
+            activeMark.autoresizingMask = [
+                .minXMargin, .maxXMargin, .minYMargin, .maxYMargin,
+            ]
+            button.addSubview(activeMark)
         }
-        popover.behavior = .transient
+        let statusMouseEvents: NSEvent.EventTypeMask = [
+            .leftMouseDown, .leftMouseUp, .leftMouseDragged,
+        ]
+        let local = NSEvent.addLocalMonitorForEvents(matching: statusMouseEvents) {
+            [weak self] event in
+            MainActor.assumeIsolated { self?.trackStatusClick(event) }
+            return event
+        }
+        let global = NSEvent.addGlobalMonitorForEvents(
+            matching: statusMouseEvents.union(.rightMouseDown)
+        ) { [weak self] event in
+            MainActor.assumeIsolated { self?.handleGlobalMouseEvent(event) }
+        }
+        statusClickMonitors = [local, global].compactMap { $0 }
         popover.delegate = self
         popover.animates = false
-        let host = NSHostingController(rootView: MenuPanel(model: model))
+        let host = NSHostingController(
+            rootView: MenuPanel(model: model).onExitCommand { [weak self] in
+                self?.popover.performClose(nil)
+            })
         host.sizingOptions = [.preferredContentSize]
         popover.contentViewController = host
         let mainMenu = NSMenu()
@@ -190,55 +222,146 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
 
     private func observePresentation() {
         withObservationTracking {
-            let presentation = model.presentation
-            if presentation != lastPresentation {
-                lastPresentation = presentation
-                activeDot.isHidden = presentation != .active
-                statusItem?.button?.setAccessibilityLabel(
-                    "Limitless: \(presentation?.title ?? "Setup required")")
-            }
+            refreshMenuBarTime()
         } onChange: { [weak self] in
             Task { @MainActor in self?.observePresentation() }
         }
     }
 
+    private func refreshMenuBarTime() {
+        let presentation = model.presentation
+        let time = model.menuBarTime
+        #if DEBUG
+            if model.isPreview { schedulePreviewTick() }
+        #endif
+        guard presentation != lastPresentation || time != lastMenuBarTime else { return }
+        lastPresentation = presentation
+        lastMenuBarTime = time
+        activeMark.isHidden = time == nil
+        statusItem?.button?.image =
+            time.map { BrandArt.menuTime(top: $0.top, bottom: $0.bottom) }
+            ?? (presentation == .active ? BrandArt.menuActive : BrandArt.menuIdle)
+        let timeLabel = time.map { ", \($0.accessibilityLabel)" } ?? ""
+        statusItem?.button?.setAccessibilityLabel(
+            "Limitless: \(presentation?.title ?? "Setup required")\(timeLabel)")
+    }
+
+    #if DEBUG
+        private func schedulePreviewTick() {
+            previewTick?.cancel()
+            guard model.presentation == .active, let remaining = model.protectionRemainingSeconds
+            else { return }
+            let delay = max(1, remaining - (ceil(remaining / 60) - 1) * 60)
+            previewTick = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+                guard let self else { return }
+                if model.protectionRemainingSeconds == 0 {
+                    await model.stopAll()
+                } else {
+                    refreshMenuBarTime()
+                }
+            }
+        }
+    #endif
+
     func applicationDidResignActive(_ notification: Notification) {
+        if NSEvent.pressedMouseButtons & 1 != 0,
+            statusButtonBounds()?.contains(NSEvent.mouseLocation) == true
+        {
+            return
+        }
         popover.performClose(nil)
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        statusClickMonitors.forEach(NSEvent.removeMonitor)
+    }
+
     func popoverDidShow(_ notification: Notification) {
+        model.panelVisible = true
         let window = popover.contentViewController?.view.window
-        window?.makeKey()
+        window?.makeKeyAndOrderFront(nil)
         window?.makeFirstResponder(nil)
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [
-            .leftMouseDown, .rightMouseDown,
-        ]) { [weak self] _ in
-            MainActor.assumeIsolated { self?.popover.performClose(nil) }
-        }
+        NSApp.activate()
     }
 
     func popoverDidClose(_ notification: Notification) {
-        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
-        outsideClickMonitor = nil
+        model.optionsExpanded = false
+        model.panelVisible = false
+    }
+
+    private func handleGlobalMouseEvent(_ event: NSEvent) {
+        if popover.isShown, event.type == .leftMouseDown || event.type == .rightMouseDown,
+            statusButtonBounds()?.contains(screenPoint(for: event)) != true
+        {
+            popover.performClose(nil)
+        }
+        trackStatusClick(event)
+    }
+
+    private func statusButtonBounds() -> NSRect? {
+        guard let item = statusItem, item.isVisible, let button = item.button,
+            let window = button.window, window.screen != nil
+        else { return nil }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    }
+
+    private func screenPoint(for event: NSEvent) -> NSPoint {
+        event.window?.convertPoint(toScreen: event.locationInWindow) ?? event.locationInWindow
+    }
+
+    private func trackStatusClick(_ event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if event.type == .leftMouseDown {
+            closesPanelOnStatusClick =
+                !modifiers.contains(.command) && popover.isShown
+                && statusButtonBounds()?.contains(screenPoint(for: event)) == true
+        }
+        if event.type == .leftMouseDown || modifiers != .command {
+            commandClick.cancel()
+        }
+        guard modifiers == .command,
+            event.type == .leftMouseDown || commandClick.isTracking,
+            let bounds = statusButtonBounds()
+        else { return }
+        switch event.type {
+        case .leftMouseDown:
+            commandClick.begin(at: screenPoint(for: event), within: bounds)
+        case .leftMouseDragged:
+            commandClick.cancel()
+        case .leftMouseUp:
+            guard commandClick.finish(at: screenPoint(for: event), within: bounds),
+                let button = statusItem?.button
+            else { return }
+            Task {
+                await model.startFavorite()
+                if model.presentation != .active, !popover.isShown { showPopover(from: button) }
+            }
+        default: break
+        }
     }
 
     @objc private func clickStatusItem() {
         guard let button = statusItem?.button else { return }
-        if NSApp.currentEvent?.type == .rightMouseUp
-            || NSApp.currentEvent?.modifierFlags.contains(.control) == true
+        let event = NSApp.currentEvent
+        defer { closesPanelOnStatusClick = false }
+        if event?.type == .rightMouseUp
+            || event?.modifierFlags.contains(.control) == true
         {
             popover.performClose(nil)
             actionsMenu().popUp(
                 positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY), in: button)
-        } else if popover.isShown {
+        } else if event?.type == .leftMouseUp, event?.modifierFlags.contains(.command) == true {
+            return
+        } else if popover.isShown || (event?.type == .leftMouseUp && closesPanelOnStatusClick) {
             popover.performClose(nil)
         } else {
-            popover.animates =
-                !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-                && NSApp.currentEvent?.type == .leftMouseUp
-            NSApp.activate()
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            showPopover(from: button)
         }
+    }
+
+    private func showPopover(from button: NSStatusBarButton) {
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 
     private func actionsMenu() -> NSMenu {
@@ -354,11 +477,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
             do {
                 _ = try await NSWorkspace.shared.recycle([installedApp])
                 progress.orderOut(nil)
+                if model.removalLeftUpdateSettings { showRemovalError() }
                 NSApp.terminate(nil)
             } catch {
                 progress.orderOut(nil)
+                let cleanup = model.message ?? "System cleanup finished."
                 model.message =
-                    "Helper, login item and preferences removed. macOS could not move the app to the Trash: \(error.localizedDescription)"
+                    "\(cleanup) macOS could not move the app to the Trash. \(error.localizedDescription)"
                 NSWorkspace.shared.activateFileViewerSelecting([installedApp])
                 showRemovalError()
             }
@@ -378,15 +503,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
         if model.removalComplete { return .terminateNow }
         guard !terminating else { return .terminateCancel }
         let quitEvent = NSAppleEventManager.shared().currentAppleEvent
+        let systemRestart = Self.isSystemRestart(quitEvent)
         terminating = true
         Task {
-            if !model.isPreview && Self.isSystemRestart(quitEvent) {
+            if !model.isPreview && systemRestart {
                 await model.refresh()
-                let remaining =
-                    model.status?.sessions.filter { $0.suspension == nil }
-                    .map { model.remainingSeconds($0) } ?? []
                 if Self.shouldDeferRestart(
-                    presentation: model.presentation, remainingSessions: remaining)
+                    presentation: model.presentation, sessions: model.status?.sessions ?? [],
+                    remaining: model.remainingSeconds)
                 {
                     model.message = "Restart postponed. Stop Limitless before restarting your Mac."
                     terminating = false
@@ -394,7 +518,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
                     return
                 }
             }
-            let restored = await model.prepareToQuit()
+            let restored = await model.prepareToQuit(systemRestart: systemRestart)
             var shouldQuit = restored
             if !restored {
                 let alert = NSAlert()
@@ -420,9 +544,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSM
     }
 
     static func shouldDeferRestart(
-        presentation: PowerPresentation?, remainingSessions: [TimeInterval?]
+        presentation: PowerPresentation?, sessions: [SessionSummary],
+        remaining: (SessionSummary) -> TimeInterval?
     ) -> Bool {
-        presentation == .active && remainingSessions.contains { $0 == nil || $0! > 0 }
+        presentation == .active
+            && sessions.contains {
+                $0.kind == .manual && $0.suspension == nil && (remaining($0).map { $0 > 0 } ?? true)
+            }
     }
 }
 
@@ -434,6 +562,6 @@ private struct RemovalProgress: View {
     }
 }
 
-private final class StatusDot: NSView {
+private final class StatusMark: NSImageView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

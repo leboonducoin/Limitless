@@ -1,10 +1,15 @@
 import LimitlessCore
+import LimitlessSystem
 import ServiceManagement
 import SwiftUI
 
 struct SettingsView: View {
     @Bindable var model: AppModel
     private var batteryInput = SwiftUI.State<String>(wrappedValue: "")
+    private var hotspotName = SwiftUI.State<String>(wrappedValue: "")
+    private var hotspotPassword = SwiftUI.State<String>(wrappedValue: "")
+    private var hotspotExpanded = SwiftUI.State<Bool>(wrappedValue: false)
+    private var confirmingCLIMigration = SwiftUI.State<Bool>(wrappedValue: false)
     @FocusState private var batteryFocused: Bool
 
     private static let batteryFormatter: NumberFormatter = {
@@ -22,6 +27,28 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if model.showsPowerControls {
+                Text("Session").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Picker("Menu bar", selection: $model.menuBarStyle) {
+                    ForEach(MenuBarStyle.allCases, id: \.self) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Picker("Favorite duration", selection: $model.favoriteMinutes) {
+                        ForEach(SessionEnd.presetMinutes, id: \.self) { minutes in
+                            Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h").tag(minutes)
+                        }
+                    }
+                    Text("⌘-click to start or add 15 min.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                Toggle(
+                    "Session notifications",
+                    isOn: Binding(
+                        get: { model.sessionNotifications },
+                        set: { enabled in Task { await model.setSessionNotifications(enabled) } }))
+                Divider()
+                Text("Power").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Group {
                     if model.showsPowerSource {
                         VStack(alignment: .leading, spacing: 6) {
@@ -37,6 +64,9 @@ struct SettingsView: View {
                             .accessibilityLabel("Power source")
                         }
                     }
+                    Toggle("Keep display awake", isOn: $model.draft.keepsDisplayAwake)
+                        .help("Keep the screen available for work that needs the desktop.")
+                    Toggle("Mute audio when the display sleeps", isOn: $model.muteWhenScreenSleeps)
                     if model.showsBatteryLimit {
                         HStack {
                             Text("Battery reserved limit")
@@ -101,8 +131,63 @@ struct SettingsView: View {
                             }
                         }
                     }
-                }.disabled(!model.canControl && !model.isPreview)
-                if model.showsPowerSource || model.stopChoice == .process { Divider() }
+                }.disabled(!model.canEditPowerPolicy)
+                if model.showsLidControls {
+                    Divider()
+                    Text("Closed lid").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Toggle("Mute audio with the lid closed", isOn: $model.muteWithClosedLid)
+                        .help("Applies only when no external display is connected.")
+                }
+                Divider()
+                Text("Network").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                DisclosureGroup("iPhone hotspot", isExpanded: hotspotExpanded.projectedValue) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(
+                            "Join if the network drops",
+                            isOn: Binding(
+                                get: { model.hotspotEnabled },
+                                set: { enabled in Task { await model.setHotspotEnabled(enabled) } })
+                        )
+                        .disabled(
+                            !model.hotspotConfigured || model.hotspotChanging || model.isPreview)
+                        if model.hotspotWithdrawalPending {
+                            Text(
+                                model.hotspotChanging
+                                    ? "Finishing the last hotspot attempt…"
+                                    : "Hotspot fallback is paused. Unlock Keychain to finish."
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Text(
+                            "Connect to your iPhone hotspot to save it. Fallback starts after 30 seconds offline during a session."
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        TextField("Hotspot name", text: hotspotName.projectedValue)
+                        SecureField("Hotspot password", text: hotspotPassword.projectedValue)
+                        HStack {
+                            Button("Save hotspot") {
+                                if model.saveHotspot(
+                                    name: hotspotName.wrappedValue,
+                                    password: hotspotPassword.wrappedValue)
+                                {
+                                    hotspotName.wrappedValue = ""
+                                    hotspotPassword.wrappedValue = ""
+                                }
+                            }
+                            .disabled(
+                                model.isPreview || model.hotspotChanging
+                                    || hotspotName.wrappedValue.isEmpty
+                                    || hotspotPassword.wrappedValue.isEmpty)
+                            Button("Forget hotspot") { Task { await model.forgetHotspot() } }
+                                .disabled(model.isPreview || model.hotspotChanging)
+                        }
+                    }
+                    .padding(.top, 6)
+                    .onDisappear { hotspotPassword.wrappedValue = "" }
+                }
+                Divider()
+                Text("Terminal & agents").font(.caption.weight(.semibold)).foregroundStyle(
+                    .secondary)
                 HStack {
                     Toggle(
                         "Allow CLI & AI tasks",
@@ -110,7 +195,11 @@ struct SettingsView: View {
                             get: { model.status?.policy.allowsAutomation ?? false },
                             set: { enabled in Task { await model.setAutomation(enabled) } })
                     )
-                    .disabled((!model.canControl && !model.isPreview) || model.busy)
+                    .disabled(
+                        !model.canEditPowerPolicy || model.busy
+                            || (model.cliMigrationRequired
+                                && model.status?.policy.allowsAutomation != true)
+                    )
                     Link(
                         destination: URL(
                             string:
@@ -122,8 +211,29 @@ struct SettingsView: View {
                     .accessibilityLabel("Set up CLI and AI integration")
                     .help("Set up CLI and AI integration")
                 }
+                if model.cliMigrationRequired {
+                    Button("Migrate CLI & agent hooks…") {
+                        confirmingCLIMigration.wrappedValue = true
+                    }
+                    .disabled(!model.canEditPowerPolicy || model.busy)
+                    .alert(
+                        "Migrate CLI & agent hooks?",
+                        isPresented: confirmingCLIMigration.projectedValue
+                    ) {
+                        Button("Cancel", role: .cancel) {}
+                        Button("Migrate and enable") {
+                            Task { await model.setAutomation(true, migrateLegacy: true) }
+                        }
+                    } message: {
+                        Text(
+                            "Quit your agents and pause scripts that use Limitless. Keep them stopped until migration finishes in this account. Repeat in each account that uses the integration."
+                        )
+                    }
+                }
             }
             if model.showsSudoTouchID {
+                Divider()
+                Text("Administration").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Toggle(
                     "Touch ID for sudo",
                     isOn: Binding(
@@ -180,6 +290,8 @@ struct SettingsView: View {
                     }
                 }
             }
+            if model.showsPowerControls { Divider() }
+            Text("App").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             Toggle(
                 "Launch at login",
                 isOn: Binding(
@@ -194,21 +306,30 @@ struct SettingsView: View {
             }
             if model.showsPowerControls {
                 HStack {
-                    Toggle("Automatic updates", isOn: $model.automaticUpdates)
-                        .disabled((!model.trustedBuild && !model.isPreview) || model.updating)
+                    Toggle(
+                        "Automatic updates",
+                        isOn: Binding(
+                            get: { model.automaticUpdates },
+                            set: { model.setAutomaticUpdates($0) })
+                    )
+                    .disabled((!model.trustedBuild && !model.isPreview) || model.updating)
                     if let update = model.availableUpdate, model.showsUpdateButton {
                         Button("Update") { model.requestUpdate() }
                             .help("Install Limitless \(update.version)")
                             .disabled(!model.canInstallAvailableUpdate())
                     }
                 }
-                if let message = model.updateMessage {
-                    Text(message).font(.caption).foregroundStyle(.secondary)
-                }
             }
+            if model.needsManualUpdate {
+                Link("Download update", destination: GitHubUpdate.releasesPage)
+            }
+            if let message = model.updateMessage {
+                Text(message).font(.caption).foregroundStyle(.secondary)
+            }
+            Button("Copy diagnostic") { model.copyDiagnostic() }
+                .disabled(model.isPreview)
         }
         .font(.callout).toggleStyle(.switch).controlSize(.small)
-        .onChange(of: model.draft) { model.policyEdited() }
     }
 
     private func applyBatteryInput() {

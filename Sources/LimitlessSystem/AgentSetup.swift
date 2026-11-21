@@ -5,10 +5,107 @@ public enum AgentSetup {
     public static let providers = ["codex", "claude", "cursor", "gemini"]
     private static let maximumFileSize = 1_024 * 1_024
 
+    private static func usesPrivateResources(_ resources: URL, home: URL) -> Bool {
+        resources.standardizedFileURL.path
+            == InstalledCLI.privateApplication(in: home)
+            .appendingPathComponent("Contents/Resources/limitless-skill").path
+    }
+
+    private static func shellPath(_ path: String) -> String {
+        "'" + path.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    private static func renderedSkill(in resources: URL, home: URL) throws -> Data {
+        let template = try String(
+            contentsOf: resources.appendingPathComponent("SKILL.md"), encoding: .utf8)
+        let token = "{{LIMITLESS_CLI}}"
+        let path =
+            usesPrivateResources(resources, home: home)
+            ? InstalledCLI.privateExecutable(in: home).path : InstalledCLI.target
+        guard template.contains(token),
+            !path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        else { throw CocoaError(.fileReadCorruptFile) }
+        return Data(template.replacingOccurrences(of: token, with: shellPath(path)).utf8)
+    }
+
+    @concurrent public static func verifiedResources() async throws -> URL {
+        let identity = try await SignedIdentity.current(
+            expectedIdentifier: LimitlessIdentity.commandLine)
+        let app: URL
+        let usePrivate = identity.executableURL.path == InstalledCLI.privateExecutable().path
+        if usePrivate {
+            try InstalledCLI.requirePrivatePath(identity.executableURL, regularFile: true)
+            app = InstalledCLI.privateApplication()
+        } else {
+            guard identity.executableURL.path == InstalledCLI.target,
+                InstalledCLI.sharedPathIsProtected
+            else { throw SignatureError.untrustedIdentity }
+            app = URL(fileURLWithPath: "/Applications/Limitless.app", isDirectory: true)
+            guard app.resolvingSymlinksInPath().path == app.path
+            else { throw SignatureError.untrustedIdentity }
+        }
+        let resources = try protectedResources(in: app, usePrivate: usePrivate)
+        try identity.verifyExecutable(at: app, identifier: LimitlessIdentity.application)
+        return resources
+    }
+
+    static func protectedResources(in app: URL, usePrivate: Bool) throws -> URL {
+        let resources = app.appendingPathComponent("Contents/Resources/limitless-skill")
+        for file in ["SKILL.md"] + providers.map({ "hooks/\($0).json" }) {
+            let url = resources.appendingPathComponent(file)
+            if usePrivate {
+                try InstalledCLI.requirePrivatePath(url, regularFile: true)
+            } else {
+                try InstalledCLI.requireProtectedPath(
+                    root: URL(fileURLWithPath: "/"),
+                    components: Array(url.pathComponents.dropFirst()),
+                    regularFile: true, owner: 0)
+            }
+        }
+        return resources
+    }
+
+    public static func legacyProviders(
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) throws -> [String] {
+        guard geteuid() != 0 else { throw CocoaError(.fileReadNoPermission) }
+        let home = home.standardizedFileURL.resolvingSymlinksInPath()
+        return try providers.filter { provider in
+            let paths = try locations(provider)
+            let skill = paths.skill.split(separator: "/").map(String.init)
+            guard
+                let marker = try ManagedDirectory.open(
+                    home: home, components: skill, create: false, owner: geteuid())?
+                    .read(".limitless-managed")?.data,
+                marker == Data("Limitless\n".utf8) || marker == Data("Limitless:new-config\n".utf8)
+            else { return false }
+            let config = paths.config.split(separator: "/").map(String.init)
+            guard let file = config.last,
+                let data = try ManagedDirectory.open(
+                    home: home, components: Array(config.dropLast()), create: false,
+                    owner: geteuid())?
+                    .read(file)?.data
+            else { return false }
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { throw CocoaError(.fileReadCorruptFile) }
+            guard let hooks = parsed["hooks"] else { return false }
+            guard let events = hooks as? [String: [[String: Any]]]
+            else { throw CocoaError(.fileReadCorruptFile) }
+            let legacy = InstalledCLI.target + " hook " + provider
+            return events.values.joined().contains { entry in
+                if entry["command"] as? String == legacy { return true }
+                return (entry["hooks"] as? [[String: Any]])?.contains {
+                    $0["command"] as? String == legacy
+                } == true
+            }
+        }
+    }
+
     private struct ManagedFile: Equatable {
         let data: Data
         let device: dev_t
         let inode: ino_t
+        let group: gid_t
         let mode: mode_t
     }
 
@@ -98,7 +195,7 @@ public enum AgentSetup {
             try validate()
             return ManagedFile(
                 data: data, device: final.st_dev, inode: final.st_ino,
-                mode: final.st_mode & 0o777)
+                group: final.st_gid, mode: final.st_mode & 0o777)
         }
 
         func names() throws -> Set<String> {
@@ -139,7 +236,17 @@ public enum AgentSetup {
                 descriptor, name,
                 O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, mode)
             guard file >= 0 else { throw JournalError.system(errno) }
-            defer { close(file) }
+            var created = false
+            defer {
+                if !created,
+                    (try? SecureOwnershipJournal.requireSameEntry(
+                        descriptor, name: name, descriptor: file)) != nil
+                {
+                    unlinkat(descriptor, name, 0)
+                }
+                close(file)
+            }
+            _ = try validateFile(file)
             try FileHandle(fileDescriptor: file, closeOnDealloc: false).write(contentsOf: data)
             guard fchmod(file, mode) == 0, fsync(file) == 0 else {
                 throw JournalError.system(errno)
@@ -152,9 +259,10 @@ public enum AgentSetup {
                 descriptor, name: name, descriptor: file)
             guard fsync(descriptor) == 0 else { throw JournalError.system(errno) }
             try validate()
+            created = true
             return ManagedFile(
                 data: data, device: info.st_dev, inode: info.st_ino,
-                mode: info.st_mode & 0o777)
+                group: info.st_gid, mode: info.st_mode & 0o777)
         }
 
         func replace(
@@ -174,6 +282,11 @@ public enum AgentSetup {
                 close(file)
                 unlinkat(descriptor, temporary, 0)
             }
+            let initial = try validateFile(file)
+            if let expected, initial.st_gid != expected.group {
+                guard fchown(file, uid_t.max, expected.group) == 0
+                else { throw JournalError.system(errno) }
+            }
             try FileHandle(fileDescriptor: file, closeOnDealloc: false).write(contentsOf: data)
             guard fchmod(file, expected?.mode ?? 0o600) == 0, fsync(file) == 0 else {
                 throw JournalError.system(errno)
@@ -184,7 +297,7 @@ public enum AgentSetup {
             }
             let candidate = ManagedFile(
                 data: data, device: info.st_dev, inode: info.st_ino,
-                mode: info.st_mode & 0o777)
+                group: info.st_gid, mode: info.st_mode & 0o777)
             try validate()
             guard try read(name) == expected else { throw CocoaError(.fileWriteUnknown) }
             replacement = candidate
@@ -237,7 +350,7 @@ public enum AgentSetup {
                 info.st_mode & 0o022 == 0, info.st_nlink == 1, info.st_size >= 0,
                 info.st_size <= off_t(maximumFileSize)
             else { throw CocoaError(.fileReadCorruptFile) }
-            try SecureOwnershipJournal.rejectWriteGrantingAccess(file)
+            try SecureOwnershipJournal.rejectExtendedAccess(file)
             return info
         }
 
@@ -288,8 +401,10 @@ public enum AgentSetup {
         }
     }
 
-    static func merged(_ data: Data?, template: Data, provider: String, remove: Bool) throws -> Data
-    {
+    static func merged(
+        _ data: Data?, template: Data, provider: String, remove: Bool,
+        privateExecutable: URL? = nil, usePrivate: Bool = false
+    ) throws -> Data {
         let source = try JSONSerialization.jsonObject(with: template) as? [String: Any]
         guard let additions = source?["hooks"] as? [String: [[String: Any]]] else {
             throw CocoaError(.fileReadCorruptFile)
@@ -308,7 +423,20 @@ public enum AgentSetup {
             throw CocoaError(.fileReadCorruptFile)
         }
         var hooks = config["hooks"] as? [String: Any] ?? [:]
-        let command = "/Applications/Limitless.app/Contents/MacOS/limitless hook " + provider
+        let command = InstalledCLI.target + " hook " + provider
+        let privateCommand = privateExecutable.map {
+            shellPath($0.path) + " hook " + provider
+        }
+        guard !usePrivate || privateCommand != nil else { throw CocoaError(.fileReadCorruptFile) }
+        let ownedCommands = Set([command, privateCommand].compactMap { $0 })
+        let installedCommand = usePrivate ? (privateCommand ?? command) : command
+        func replacingCommand(in entry: [String: Any]) throws -> [String: Any] {
+            guard entry["command"] as? String == command
+            else { throw CocoaError(.fileReadCorruptFile) }
+            var entry = entry
+            entry["command"] = installedCommand
+            return entry
+        }
         for (event, entries) in additions {
             if hooks[event] != nil, !(hooks[event] is [[String: Any]]) {
                 throw CocoaError(.fileReadCorruptFile)
@@ -317,9 +445,13 @@ public enum AgentSetup {
             var retained: [[String: Any]] = []
             for var entry in existing {
                 if provider == "cursor" {
-                    if entry["command"] as? String != command { retained.append(entry) }
+                    if !ownedCommands.contains(entry["command"] as? String ?? "") {
+                        retained.append(entry)
+                    }
                 } else if let commands = entry["hooks"] as? [[String: Any]] {
-                    let remaining = commands.filter { $0["command"] as? String != command }
+                    let remaining = commands.filter {
+                        !ownedCommands.contains($0["command"] as? String ?? "")
+                    }
                     if remaining.count == commands.count {
                         retained.append(entry)
                     } else if !remaining.isEmpty {
@@ -330,13 +462,52 @@ public enum AgentSetup {
                     retained.append(entry)
                 }
             }
-            if !remove { retained += entries }
+            if !remove {
+                retained += try entries.map { entry in
+                    if provider == "cursor" { return try replacingCommand(in: entry) }
+                    guard let commands = entry["hooks"] as? [[String: Any]]
+                    else { throw CocoaError(.fileReadCorruptFile) }
+                    var entry = entry
+                    entry["hooks"] = try commands.map(replacingCommand)
+                    return entry
+                }
+            }
             hooks[event] = retained.isEmpty ? nil : retained
         }
         config["hooks"] = hooks.isEmpty ? nil : hooks
         if provider == "cursor", !remove { config["version"] = 1 }
         return try JSONSerialization.data(
             withJSONObject: config, options: [.prettyPrinted, .sortedKeys])
+    }
+
+    public static func isCurrent(
+        _ provider: String, home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        resources: URL = URL(
+            fileURLWithPath: "/Applications/Limitless.app/Contents/Resources/limitless-skill")
+    ) throws -> Bool {
+        guard geteuid() != 0 else { throw CocoaError(.fileReadNoPermission) }
+        let home = home.standardizedFileURL.resolvingSymlinksInPath()
+        let paths = try locations(provider)
+        let parts = paths.config.split(separator: "/").map(String.init)
+        guard let name = parts.last,
+            let config = try ManagedDirectory.open(
+                home: home, components: Array(parts.dropLast()), create: false, owner: geteuid())?
+                .read(name)?.data,
+            let skill = try ManagedDirectory.open(
+                home: home, components: paths.skill.split(separator: "/").map(String.init),
+                create: false, owner: geteuid())?.read("SKILL.md")?.data
+        else { return false }
+        let template = try Data(
+            contentsOf: resources.appendingPathComponent("hooks/\(provider).json"))
+        let expected = try merged(
+            config, template: template, provider: provider, remove: false,
+            privateExecutable: InstalledCLI.privateExecutable(in: home),
+            usePrivate: usesPrivateResources(resources, home: home))
+        let canonical = try JSONSerialization.data(
+            withJSONObject: JSONSerialization.jsonObject(with: config),
+            options: [.prettyPrinted, .sortedKeys])
+        let expectedSkill = try renderedSkill(in: resources, home: home)
+        return canonical == expected && skill == expectedSkill
     }
 
     public static func configure(
@@ -366,20 +537,22 @@ public enum AgentSetup {
         let owner = geteuid()
         var skillDirectory = try ManagedDirectory.open(
             home: home, components: skillParts, create: false, owner: owner)
+        let existingMarker = try skillDirectory?.read(".limitless-managed")
+        if remove, existingMarker == nil { return }
         var configDirectory = try ManagedDirectory.open(
             home: home, components: Array(configParts.dropLast()), create: false, owner: owner)
         let skillExisted = skillDirectory != nil
         let old = try configDirectory?.read(configName)
-        let existingMarker = try skillDirectory?.read(".limitless-managed")
-        if remove, existingMarker == nil { return }
         let newConfigMarker = Data("Limitless:new-config\n".utf8)
         let savedMarker =
             existingMarker?.data ?? (old == nil ? newConfigMarker : Data("Limitless\n".utf8))
         let template = try Data(
             contentsOf: resources.appendingPathComponent("hooks/\(provider).json"))
         let updated = try merged(
-            old?.data, template: template, provider: provider, remove: remove)
-        let skillText = try Data(contentsOf: resources.appendingPathComponent("SKILL.md"))
+            old?.data, template: template, provider: provider, remove: remove,
+            privateExecutable: InstalledCLI.privateExecutable(in: home),
+            usePrivate: usesPrivateResources(resources, home: home))
+        let skillText = try renderedSkill(in: resources, home: home)
         if skillExisted {
             let names = try skillDirectory!.names()
             guard names.isSubset(of: ["SKILL.md", ".limitless-managed"]),
@@ -471,7 +644,7 @@ public enum AgentSetup {
                     activeConfigDirectory, name: configName, previous: old,
                     attempted: writtenConfig, allowMissing: remove && removeConfig)
             }
-            if let backupName, let backup {
+            if rollbackError == nil, let backupName, let backup {
                 attempt { try activeConfigDirectory.remove(backupName, expected: backup) }
             }
             if let rollbackError { throw rollbackError }

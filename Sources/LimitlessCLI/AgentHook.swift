@@ -1,11 +1,13 @@
 import CryptoKit
 import Darwin
 import Foundation
+import LimitlessCore
 import LimitlessSystem
 
 struct AgentEvent: Equatable {
     enum Action: String { case begin, end, endSession }
     let action: Action
+    let provider: AgentProvider
     let session: String
     let task: String
 
@@ -55,11 +57,14 @@ struct AgentEvent: Equatable {
     }
 
     init(action: Action, provider: String, session: String, task: String) throws {
-        guard [provider, session, task].allSatisfy({ !$0.isEmpty && $0.utf8.count <= 512 }) else {
+        guard let provider = AgentProvider(rawValue: provider),
+            [session, task].allSatisfy({ !$0.isEmpty && $0.utf8.count <= 512 })
+        else {
             throw CLIError.usage("Invalid task identifier.")
         }
         self.action = action
-        self.session = Self.digest(provider + "\0" + session)
+        self.provider = provider
+        self.session = Self.digest(provider.rawValue + "\0" + session)
         self.task = Self.digest(task)
     }
 
@@ -74,6 +79,7 @@ final class AgentActivity {
         let host: ProcessIdentity
         let device: dev_t
         let inode: ino_t
+        let provider: AgentProvider
     }
     static var directory: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -82,6 +88,7 @@ final class AgentActivity {
     let context: Context
     private let directoryFD: Int32
     private let markerFD: Int32
+    private static let startupGrace: TimeInterval = 10
 
     private static func openDirectory(_ url: URL) throws -> Int32 {
         guard geteuid() != 0, getuid() == geteuid() else { throw WorkError.administratorNotAllowed }
@@ -108,19 +115,67 @@ final class AgentActivity {
         let fd = try openDirectory(directory)
         defer { close(fd) }
         guard host.isAlive else { throw WorkError.processUnavailable }
-        guard try FileManager.default.contentsOfDirectory(atPath: directory.path).count < 256 else {
-            throw CLIError.usage(
-                "Too many unfinished agent tasks. End the previous sessions first.")
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        if names.count >= 256 {
+            var remaining = names.count
+            for name in names where validName(name) {
+                if removeUnclaimed(name, directory: fd) { remaining -= 1 }
+            }
+            guard remaining < 256 else {
+                throw CLIError.usage(
+                    "Too many unfinished agent tasks. End the previous sessions first.")
+            }
         }
         let name = event.session + "." + event.task
-        let marker = openat(fd, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        let flags = O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC
+        var marker = openat(fd, name, flags, 0o600)
+        if marker < 0, errno == EEXIST {
+            guard removeUnclaimed(name, directory: fd) else { return nil }
+            marker = openat(fd, name, flags, 0o600)
+        }
         if marker < 0, errno == EEXIST { return nil }
         guard marker >= 0 else { throw WorkError.processUnavailable }
         var info = stat()
         let sampled = fstat(marker, &info) == 0
         close(marker)
         guard sampled else { throw WorkError.processUnavailable }
-        return Context(name: name, host: host, device: info.st_dev, inode: info.st_ino)
+        return Context(
+            name: name, host: host, device: info.st_dev, inode: info.st_ino,
+            provider: event.provider)
+    }
+
+    static func discardUnclaimed(_ context: Context, directory: URL = directory) {
+        guard validName(context.name), let fd = try? openDirectory(directory) else { return }
+        defer { close(fd) }
+        _ = removeUnclaimed(context.name, directory: fd, expected: context)
+    }
+
+    private static func removeUnclaimed(
+        _ name: String, directory: Int32, expected: Context? = nil
+    ) -> Bool {
+        let file = openat(directory, name, O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)
+        guard file >= 0 else { return false }
+        defer { close(file) }
+        var entry = stat()
+        guard flock(file, LOCK_EX | LOCK_NB) == 0, fstat(file, &entry) == 0,
+            entry.st_uid == geteuid(), entry.st_mode & S_IFMT == S_IFREG,
+            entry.st_mode & 0o077 == 0, entry.st_nlink == 1, entry.st_size == 0
+        else { return false }
+        if let expected {
+            guard entry.st_dev == expected.device, entry.st_ino == expected.inode else {
+                return false
+            }
+        } else {
+            let modified =
+                TimeInterval(entry.st_mtimespec.tv_sec)
+                + TimeInterval(entry.st_mtimespec.tv_nsec) / 1e9
+            guard Date.now.timeIntervalSince1970 - modified >= startupGrace else { return false }
+        }
+        guard (try? SecureOwnershipJournal.rejectExtendedAccess(file)) != nil,
+            (try? SecureOwnershipJournal.requireSameEntry(directory, name: name, descriptor: file))
+                != nil
+        else { return false }
+        return unlinkat(directory, name, 0) == 0
     }
 
     static func end(_ event: AgentEvent, directory: URL = directory) throws {
@@ -198,7 +253,12 @@ final class AgentActivity {
                 let identity = try await SignedIdentity.current(
                     expectedIdentifier: LimitlessIdentity.commandLine)
                 if let context = try AgentActivity.begin(event, host: ProcessIdentity.hookHost()) {
-                    try launch(context, executable: identity.executableURL)
+                    do {
+                        try launch(context, identity: identity)
+                    } catch {
+                        AgentActivity.discardUnclaimed(context)
+                        throw error
+                    }
                 }
             } else {
                 try AgentActivity.end(event)
@@ -221,7 +281,8 @@ final class AgentActivity {
         return result
     }
 
-    static func launch(_ context: AgentActivity.Context, executable: URL) throws {
+    static func launch(_ context: AgentActivity.Context, identity: SignedIdentity) throws {
+        let executable = try InstalledCLI.verifiedLaunchExecutable(for: identity)
         let child = Process()
         let input = Pipe()
         let ready = Pipe()

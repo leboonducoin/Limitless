@@ -25,6 +25,35 @@ import AppKit
     }
 
     static let menuIdle = menuImage()
+    static let menuActive = menuImage(
+        color: NSColor(srgbRed: 0.92, green: 0.42, blue: 0.08, alpha: 1))
+    static let menuOrange = NSImage(size: NSSize(width: 8, height: 7), flipped: false) { bounds in
+        NSColor(srgbRed: 0.92, green: 0.42, blue: 0.08, alpha: 1).setStroke()
+        let path = loop(in: bounds.insetBy(dx: 0.7, dy: 0.7))
+        path.lineWidth = 1.15
+        path.stroke()
+        return true
+    }
+
+    static func menuTime(top topText: String, bottom bottomText: String) -> NSImage {
+        let image = NSImage(size: NSSize(width: 24, height: 23), flipped: false) { _ in
+            let top = NSAttributedString(
+                string: topText,
+                attributes: [
+                    .font: NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .semibold)
+                ]
+            )
+            let bottom = NSAttributedString(
+                string: bottomText,
+                attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)]
+            )
+            top.draw(at: NSPoint(x: (24 - top.size().width) / 2, y: 9))
+            bottom.draw(at: NSPoint(x: (16 - bottom.size().width) / 2, y: 0))
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
 
     static let github: NSImage = {
         let svg = """
@@ -35,15 +64,15 @@ import AppKit
         return image
     }()
 
-    private static func menuImage() -> NSImage {
+    private static func menuImage(color: NSColor? = nil) -> NSImage {
         let image = NSImage(size: NSSize(width: 23, height: 18), flipped: false) { _ in
-            NSColor.black.setStroke()
+            (color ?? .black).setStroke()
             let path = loop(in: NSRect(x: 1, y: 1, width: 21, height: 16))
             path.lineWidth = 1.8
             path.stroke()
             return true
         }
-        image.isTemplate = true
+        image.isTemplate = color == nil
         image.accessibilityDescription = "Limitless"
         return image
     }

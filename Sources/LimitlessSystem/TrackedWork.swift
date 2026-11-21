@@ -12,8 +12,16 @@ public struct ProcessIdentity: Codable, Equatable, Sendable {
     private let startedMicroseconds: UInt64
 
     public init(pid: Int32) throws {
+        try self.init(pid: pid, allowingSelf: false)
+    }
+
+    public static func current() throws -> Self {
+        try Self(pid: getpid(), allowingSelf: true)
+    }
+
+    private init(pid: Int32, allowingSelf: Bool) throws {
         guard geteuid() != 0, geteuid() == getuid() else { throw WorkError.administratorNotAllowed }
-        guard pid > 1, pid != getpid() else { throw WorkError.invalidProcess }
+        guard pid > 1, allowingSelf || pid != getpid() else { throw WorkError.invalidProcess }
         guard let info = Self.read(pid), info.pbi_status != SZOMB else {
             throw WorkError.processUnavailable
         }

@@ -9,16 +9,24 @@ enum CLIError: Error, Equatable {
 enum CommandOptions: Equatable {
     case help, version
     case status(json: Bool)
+    case doctor
     case run(command: [String], request: SessionRequest)
     case watch(pid: Int32, request: SessionRequest)
     case hook(provider: String)
     case setup(provider: String, remove: Bool)
+    case checkSetup(provider: String)
 
     static func parse(_ arguments: [String]) throws -> Self {
         if arguments.isEmpty || arguments == ["--help"] || arguments == ["help"] { return .help }
         if arguments == ["--version"] { return .version }
         if arguments == ["status"] { return .status(json: false) }
         if arguments == ["status", "--json"] { return .status(json: true) }
+        if arguments == ["doctor"] { return .doctor }
+        if arguments.count == 3, arguments[0] == "setup", arguments[2] == "--check",
+            AgentSetup.providers.contains(arguments[1])
+        {
+            return .checkSetup(provider: arguments[1])
+        }
         if arguments.count == 2 || arguments.count == 3, arguments[0] == "setup",
             AgentSetup.providers.contains(arguments[1]),
             arguments.count == 2 || arguments[2] == "--remove"
@@ -26,12 +34,13 @@ enum CommandOptions: Equatable {
             return .setup(provider: arguments[1], remove: arguments.count == 3)
         }
         if arguments.count == 2, arguments[0] == "hook",
-            ["codex", "claude", "cursor", "gemini", "other"].contains(arguments[1])
+            AgentProvider(rawValue: arguments[1]) != nil
         {
             return .hook(provider: arguments[1])
         }
         guard let verb = arguments.first, verb == "run" || verb == "watch" else {
-            throw CLIError.usage("Expected run, watch, status or setup. Use --help for syntax.")
+            throw CLIError.usage(
+                "Expected run, watch, status, doctor or setup. Use --help for syntax.")
         }
         var mode: PowerMode?
         var floor: Int?

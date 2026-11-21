@@ -13,41 +13,78 @@ Swift throughout. No package dependencies, database or analytics.
 
 ## Sessions
 
-The helper owns the shared session registry. Each authenticated connection owns
-its demands; disconnect or a missed lease releases them. Heartbeats run every
+The helper owns one shared protection session with a stable identifier until
+its last request ends. Each authenticated connection owns its requests.
+Disconnect or a missed lease releases them. Heartbeats run every
 5 seconds with a 30-second lease. Relative deadlines use a continuous clock.
 
-Stop, deadlines, battery protection and owner loss outrank recovery. Sessions
-never resume after login or reboot. CLI permission is remembered; faults revoke it.
-AI uses both sources and at least 20% battery, within user limits. Manual sessions
-reject or end AI holds. A stopped task cannot reacquire protection.
+Stop, deadlines, battery protection, critical thermal load and owner loss outrank recovery. Sessions
+never resume after login or reboot. The root helper remembers power limits for each account.
+CLI permission lasts for the current helper and console account. A fault revokes it.
+AI uses the selected power sources and at least 20% battery. Manual sessions
+reject or end all automated holds. A second app owner cannot create another manual session.
+A stopped task cannot reacquire protection. Stop withdraws CLI consent until
+the user approves it again. The latest authorized deadline
+determines the shared countdown when every request is bounded.
 
 Only the authenticated app owning a manual session can extend its timer or date by
 15 minutes. Extensions preserve the session ID, start time, power limits and original
-duration ceiling. Expired/stopped sessions cannot be extended. Protocol 11 requires
-matching app, CLI and helpers; older helpers cannot provide display protection or extensions.
+duration ceiling. Expired or stopped sessions cannot be extended. Protocol 14 requires
+matching app, CLI and helpers. A fresh helper rejects starts until the app reapplies
+the saved power policy. Root-owned preferences store power limits under the
+console account's directory identity. The helper requires fresh CLI approval
+after a helper restart or console account change.
 
 ## Power
 
 `MacSleepBackend` isolates the undocumented global `pmset disablesleep` flag.
-Battery/adapter modes are policies, not independent macOS flags. Unknown readings
-suspend protection. The helper also runs Apple’s `caffeinate -d -i` and checks both
-system and display assertions every two seconds. Keeping the display awake prevents
-automatic idle locking while protection is active; manual locking and managed security
-policies remain under macOS control. Assertions are released with the session, including
-suspension or battery cutoff. Recovery and restoration each allow three attempts.
+Battery and adapter modes are policies. Unknown power readings suspend protection.
+The helper checks the system assertion from Apple's `caffeinate -i` and the display
+assertion when the policy also requests `-d`. Keeping the display awake prevents
+automatic idle locking. Manual locking and managed security policies stay under
+macOS control. Assertions are released at the end, including suspension, thermal
+cutoff and battery cutoff. Recovery and restoration each allow three attempts.
+
+At critical thermal load the helper rejects new starts and releases existing
+sessions. Cooling permits a new session. The most recent endings are held in
+memory for the menu, notifications and CLI diagnosis.
+
+The menu app reads the lid state and display list separately. Opt-ins for
+display sleep and lid closure without an external display can mute the
+selected output. It restores that output after wake or stop if the mute was confirmed.
+Switching to a different output while the display stays asleep leaves the new output alone.
+It honors an observed manual unmute until the next wake or session. An ambiguous
+recovery record needs manual attention. Keyboard backlighting and Low Power Mode
+remain under macOS control. Apple's public Low Power Mode API only reads state.
+
+Optional hotspot fallback runs in the user app. The Mac must be connected to the
+hotspot when it is saved. Limitless creates a fresh login Keychain item for the
+password, Wi-Fi identifiers and automatic-join permission. It looks for one WPA2 or
+WPA3 Personal network with the saved name and access point identifier. If that identifier
+changes, connect and save the hotspot again. Limitless rechecks session eligibility
+before association. An association in progress completes under macOS control.
 
 Only owned state is restored. A protected root journal records ownership before
 changes and survives interruption; invalid files fail closed. Competing privileged
-tools can still change the global flag. Ordinary restart requests can be deferred
-while the app is active; forced restarts remain outside its control.
+tools can still change the global flag. Only a manual session can defer an ordinary
+restart or shutdown. A pending audio restore stays recorded through restart. Forced
+restarts remain outside the app's control.
 
 ## Trust and files
 
 App and CLI use separate XPC endpoints. Both sides verify the exact executable ID
 and certificate. Requests are bounded to 128 KiB, with 64 clients and 256 sessions.
-The helper accepts no arbitrary command or path. It alone installs the fixed CLI
-link. Root files use ownership, permissions, no-follow, locking and atomic writes.
+Up to 60 task connections may be admitted, and only eight task requests may be
+pending, leaving capacity for app controls.
+The helper accepts no arbitrary command or path. It installs the fixed system
+CLI link only when its complete execution path and destination directory are
+protected from local account writes. Otherwise the app verifies a copy of the
+signed bundle in an owner-only per-account directory and uses that path for
+CLI and agent setup. Root files use ownership, permissions, no-follow, locking
+and atomic writes.
+The app requests native administrator authorization for privileged removal, CLI
+enablement, and changes to Touch ID. Each privileged service verifies the
+authorization before it applies such a request.
 
 The optional sudo component has its own app identity, icon and administrator
 approval. Its helper belongs only to that component; Full Disk Access is not
@@ -63,7 +100,9 @@ macOS permission refusals are separate from connection failures. The app offers
 Full Disk Access guidance; it never grants access or retries the write automatically.
 
 AI hooks read lifecycle IDs only. Private markers bind a task to its original
-process and file identity. Setup merges only Limitless hooks, backs up existing
+process and file identity. A worker holds an exclusive lock during its turn.
+Expired, unclaimed markers can be cleaned up after the startup grace period.
+Setup merges only Limitless hooks, backs up existing
 settings and refuses linked, shared-writable or write-ACL-controlled paths. Setup and
 removal roll back the skill, marker and settings together. Removal preserves other integrations.
 
@@ -72,20 +111,33 @@ removal roll back the skill, marker and settings together. Removal preserves oth
 Checks and download attempts wait eight hours, persisted across launches. A detected update
 starts downloading immediately while the app is idle. A manual check resets the eight-hour
 clock and can retry a delayed download after a five-minute cooldown. Version checks fetch the
-published `release.json` asset rather than GitHub's rate-limited REST API. Server retry deadlines
+published `release-v2.json` asset. Version 1.2 uses a new asset name and archive
+name so older versions require manual installation and CLI migration. Server retry deadlines
 remain mandatory. Failures back off to seven days, and a verified download resets its failure
 count. Invalid persisted counters are discarded. Background errors stay quiet. No GitHub token
 is needed or stored.
 
 Updates verify archive bounds, SHA-256, source metadata and all five executable
-signatures, including the sudo component and helper. They retain quarantine and a rollback backup. Removal closes admission,
+signatures, including the sudo component and helper. Limitless verifies and launches update
+and Touch ID executables from a private copy. Updates retain quarantine and a rollback
+backup until the replacement starts and verifies the required helper. If the existing
+installation cannot be replaced by the current user or its launch path permits
+writes by another account, the app offers the release download.
+Removal closes admission,
 confirms sleep restoration, removes the helper and owned CLI link, then clears
 preferences and recycles the matching signed app in Applications, even when macOS
 launched a quarantined copy from App Translocation. The installed copy is verified
 before cleanup and again before recycling. Sudo cleanup runs in its own helper before
-removing its service; updates preserve the setting. An update records whether the power helper
-was enabled, restores it after relaunch and retries from the previous app if replacement fails.
-Failed cleanup stays visible and retryable.
+removing its service; updates preserve the setting. Update preparation can be cancelled by the
+same console user while the power helper's recovery record is still intact. An update records
+whether the power helper was enabled, restores it after relaunch and retries from the previous
+app if opening the replacement fails. The requester hands recovery to the installer before
+exiting. A relaunched app waits for a live installer to exit before restoring the helper.
+The rollback records whether the helper was enabled before the update. Uninstall confirms
+normal sleep before handling audio
+restoration or Keychain cleanup. A failed power-helper preflight can reopen admission after
+confirmed restoration. Preparation ends on a console user change. Once system removal starts,
+admission stays closed until cleanup completes. Failed cleanup stays visible and retryable.
 
 ## Apple certificate selector
 

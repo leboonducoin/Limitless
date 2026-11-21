@@ -1,6 +1,67 @@
 # Changelog
 
-## 1.1.0 — Unreleased
+## 1.2.0 — Unreleased
+
+Upgrading from 1.1 or earlier requires a manual download. If you use Limitless
+with a terminal or AI agent, follow the
+[CLI migration instructions](https://github.com/leboonducoin/Limitless/blob/main/docs/cli.md#upgrading-from-11-or-earlier)
+before installing 1.2.
+
+### Menu bar and keyboard
+
+- Use Limitless directly from the menu bar. The popover responds on the first click and keeps session controls visible while Options scrolls beneath them.
+- Open Options from the whole row, including the label and icon. Settings are grouped by purpose, Power source comes first in Power, and Options collapses when the popover closes.
+- Command-click starts your favorite duration when idle or when only CLI or AI tasks are active. During your own timer or dated session, it adds 15 minutes within your limits.
+- Use Command-Return to start, Command-Plus to extend, and Command-Period to stop. Tab, Space, and Escape work in the popover.
+- Choose remaining time, end time, or an icon alone. Remaining time is the default and shows `00h` when less than an hour remains. All three modes keep the same menu-bar width and show an orange Limitless mark during protection.
+- Get a reminder in the final five minutes and a notification with the reason when the shared session ends. Notifications default to on at first launch and follow macOS permission and your setting. Short sessions can also report their ending.
+
+### Sessions, power, and the lid
+
+- Concurrent CLI and AI requests share one keep-awake session while keeping their own deadlines and limits. A manual session takes priority so automated requests cannot extend it.
+- The helper restores approved power limits after a restart, including when CLI access is off. After upgrading from 1.1 or earlier, review your power limits in Options once.
+- Critical thermal state ends protection and blocks new starts until macOS reports that it has cooled. Battery cutoffs and session deadlines continue to apply.
+- Keep the saved power-source restriction when macOS temporarily reports no battery.
+- Keep the display awake or let it sleep during a session. Limitless distinguishes a closed lid with an external display from a closed lid without one.
+- Opt in to muting audio when the display sleeps or when the lid closes without an external screen. Limitless restores the mute it applied to the original output and preserves a mute you set yourself.
+- Enable optional iPhone hotspot fallback for a specific password-protected network. Connect to the hotspot once to save its access point. Credentials stay in the local Keychain. Limitless checks that the session is still eligible before scanning and again before joining.
+- Remember the hotspot’s Wi-Fi security mode at setup and reject weaker modes. If you saved the hotspot with an older build, reconnect and save it again to enable fallback.
+- Out-of-range timer values are rejected before a session starts, and old out-of-range values can be displayed safely.
+
+### CLI and AI integrations
+
+- `limitless doctor` reports the authenticated helper, active protection, power and thermal readings, and protocol. Copy diagnostics from the menu when reporting a problem.
+- See which agent or provider is keeping the Mac awake, alongside any manual request. The bundled skill explains how lifecycle hooks protect Codex, Claude, Cursor, and Gemini tasks and how their protection ends.
+- Agent setup puts the verified absolute CLI path in both the skill and hooks. The skill uses that path for task protection and diagnostics.
+- Recover abandoned task markers while preserving the markers used by active workers. Disabling or removing a Limitless integration leaves unmanaged agent configuration alone.
+- Changing CLI access leaves your power limits in place. The helper remembers power limits and requires fresh approval for CLI access after it restarts or the console account changes. Protocol 14 requires the app, CLI, and helpers from the same release.
+
+### Updates, cleanup, and verification
+
+- Recover safely from interrupted updates. The previous installation stays available until the new app starts and its power helper is confirmed when required.
+- Keep update recovery state in Keychain. Preserve backups from the older updater and unrelated recovery records. Offer a manual download when Limitless cannot confirm its recovery state.
+- Offer a manual download when the installed app cannot be replaced automatically. Automatic updates still require an idle session and a matching signing identity.
+- Install updates automatically only from an app path protected against writes from other accounts. Shared installations keep update checks and use **Download update** in Options.
+- Restore normal sleep during uninstall before handling audio or Keychain errors. Existing external Touch ID settings are preserved during uninstall.
+- Uninstall requires confirmation in the menu. The helpers verify macOS administrator approval before removing system components, granting CLI access, or changing Touch ID for sudo.
+- Reserve space for app controls even when many CLI or agent tasks connect.
+- Automated sessions yield to an ordinary macOS restart or shutdown.
+- Install a protected CLI per account when the shared application or command directories are writable. Use **Migrate CLI & agent hooks…** in Options to retire the old shortcut and update Limitless hooks in that account.
+- Keep hotspot consent with the saved credential in Keychain. Preserve the access restrictions on agent settings and avoid copying extra files into the release.
+- Remove both current and older saved hotspot credentials when forgetting a hotspot or uninstalling Limitless.
+- Create a fresh protected Keychain record when saving hotspot settings and report if cleanup of older records needs a retry.
+- Keep hotspot fallback paused across relaunches if Keychain cannot yet save your request to turn it off.
+- Wait for an in-progress hotspot connection attempt to finish before confirming disablement or cleanup.
+- Stop ends the session and withdraws CLI and agent approval. Re-enable CLI access in Options to start new automated work.
+- Preserve your automatic-update choice in Keychain when you re-enable the helper. Review your automatic-update preference after upgrading from an older release.
+- Keep automatic updates paused across relaunches while an opt-out is waiting to be stored in Keychain.
+- Respect the choice to disable launch at login. If you quit during helper approval, you can enable launch at login separately in Options.
+- Add regression tests for session ownership and timing, thermal limits, hotspot cancellation, audio restoration, and update recovery. CI checks Swift compilation, sanitizers, dependencies, workflows, and secrets.
+- Add an interactive demo and GitHub workflows that attest inert preview archives and verified distribution packages.
+- Pin release packaging to the project's Apple Developer Team. Reject unsupported PAM file bytes before changing Touch ID for sudo.
+- Verify update and Touch ID components in private copies before launching them. Verify signed archives and their checksums again after export.
+
+## 1.1.0 — 2026-10-21
 
 - Keep the display awake during eligible sessions to prevent automatic idle locking, and verify both display and system assertions. Manual locking remains available.
 - Add a small circular + beside Stop to extend an owned timer or date by 15 minutes per click. Rapid clicks accumulate; Stop discards pending additions. Existing policy ceilings and cutoff protection remain in force.
