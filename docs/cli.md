@@ -1,11 +1,10 @@
 # CLI & AI
 
 Move Limitless to Applications and enable **Allow CLI & AI tasks** under **Options**.
-Approve the macOS prompt. A protected system installation exposes `limitless`
-directly. If the app or command directories are writable by a local account,
-Limitless installs a verified private copy for your account on a local volume
-that enforces file ownership. Use its path in the
-commands below or define an alias for this shell:
+Approve the macOS prompt. Limitless creates a verified private CLI for your
+account on a local volume that enforces ownership. Agent setup always uses this
+copy. A protected system installation can also expose `limitless` in the terminal.
+Use the private path directly or define an alias for this shell:
 
 ```sh
 alias limitless='"$HOME/Library/Application Support/Limitless CLI/Limitless.app/Contents/MacOS/limitless"'
@@ -23,12 +22,11 @@ account. Pause scripts that use the old shared `limitless` command. Keep
 them closed while you install and open the new app.
 
 In each affected account, open **Options**. If **Migrate CLI & agent hooks…**
-appears, use it to retire the old shortcut and migrate the hooks installed
-by Limitless. Wait for migration to finish before restarting your agents or
-resuming scripts. Use the private CLI path above if setup installed a private
-copy. If the migration button does not appear, rerun setup for each provider
-using the verified CLI before restarting it. For hooks or scripts configured
-manually, update their command paths before running them again.
+appears, use it to migrate the managed skill and existing Limitless hooks, and
+retire any unsafe shortcut. Wait for migration to finish before restarting your
+agents or resuming scripts. Update manually configured hooks and scripts to use
+the private CLI path above. Run setup with that CLI if you want Limitless to
+install the provider's standard hooks.
 
 ## Terminal
 

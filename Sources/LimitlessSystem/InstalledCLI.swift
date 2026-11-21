@@ -94,7 +94,7 @@ public enum InstalledCLI {
                 at: destination, identifier: LimitlessIdentity.application)
             if try Data(contentsOf: destination.appendingPathComponent(record)) == expected {
                 try requirePrivatePath(privateExecutable(), regularFile: true)
-                return try AgentSetup.protectedResources(in: destination, usePrivate: true)
+                return try AgentSetup.protectedResources(in: destination)
             }
         }
         let staging = directory.appendingPathComponent(".staging-\(UUID().uuidString)")
@@ -110,7 +110,7 @@ public enum InstalledCLI {
             identifier: LimitlessIdentity.commandLine)
         try requirePrivatePath(
             copy.appendingPathComponent("Contents/MacOS/limitless"), regularFile: true)
-        _ = try AgentSetup.protectedResources(in: copy, usePrivate: true)
+        _ = try AgentSetup.protectedResources(in: copy)
         guard try Data(contentsOf: copy.appendingPathComponent(record)) == expected else {
             throw SignatureError.untrustedIdentity
         }
@@ -120,7 +120,7 @@ public enum InstalledCLI {
         } else {
             try manager.moveItem(at: copy, to: destination)
         }
-        return try AgentSetup.protectedResources(in: destination, usePrivate: true)
+        return try AgentSetup.protectedResources(in: destination)
     }
 
     @concurrent public static func removePrivateCopy() async throws {

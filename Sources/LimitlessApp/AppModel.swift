@@ -215,10 +215,11 @@ import UserNotifications
             persistsUpdateState = true
             await readUpdateRecovery()
         }
-        if trustedBuild, !InstalledCLI.sharedPathIsProtected {
+        if trustedBuild {
             do {
+                let sharedIsProtected = InstalledCLI.sharedPathIsProtected
                 cliMigrationRequired =
-                    try InstalledCLI.isAppOwnedLinkPresent()
+                    try (!sharedIsProtected && InstalledCLI.isAppOwnedLinkPresent())
                     || !AgentSetup.legacyProviders().isEmpty
             } catch {
                 cliMigrationRequired = true
@@ -1126,32 +1127,27 @@ import UserNotifications
             return
         }
         do {
+            let privateResources = try await InstalledCLI.refreshPrivateCopy()
+            if migrateLegacy {
+                for provider in try AgentSetup.legacyProviders() {
+                    try AgentSetup.migrateLegacy(provider, resources: privateResources)
+                }
+                guard try AgentSetup.legacyProviders().isEmpty
+                else { throw ServiceError.restorationRequired }
+            }
             try await AdministratorAuthorization.withGrant { grant in
-                var privateResources: URL?
-                if !InstalledCLI.sharedPathIsProtected {
-                    privateResources = try await InstalledCLI.refreshPrivateCopy()
+                let shortcutInstalled = await self.perform(.installCLI, authorization: grant)
+                if !InstalledCLI.sharedPathIsProtected, try InstalledCLI.isAppOwnedLinkPresent() {
+                    self.cliMigrationRequired = true
+                    throw ServiceError.restorationRequired
                 }
-                guard await self.perform(.installCLI, authorization: grant) else {
+                self.cliMigrationRequired = false
+                if await self.perform(.setAutomation(true), authorization: grant),
+                    !shortcutInstalled
+                {
                     self.message =
-                        "The limitless command could not be installed. An existing command was left unchanged."
-                    return
+                        "CLI and AI tasks are enabled for this account. The shared Terminal shortcut could not be installed."
                 }
-                if migrateLegacy {
-                    if let privateResources {
-                        guard try !InstalledCLI.isAppOwnedLinkPresent()
-                        else { throw ServiceError.restorationRequired }
-                        for provider in try AgentSetup.legacyProviders() {
-                            try AgentSetup.configure(provider, resources: privateResources)
-                        }
-                        guard try AgentSetup.legacyProviders().isEmpty
-                        else { throw ServiceError.restorationRequired }
-                    } else if !InstalledCLI.sharedPathIsProtected {
-                        throw ServiceError.restorationRequired
-                    }
-                    self.cliMigrationRequired = false
-                }
-                guard !self.cliMigrationRequired else { return }
-                _ = await self.perform(.setAutomation(true), authorization: grant)
             }
         } catch {
             message =
