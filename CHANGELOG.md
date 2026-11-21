@@ -47,8 +47,9 @@ before installing 1.2.
 - Install a protected CLI per account when the shared application or command directories are writable. Use **Migrate CLI & agent hooks…** in Options to retire the old shortcut and update Limitless hooks in that account.
 - Keep hotspot consent with the saved credential in Keychain. Preserve the access restrictions on agent settings and avoid copying extra files into the release.
 - Remove both current and older saved hotspot credentials when forgetting a hotspot or uninstalling Limitless.
+- Keep hotspot fallback paused across relaunches if Keychain cannot yet save your request to turn it off.
 - Stop ends the session and withdraws CLI and agent approval. Re-enable CLI access in Options to start new automated work.
-- Keep the automatic-update choice and retry schedule in Keychain. Review your automatic-update preference after upgrading from an older release.
+- Preserve your automatic-update choice in Keychain when you re-enable the helper. Review your automatic-update preference after upgrading from an older release.
 - Respect the choice to disable launch at login. If you quit during helper approval, you can enable launch at login separately in Options.
 - Add regression tests for session ownership and timing, thermal limits, hotspot cancellation, audio restoration, and update recovery. CI checks Swift compilation, sanitizers, dependencies, workflows, and secrets.
 - Add an interactive demo and GitHub workflows that attest inert preview archives and verified distribution packages.

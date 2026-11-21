@@ -96,6 +96,17 @@ private func protection(
     #expect(AppModel(preferences: preferences).muteWithClosedLid)
 }
 
+@Test @MainActor func pendingHotspotWithdrawalSurvivesRelaunch() throws {
+    let domain = "Limitless.hotspot-withdrawal-test.\(UUID())"
+    let preferences = try #require(UserDefaults(suiteName: domain))
+    defer { preferences.removePersistentDomain(forName: domain) }
+    let model = AppModel(preferences: preferences)
+    #expect(!model.hotspotWithdrawalPending)
+    model.pauseHotspotForWithdrawal()
+    let freshPreferences = try #require(UserDefaults(suiteName: domain))
+    #expect(AppModel(preferences: freshPreferences).hotspotWithdrawalPending)
+}
+
 @Test func hotspotMatchingRequiresTheSavedNameAndAccessPoint() {
     let network = HotspotCredentials.Network(
         ssid: "Test fixture", bssid: "0A:10:20:30:40:50", password: "fixture-password")

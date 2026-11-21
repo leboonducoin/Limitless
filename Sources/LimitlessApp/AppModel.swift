@@ -25,6 +25,7 @@ import UserNotifications
         }
     }
     private static let sessionNotificationsKey = "sessionNotifications"
+    private static let hotspotWithdrawalKey = "hotspotWithdrawalPending"
 
     private(set) var status: ServiceStatus?
     private(set) var busy = false
@@ -80,7 +81,13 @@ import UserNotifications
     private(set) var hotspotMessage: String?
     private(set) var hotspotConfigured: Bool
     private(set) var hotspotEnabled: Bool
-    private var hotspotWithdrawalPending = false
+    private(set) var hotspotWithdrawalPending: Bool {
+        didSet {
+            if !isPreview {
+                preferences.set(hotspotWithdrawalPending, forKey: Self.hotspotWithdrawalKey)
+            }
+        }
+    }
     var muteWhenScreenSleeps: Bool {
         didSet {
             if !isPreview {
@@ -174,6 +181,7 @@ import UserNotifications
             ?? false
         hotspotConfigured = false
         hotspotEnabled = false
+        hotspotWithdrawalPending = preferences.bool(forKey: Self.hotspotWithdrawalKey)
         let authentication = LAContext()
         hasTouchID =
             authentication.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
@@ -793,7 +801,8 @@ import UserNotifications
             return false
         }
         let network = HotspotCredentials.Network(
-            ssid: name, bssid: accessPoint, password: password, automaticJoin: hotspotEnabled)
+            ssid: name, bssid: accessPoint, password: password,
+            automaticJoin: hotspotEnabled && !hotspotWithdrawalPending)
         guard network.isValid else {
             message = "Enter your hotspot name and its password (at least eight characters)."
             return false
@@ -803,6 +812,7 @@ import UserNotifications
             return false
         }
         hotspotConfigured = true
+        hotspotEnabled = network.automaticJoin == true
         hotspotWithdrawalPending = false
         hotspot.update(eligible: false)
         updateEnvironment()
@@ -812,10 +822,7 @@ import UserNotifications
 
     func setHotspotEnabled(_ enabled: Bool) {
         guard trustedBuild, !isPreview, hotspotConfigured else { return }
-        if !enabled {
-            hotspotWithdrawalPending = true
-            hotspot.update(eligible: false)
-        }
+        if !enabled { pauseHotspotForWithdrawal() }
         guard let network = HotspotCredentials.read(),
             HotspotCredentials.save(
                 .init(
@@ -836,8 +843,6 @@ import UserNotifications
 
     func forgetHotspot() {
         guard trustedBuild, !isPreview else { return }
-        hotspotWithdrawalPending = true
-        hotspot.update(eligible: false)
         guard removeHotspotConfiguration() else {
             message = "The hotspot details could not be removed from Keychain."
             return
@@ -845,7 +850,13 @@ import UserNotifications
         message = nil
     }
 
+    func pauseHotspotForWithdrawal() {
+        hotspotWithdrawalPending = true
+        hotspot.update(eligible: false)
+    }
+
     private func removeHotspotConfiguration() -> Bool {
+        pauseHotspotForWithdrawal()
         guard HotspotCredentials.remove() else { return false }
         hotspotConfigured = false
         hotspotEnabled = false
@@ -1177,7 +1188,14 @@ import UserNotifications
             }
             try await helper.register()
             pendingLoginSetup = true
-            if !updatesConsentRecorded { setAutomaticUpdates(true) }
+            if !updatesConsentRecorded {
+                if let enabled = UpdatePreferences.initializeConsent() {
+                    updatesConsentRecorded = true
+                    automaticUpdates = enabled
+                } else {
+                    updateMessage = "Unlock Keychain to restore your automatic-update setting."
+                }
+            }
         } catch UpdateError.busy {
             message = "Another Limitless instance is updating."
         } catch {

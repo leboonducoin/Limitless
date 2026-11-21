@@ -458,6 +458,12 @@ enum UpdatePreferences {
         AppKeychain.save(Data([enabled ? 1 : 0]), service: "updates", account: "automatic")
     }
 
+    static func initializeConsent() -> Bool? {
+        if let enabled = readConsent() { return enabled }
+        if AppKeychain.add(Data([1]), service: "updates", account: "automatic") { return true }
+        return readConsent()
+    }
+
     static func readSchedule() -> UpdateSchedule? {
         guard let data = AppKeychain.read(service: "updates", account: "schedule"),
             data.count <= 1_024

@@ -149,6 +149,10 @@ struct SettingsView: View {
                                 set: { model.setHotspotEnabled($0) })
                         )
                         .disabled(!model.hotspotConfigured || model.isPreview)
+                        if model.hotspotWithdrawalPending {
+                            Text("Hotspot fallback is paused. Unlock Keychain to finish.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         Text(
                             "Connect to your iPhone hotspot to save it. Fallback starts after 30 seconds offline during a session."
                         )

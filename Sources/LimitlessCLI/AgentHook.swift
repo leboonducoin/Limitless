@@ -254,7 +254,7 @@ final class AgentActivity {
                     expectedIdentifier: LimitlessIdentity.commandLine)
                 if let context = try AgentActivity.begin(event, host: ProcessIdentity.hookHost()) {
                     do {
-                        try launch(context, executable: identity.executableURL)
+                        try launch(context, identity: identity)
                     } catch {
                         AgentActivity.discardUnclaimed(context)
                         throw error
@@ -281,7 +281,8 @@ final class AgentActivity {
         return result
     }
 
-    static func launch(_ context: AgentActivity.Context, executable: URL) throws {
+    static func launch(_ context: AgentActivity.Context, identity: SignedIdentity) throws {
+        let executable = try InstalledCLI.verifiedLaunchExecutable(for: identity)
         let child = Process()
         let input = Pipe()
         let ready = Pipe()

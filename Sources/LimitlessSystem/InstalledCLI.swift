@@ -25,6 +25,13 @@ public enum InstalledCLI {
             regularFile: regularFile, owner: user, allowRootAncestors: true)
     }
 
+    public static func verifiedLaunchExecutable(for identity: SignedIdentity) throws -> URL {
+        let executable = identity.executableURL
+        try requirePrivatePath(executable, regularFile: true)
+        try identity.verifyExecutable(at: executable, identifier: LimitlessIdentity.commandLine)
+        return executable
+    }
+
     public static var sharedPathIsProtected: Bool {
         let root = URL(fileURLWithPath: "/")
         return
