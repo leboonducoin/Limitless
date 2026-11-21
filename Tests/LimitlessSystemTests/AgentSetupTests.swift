@@ -93,6 +93,15 @@ import Testing
     try FileManager.default.copyItem(at: resources, to: privateResources)
     for provider in try AgentSetup.legacyProviders(home: home) {
         try AgentSetup.configure(provider, home: home, resources: privateResources)
+        let skillRoot = provider == "codex" ? ".agents" : ".\(provider)"
+        let skill = home.appendingPathComponent(skillRoot + "/skills/limitless/SKILL.md")
+        let content = try String(contentsOf: skill, encoding: .utf8)
+        let executable = InstalledCLI.privateExecutable(in: home)
+        #expect(content.contains("'\(executable.path)'"))
+        #expect(!content.contains("{{LIMITLESS_CLI}}"))
+        try Data(contentsOf: resources.appendingPathComponent("SKILL.md")).write(to: skill)
+        #expect(try !AgentSetup.isCurrent(provider, home: home, resources: privateResources))
+        try AgentSetup.configure(provider, home: home, resources: privateResources)
         #expect(try AgentSetup.isCurrent(provider, home: home, resources: privateResources))
     }
     #expect(try AgentSetup.legacyProviders(home: home).isEmpty)

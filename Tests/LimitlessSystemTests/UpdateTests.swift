@@ -3,18 +3,36 @@ import Testing
 
 @testable import LimitlessSystem
 
-@Test func automaticReplacementRequiresWriteAccessToTheAppAndParent() throws {
-    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    let app = root.appendingPathComponent("Limitless.app", isDirectory: true)
+@Test func automaticReplacementRequiresAProtectedWritableLaunchPath() throws {
     let files = FileManager.default
-    try files.createDirectory(at: app, withIntermediateDirectories: true)
+    let root = try GitHubUpdate.canonical(files.temporaryDirectory)
+        .appendingPathComponent(UUID().uuidString)
+    let app = root.appendingPathComponent("Limitless.app", isDirectory: true)
+    let macOS = app.appendingPathComponent("Contents/MacOS")
+    try files.createDirectory(at: macOS, withIntermediateDirectories: true)
+    let info = app.appendingPathComponent("Contents/Info.plist")
+    let executable = macOS.appendingPathComponent("LimitlessApp")
     defer {
         try? files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
         try? files.removeItem(at: root)
     }
+    for file in [info, executable] { try Data().write(to: file) }
     try GitHubUpdate.requireWritableApp(app)
+    for path in [root, app, macOS, info, executable] {
+        let permissions = try files.attributesOfItem(atPath: path.path)[.posixPermissions]
+        try files.setAttributes([.posixPermissions: 0o770], ofItemAtPath: path.path)
+        #expect(throws: UpdateError.unsafeLocation) {
+            try GitHubUpdate.requireWritableApp(app)
+        }
+        #expect(throws: UpdateError.unsafeLocation) {
+            try GitHubUpdate.requireProtectedLaunchPath(app)
+        }
+        try files.setAttributes(
+            [.posixPermissions: try #require(permissions)], ofItemAtPath: path.path)
+    }
     try files.setAttributes([.posixPermissions: 0o500], ofItemAtPath: root.path)
     #expect(throws: UpdateError.unsafeLocation) { try GitHubUpdate.requireWritableApp(app) }
+    try GitHubUpdate.requireProtectedLaunchPath(app)
 }
 
 @Test func backupReceiptCanAddressOnlyAnInstallerNamedSibling() throws {

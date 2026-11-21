@@ -38,10 +38,12 @@ enum LimitlessApp {
                     }
                     let configuration = NSWorkspace.OpenConfiguration()
                     configuration.createsNewApplicationInstance = true
+                    try GitHubUpdate.requireProtectedLaunchPath(installed.app)
                     do {
                         _ = try await NSWorkspace.shared.openApplication(
                             at: installed.app, configuration: configuration)
                     } catch {
+                        try GitHubUpdate.requireProtectedLaunchPath(installed.backup)
                         _ = try FileManager.default.replaceItemAt(
                             installed.app, withItemAt: installed.backup,
                             options: .usingNewMetadataOnly)
@@ -54,13 +56,10 @@ enum LimitlessApp {
                 } catch {
                     let configuration = NSWorkspace.OpenConfiguration()
                     configuration.createsNewApplicationInstance = true
-                    let recoveryApp =
-                        (try? await GitHubUpdate.currentInstalledApplication(
-                            identity: SignedIdentity(
-                                expectedIdentifier: LimitlessIdentity.application)))
-                        ?? Bundle.main.bundleURL
-                    _ = try? await NSWorkspace.shared.openApplication(
-                        at: recoveryApp, configuration: configuration)
+                    if let recoveryApp = await GitHubUpdate.recoveryApplication() {
+                        _ = try? await NSWorkspace.shared.openApplication(
+                            at: recoveryApp, configuration: configuration)
+                    }
                     let alert = NSAlert()
                     alert.messageText = "Update incomplete"
                     alert.informativeText = error.localizedDescription

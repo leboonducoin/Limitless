@@ -136,6 +136,9 @@ func main() throws {
     try run(executable, ["reject-installed-build", candidate.path])
     try currentRecord.write(to: currentRecordURL)
     try sign(current, certificate: certificate)
+    try files.setAttributes([.posixPermissions: 0o770], ofItemAtPath: root.path)
+    try run(executable, ["reject-shared-ancestor", candidate.path])
+    try files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
     try run(executable, ["replace", candidate.path])
     print(
         "Signed upgrade acceptance, revision mismatch/tampering/ad-hoc/downgrade refusal and atomic replacement passed. No installed app was changed."

@@ -8,7 +8,7 @@ import LimitlessSystem
         let candidate = URL(fileURLWithPath: arguments[1])
         let current = Bundle.main.bundleURL
         let identity = try SignedIdentity(expectedIdentifier: LimitlessIdentity.application)
-        if arguments[0] == "reject-installed-build" {
+        if ["reject-installed-build", "reject-shared-ancestor"].contains(arguments[0]) {
             let finishedParent = Process()
             finishedParent.executableURL = URL(fileURLWithPath: "/usr/bin/true")
             try finishedParent.run()

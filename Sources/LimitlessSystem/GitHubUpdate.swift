@@ -118,7 +118,7 @@ public enum UpdateError: Error, LocalizedError, Equatable, Sendable {
         case .invalidRelease: "GitHub did not provide a valid Limitless release."
         case .invalidArchive: "The update archive failed verification."
         case .untrustedBuild: "The update must be signed by the same certificate as this app."
-        case .unsafeLocation: "Move Limitless to a writable Applications folder before updating."
+        case .unsafeLocation: "Install this update manually from GitHub Releases."
         case .busy: "Close the running Limitless app before replacing it."
         case .failed: "The update could not be completed. Reopen Limitless or retry."
         case .rateLimited(let until):
@@ -267,9 +267,8 @@ public enum GitHubUpdate {
     @concurrent public static func stage(
         _ release: Release, identity: SignedIdentity, installedApp: URL
     ) async throws -> Staged {
-        let target = try canonical(installedApp)
-        try requireWritableApp(target)
-        let directory = target.deletingLastPathComponent().appendingPathComponent(
+        try requireWritableApp(installedApp)
+        let directory = installedApp.deletingLastPathComponent().appendingPathComponent(
             ".Limitless-update-\(UUID().uuidString)")
         try FileManager.default.createDirectory(
             at: directory, withIntermediateDirectories: false,
@@ -283,8 +282,9 @@ public enum GitHubUpdate {
         try data.write(to: archive, options: .withoutOverwriting)
         try await extract(archive, to: directory)
         let app = directory.appendingPathComponent("Limitless.app")
+        try requireProtectedLaunchPath(app)
         try verify(
-            app, identity: identity, newerThan: target, expectedVersion: release.version,
+            app, identity: identity, newerThan: installedApp, expectedVersion: release.version,
             expectedSourceRevision: release.sourceRevision)
         try quarantine(app, downloadedFrom: release.url)
         staged = true
@@ -350,10 +350,10 @@ public enum GitHubUpdate {
 
     private static func tar(_ arguments: [String], directory: URL) async throws -> String {
         let output = directory.appendingPathComponent(UUID().uuidString + ".log")
-        guard FileManager.default.createFile(atPath: output.path, contents: nil) else {
-            throw UpdateError.invalidArchive
-        }
-        let handle = try FileHandle(forWritingTo: output)
+        let descriptor = open(
+            output.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard descriptor >= 0 else { throw UpdateError.invalidArchive }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer {
             try? handle.close()
             try? FileManager.default.removeItem(at: output)
@@ -393,16 +393,37 @@ public enum GitHubUpdate {
     }
 
     static func requireWritableApp(_ app: URL) throws {
-        let values = try app.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-        guard app.lastPathComponent == "Limitless.app", values.isDirectory == true,
-            values.isSymbolicLink == false,
+        guard app.lastPathComponent == "Limitless.app",
             FileManager.default.isWritableFile(atPath: app.path),
             FileManager.default.isWritableFile(atPath: app.deletingLastPathComponent().path),
             geteuid() != 0, geteuid() == getuid()
         else { throw UpdateError.unsafeLocation }
+        try requireProtectedLaunchPath(app)
     }
 
-    private static func canonical(_ url: URL) throws -> URL {
+    public static func requireProtectedLaunchPath(_ app: URL) throws {
+        do {
+            for component in ["Contents/Info.plist", "Contents/MacOS/LimitlessApp"] {
+                try InstalledCLI.requirePrivatePath(
+                    app.appendingPathComponent(component), regularFile: true)
+            }
+        } catch { throw UpdateError.unsafeLocation }
+    }
+
+    @concurrent public static func recoveryApplication() async -> URL? {
+        guard let identity = try? SignedIdentity(expectedIdentifier: LimitlessIdentity.application)
+        else { return nil }
+        for app in [installedApplication, Bundle.main.bundleURL] {
+            if (try? requireProtectedLaunchPath(app)) != nil,
+                (try? requireCurrentApplication(app, identity: identity)) != nil
+            {
+                return app
+            }
+        }
+        return nil
+    }
+
+    static func canonical(_ url: URL) throws -> URL {
         guard url.isFileURL, let path = realpath(url.path, nil) else {
             throw UpdateError.unsafeLocation
         }
@@ -513,6 +534,7 @@ public enum GitHubUpdate {
         _ staged: Staged, identity: SignedIdentity, helperRequired: Bool,
         handOff: (ProcessIdentity) throws -> Void
     ) throws {
+        try requireWritableApp(installedApplication)
         let bundle = try PrivateApplicationLaunch.copy(installedApplication)
         var launched = false
         defer {
@@ -591,8 +613,8 @@ public enum GitHubUpdate {
         let current = directory.deletingLastPathComponent().appendingPathComponent(
             "Limitless.app", isDirectory: true)
         guard try canonical(current) == current else { throw UpdateError.unsafeLocation }
-        try requireCurrentApplication(current, identity: identity)
         try requireWritableApp(current)
+        try requireCurrentApplication(current, identity: identity)
         guard app.lastPathComponent == "Limitless.app",
             directory.deletingLastPathComponent() == current.deletingLastPathComponent(),
             directory.lastPathComponent.hasPrefix(".Limitless-update-"),
@@ -612,6 +634,7 @@ public enum GitHubUpdate {
             guard ContinuousClock.now < deadline else { throw UpdateError.busy }
             try await Task.sleep(for: .milliseconds(100))
         }
+        try requireProtectedLaunchPath(app)
         try verify(app, identity: identity, newerThan: current)
         guard try SecureOwnershipJournal.isStateDirectoryAbsent(),
             try InstalledHelperFiles.areAbsent(),
@@ -625,9 +648,10 @@ public enum GitHubUpdate {
             _ = try FileManager.default.replaceItemAt(
                 current, withItemAt: app, backupItemName: backupName,
                 options: [.withoutDeletingBackupItem, .usingNewMetadataOnly])
+            try requireProtectedLaunchPath(current)
             try identity.verifyExecutable(at: current, identifier: LimitlessIdentity.application)
         } catch {
-            if FileManager.default.fileExists(atPath: backup.path) {
+            if (try? requireProtectedLaunchPath(backup)) != nil {
                 _ = try? FileManager.default.replaceItemAt(
                     current, withItemAt: backup, options: .usingNewMetadataOnly)
             }

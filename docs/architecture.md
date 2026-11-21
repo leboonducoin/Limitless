@@ -121,7 +121,8 @@ Updates verify archive bounds, SHA-256, source metadata and all five executable
 signatures, including the sudo component and helper. Limitless verifies and launches update
 and Touch ID executables from a private copy. Updates retain quarantine and a rollback
 backup until the replacement starts and verifies the required helper. If the existing
-installation cannot be replaced by the current user, the app offers the release download.
+installation cannot be replaced by the current user or its launch path permits
+writes by another account, the app offers the release download.
 Removal closes admission,
 confirms sleep restoration, removes the helper and owned CLI link, then clears
 preferences and recycles the matching signed app in Applications, even when macOS

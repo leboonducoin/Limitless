@@ -25,8 +25,9 @@ In each affected account, open **Options**. If **Migrate CLI & agent hooks…**
 appears, use it to retire the old shortcut and migrate the hooks installed
 by Limitless. Wait for migration to finish before restarting your agents or
 resuming scripts. Use the private CLI path above if setup installed a private
-copy. For hooks or scripts configured manually, update their command paths
-before running them again.
+copy. If the migration button does not appear, rerun setup for each provider
+using the verified CLI before restarting it. For hooks or scripts configured
+manually, update their command paths before running them again.
 
 ## Terminal
 
@@ -93,8 +94,10 @@ its holds. Work detached beyond a turn needs its own task tracking.
 
 ### Other
 
-Copy [SKILL.md](../skills/limitless/SKILL.md) into your agent’s skill folder.
-Connect its real task start, finish and cancellation events to `limitless hook other`.
+Copy [SKILL.md](../skills/limitless/SKILL.md) into your agent’s skill folder and
+replace `{{LIMITLESS_CLI}}` with the shell-quoted absolute path to your verified
+Limitless executable. Connect its real task start, finish and cancellation
+events to the same executable with the subcommand `hook other`.
 Pass this JSON on standard input:
 
 ```json

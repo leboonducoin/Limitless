@@ -9,17 +9,27 @@ Limitless follows real task events from Codex, Claude Code, Cursor and Gemini CL
 Tasks use one shared session through the installed hooks. Each task releases its
 own request and keeps its own limits. Thinking, tool calls and waiting for delegated work remain
 part of the turn. Detached work that outlives a turn needs its own explicit
-`limitless run` or `limitless watch` session.
+session with the `run` or `watch` subcommand.
+
+## Use the protected executable
+
+```sh
+{{LIMITLESS_CLI}}
+```
+
+Use this exact absolute executable with the subcommands below. If the path
+is unavailable or setup has not filled it in, ask the user to finish
+setting up the integration. Keep using the same path for all Limitless commands.
 
 ## Confirm protection
 
-- Use `limitless status --json` when the user asks whether the Mac is being kept
+- Use `status --json` when the user asks whether the Mac is being kept
   awake. Check the helper's observed state, its fault and the session suspension
   reason. A hook event or an armed session alone cannot confirm protection.
-- Use `limitless doctor` when the helper is unavailable or a session stopped.
+- Use `doctor` when the helper is unavailable or a session stopped.
   Explain what was observed and give the user a specific next action. A cutoff
   ends protection while the underlying task continues.
-- Use `limitless setup PROVIDER --check` to verify the installed skill and hook
+- Use `setup PROVIDER --check` to verify the installed skill and hook
   files without editing them. For setup or repair requested by the user, follow
   the [provider instructions](https://github.com/leboonducoin/Limitless/blob/main/docs/cli.md#ai-agent-setup).
   Setup may require an agent restart and its normal hook approval.

@@ -52,8 +52,10 @@ the signed app's `Build.json`, verifies the download, then installs and reopens 
 If the helper was enabled, the reopened version restores it; a failed replacement reopens
 the previous app so the same recovery can run. The installer records the backup location
 before replacing the app and keeps the backup until the replacement starts and, when required,
-confirms its helper. On an installation your account cannot
-replace automatically, use **Download update** in Options. macOS may run a quarantined update from a
+confirms its helper. Limitless installs updates automatically only when your
+account can replace the app and the app's launch path is protected against
+writes by other accounts. For a shared installation, use **Download update**
+in Options. macOS may run a quarantined update from a
 temporary, randomized location. Limitless verifies the matching signed copy in
 Applications before granting CLI access again, replacing it on the next update or moving it
 to the Trash. If macOS asks for administrator approval during removal, the power and

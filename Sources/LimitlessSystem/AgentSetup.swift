@@ -11,6 +11,23 @@ public enum AgentSetup {
             .appendingPathComponent("Contents/Resources/limitless-skill").path
     }
 
+    private static func shellPath(_ path: String) -> String {
+        "'" + path.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    private static func renderedSkill(in resources: URL, home: URL) throws -> Data {
+        let template = try String(
+            contentsOf: resources.appendingPathComponent("SKILL.md"), encoding: .utf8)
+        let token = "{{LIMITLESS_CLI}}"
+        let path =
+            usesPrivateResources(resources, home: home)
+            ? InstalledCLI.privateExecutable(in: home).path : InstalledCLI.target
+        guard template.contains(token),
+            !path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        else { throw CocoaError(.fileReadCorruptFile) }
+        return Data(template.replacingOccurrences(of: token, with: shellPath(path)).utf8)
+    }
+
     @concurrent public static func verifiedResources() async throws -> URL {
         let identity = try await SignedIdentity.current(
             expectedIdentifier: LimitlessIdentity.commandLine)
@@ -408,7 +425,7 @@ public enum AgentSetup {
         var hooks = config["hooks"] as? [String: Any] ?? [:]
         let command = InstalledCLI.target + " hook " + provider
         let privateCommand = privateExecutable.map {
-            "'" + $0.path.replacingOccurrences(of: "'", with: "'\"'\"'") + "' hook " + provider
+            shellPath($0.path) + " hook " + provider
         }
         guard !usePrivate || privateCommand != nil else { throw CocoaError(.fileReadCorruptFile) }
         let ownedCommands = Set([command, privateCommand].compactMap { $0 })
@@ -489,8 +506,8 @@ public enum AgentSetup {
         let canonical = try JSONSerialization.data(
             withJSONObject: JSONSerialization.jsonObject(with: config),
             options: [.prettyPrinted, .sortedKeys])
-        return canonical == expected
-            && skill == (try? Data(contentsOf: resources.appendingPathComponent("SKILL.md")))
+        let expectedSkill = try renderedSkill(in: resources, home: home)
+        return canonical == expected && skill == expectedSkill
     }
 
     public static func configure(
@@ -535,7 +552,7 @@ public enum AgentSetup {
             old?.data, template: template, provider: provider, remove: remove,
             privateExecutable: InstalledCLI.privateExecutable(in: home),
             usePrivate: usesPrivateResources(resources, home: home))
-        let skillText = try Data(contentsOf: resources.appendingPathComponent("SKILL.md"))
+        let skillText = try renderedSkill(in: resources, home: home)
         if skillExisted {
             let names = try skillDirectory!.names()
             guard names.isSubset(of: ["SKILL.md", ".limitless-managed"]),
