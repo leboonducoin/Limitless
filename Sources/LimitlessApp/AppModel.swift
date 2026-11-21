@@ -812,7 +812,8 @@ import UserNotifications
             message = "Enter your hotspot name and its password (at least eight characters)."
             return false
         }
-        guard HotspotCredentials.save(network) else {
+        let saved = HotspotCredentials.save(network)
+        guard saved != .failed else {
             message = "The hotspot details could not be saved in Keychain."
             return false
         }
@@ -821,7 +822,7 @@ import UserNotifications
         hotspotWithdrawalPending = false
         hotspot.update(eligible: false)
         updateEnvironment()
-        reportHotspotSave(success: "Hotspot details saved in Keychain.")
+        reportHotspotSave(saved, success: "Hotspot details saved in Keychain.")
         return true
     }
 
@@ -833,12 +834,14 @@ import UserNotifications
             message = "Reconnect to your iPhone hotspot and save it again before enabling fallback."
             return
         }
-        guard let network = saved,
-            HotspotCredentials.save(
-                .init(
-                    ssid: network.ssid, bssid: network.bssid, password: network.password,
-                    automaticJoin: enabled, securityMode: network.securityMode))
-        else {
+        let outcome =
+            saved.map { network in
+                HotspotCredentials.save(
+                    .init(
+                        ssid: network.ssid, bssid: network.bssid, password: network.password,
+                        automaticJoin: enabled, securityMode: network.securityMode))
+            } ?? .failed
+        guard outcome != .failed else {
             message =
                 enabled
                 ? "Hotspot fallback could not be enabled. Unlock Keychain and try again."
@@ -849,14 +852,14 @@ import UserNotifications
         hotspotEnabled = enabled
         if enabled { hotspot.requestLocationAccess() }
         updateEnvironment()
-        reportHotspotSave(success: nil)
+        reportHotspotSave(outcome, success: nil)
     }
 
-    private func reportHotspotSave(success: String?) {
+    private func reportHotspotSave(_ outcome: HotspotCredentials.SaveResult, success: String?) {
         message =
-            HotspotCredentials.removeLegacy()
-            ? success
-            : "Hotspot settings saved. Unlock Keychain and save again to remove the old password."
+            outcome == .olderEntriesRetained
+            ? "Hotspot saved. Unlock Keychain and use Forget hotspot to clear older passwords."
+            : success
     }
 
     func forgetHotspot() {

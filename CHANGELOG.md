@@ -48,6 +48,7 @@ before installing 1.2.
 - Install a protected CLI per account when the shared application or command directories are writable. Use **Migrate CLI & agent hooks…** in Options to retire the old shortcut and update Limitless hooks in that account.
 - Keep hotspot consent with the saved credential in Keychain. Preserve the access restrictions on agent settings and avoid copying extra files into the release.
 - Remove both current and older saved hotspot credentials when forgetting a hotspot or uninstalling Limitless.
+- Create a fresh protected Keychain record when saving hotspot settings and report if cleanup of older records needs a retry.
 - Keep hotspot fallback paused across relaunches if Keychain cannot yet save your request to turn it off.
 - Stop ends the session and withdraws CLI and agent approval. Re-enable CLI access in Options to start new automated work.
 - Preserve your automatic-update choice in Keychain when you re-enable the helper. Review your automatic-update preference after upgrading from an older release.

@@ -424,20 +424,29 @@ enum HotspotCredentials {
         }
     }
 
-    static func save(_ network: Network) -> Bool {
+    enum SaveResult: Equatable {
+        case failed, saved, olderEntriesRetained
+    }
+
+    static func save(_ network: Network) -> SaveResult {
         guard network.isValid, network.bssid != nil, let data = try? JSONEncoder().encode(network)
-        else { return false }
+        else { return .failed }
         let previous = account()
-        let next = previous ?? UUID().uuidString
-        guard AppKeychain.save(data, service: credentialService, account: next)
-        else { return false }
-        if previous == nil,
-            !AppKeychain.save(Data(next.utf8), service: "hotspot", account: "reference")
-        {
-            _ = AppKeychain.remove(service: credentialService, account: next)
-            return false
+        let next = UUID().uuidString
+        // A fresh item uses the creating app's access policy.
+        guard AppKeychain.add(data, service: credentialService, account: next) else {
+            return .failed
         }
-        return true
+        guard AppKeychain.save(Data(next.utf8), service: "hotspot", account: "reference") else {
+            _ = AppKeychain.remove(service: credentialService, account: next)
+            return .failed
+        }
+        let removedPrevious =
+            previous.map {
+                AppKeychain.remove(service: credentialService, account: $0)
+            } ?? true
+        let removedLegacy = removeLegacy()
+        return removedPrevious && removedLegacy ? .saved : .olderEntriesRetained
     }
 
     static func read() -> Network? {
@@ -450,7 +459,7 @@ enum HotspotCredentials {
         return network
     }
 
-    static func removeLegacy() -> Bool {
+    private static func removeLegacy() -> Bool {
         AppKeychain.remove(service: "hotspot", account: "fallback")
     }
 
