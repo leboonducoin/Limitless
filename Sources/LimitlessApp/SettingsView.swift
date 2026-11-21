@@ -168,10 +168,8 @@ struct SettingsView: View {
                             .disabled(
                                 model.isPreview || hotspotName.wrappedValue.isEmpty
                                     || hotspotPassword.wrappedValue.isEmpty)
-                            if model.hotspotConfigured {
-                                Button("Forget hotspot") { model.forgetHotspot() }
-                                    .disabled(model.isPreview)
-                            }
+                            Button("Forget hotspot") { model.forgetHotspot() }
+                                .disabled(model.isPreview)
                         }
                     }
                     .padding(.top, 6)

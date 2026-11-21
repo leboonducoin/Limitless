@@ -39,6 +39,7 @@
 - Automated sessions yield to an ordinary macOS restart or shutdown.
 - Install a protected CLI per account when the shared application or command directories are writable. Use **Migrate CLI & agent hooks…** in Options to retire the old shortcut and update Limitless hooks in that account.
 - Keep hotspot consent with the saved credential in Keychain. Preserve the access restrictions on agent settings and avoid copying extra files into the release.
+- Remove both current and older saved hotspot credentials when forgetting a hotspot or uninstalling Limitless.
 - Stop ends the session and withdraws CLI and agent approval. Re-enable CLI access in Options to start new automated work.
 - Keep the automatic-update choice and retry schedule in Keychain. Review your automatic-update preference after upgrading from an older release.
 - Respect the choice to disable launch at login. If you quit during helper approval, you can enable launch at login separately in Options.

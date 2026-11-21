@@ -259,15 +259,17 @@ private enum AppKeychain {
         let label: String
     }
 
-    private static func query(_ service: String, account: String) -> [String: Any] {
+    private static func query(_ service: String, account: String? = nil) -> [String: Any] {
         let authentication = LAContext()
         authentication.interactionNotAllowed = true
-        return [
+        var request: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: LimitlessIdentity.application + "." + service,
-            kSecAttrAccount as String: account, kSecAttrSynchronizable as String: false,
+            kSecAttrSynchronizable as String: false,
             kSecUseAuthenticationContext as String: authentication,
         ]
+        if let account { request[kSecAttrAccount as String] = account }
+        return request
     }
 
     static func save(_ data: Data, service: String, account: String) -> Bool {
@@ -340,6 +342,13 @@ private enum AppKeychain {
         let status = SecItemDelete(query(service, account: account) as CFDictionary)
         return status == errSecSuccess || status == errSecItemNotFound
     }
+
+    static func removeAll(service: String) -> Bool {
+        var request = query(service)
+        request[kSecMatchLimit as String] = kSecMatchLimitAll
+        let status = SecItemDelete(request as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
+    }
 }
 
 enum HotspotCredentials {
@@ -408,14 +417,10 @@ enum HotspotCredentials {
     }
 
     static func remove() -> Bool {
-        if let account = account(),
-            !AppKeychain.remove(service: credentialService, account: account)
-        {
-            return false
-        }
         let removedReference = AppKeychain.remove(service: "hotspot", account: "reference")
         let removedLegacy = AppKeychain.remove(service: "hotspot", account: "fallback")
-        return removedReference && removedLegacy
+        let removedCredentials = AppKeychain.removeAll(service: credentialService)
+        return removedReference && removedLegacy && removedCredentials
     }
 }
 
