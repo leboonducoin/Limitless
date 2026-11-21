@@ -65,9 +65,11 @@ if recovery stays unavailable. The download is available even when the power
 helper is disabled. Uninstall preserves unreadable update records and reports
 them after removing the system components.
 
-When upgrading from 1.1 or earlier, enable the power helper again if requested
-in Options and review Power. Limitless leaves the older updater's backup in
-place because it has no protected recovery receipt for that transaction.
+Before upgrading from 1.1 or earlier, follow the
+[CLI and agent migration instructions](cli.md#upgrading-from-11-or-earlier)
+if you use an integration. After upgrading, enable the power helper again
+if requested in Options and review Power. Limitless leaves the older updater's
+backup in place because it has no protected recovery receipt for that transaction.
 
 To move Limitless farther right in the menu bar, hold Command and drag its icon. macOS remembers
 that position for later launches.

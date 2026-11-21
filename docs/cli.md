@@ -14,15 +14,18 @@ Enable **Allow CLI & AI tasks** again after a helper restart, including after
 reboot or an update, or after changing console accounts. Your saved power
 limits remain in effect.
 
-Run setup again for each previously configured agent before using its old
-hooks. Explicit setup migrates Limitless entries to the protected command and
-keeps other settings. Closing your agents during migration prevents them from
-running a legacy hook.
+### Upgrading from 1.1 or earlier
 
-After an upgrade from 1.1 or earlier, close any agents first. If **Migrate
-CLI & agent hooks…** appears in **Options**, use it to retire the unsafe
-shared shortcut and migrate Limitless hooks for the current account.
-Repeat this in each account that uses a Limitless integration.
+Before updating, quit agents that use Limitless in every affected macOS
+account. Pause scripts that use the old shared `limitless` command. Keep
+them closed while you install and open the new app.
+
+In each affected account, open **Options**. If **Migrate CLI & agent hooks…**
+appears, use it to retire the old shortcut and migrate the hooks installed
+by Limitless. Wait for migration to finish before restarting your agents or
+resuming scripts. Use the private CLI path above if setup installed a private
+copy. For hooks or scripts configured manually, update their command paths
+before running them again.
 
 ## Terminal
 

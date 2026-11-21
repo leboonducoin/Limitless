@@ -2,6 +2,10 @@
 
 ## 1.2.0 — Unreleased
 
+If you use Limitless with a terminal or AI agent, follow the
+[CLI migration instructions](https://github.com/leboonducoin/Limitless/blob/main/docs/cli.md#upgrading-from-11-or-earlier)
+before updating from 1.1 or earlier.
+
 ### Menu bar and keyboard
 
 - Use Limitless directly from the menu bar. The popover responds on the first click and keeps session controls visible while Options scrolls beneath them.

@@ -216,7 +216,7 @@ struct SettingsView: View {
                         }
                     } message: {
                         Text(
-                            "Close your agent apps first. Limitless will retire its old shared shortcut and update its own hooks for this account."
+                            "Quit your agents and pause scripts that use Limitless. Keep them stopped until migration finishes in this account. Repeat in each account that uses the integration."
                         )
                     }
                 }
