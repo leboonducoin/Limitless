@@ -31,36 +31,25 @@ public enum AgentSetup {
     @concurrent public static func verifiedResources() async throws -> URL {
         let identity = try await SignedIdentity.current(
             expectedIdentifier: LimitlessIdentity.commandLine)
-        let app: URL
-        let usePrivate = identity.executableURL.path == InstalledCLI.privateExecutable().path
-        if usePrivate {
-            try InstalledCLI.requirePrivatePath(identity.executableURL, regularFile: true)
-            app = InstalledCLI.privateApplication()
-        } else {
-            guard identity.executableURL.path == InstalledCLI.target,
-                InstalledCLI.sharedPathIsProtected
-            else { throw SignatureError.untrustedIdentity }
-            app = URL(fileURLWithPath: "/Applications/Limitless.app", isDirectory: true)
-            guard app.resolvingSymlinksInPath().path == app.path
-            else { throw SignatureError.untrustedIdentity }
-        }
-        let resources = try protectedResources(in: app, usePrivate: usePrivate)
+        let executable = InstalledCLI.privateExecutable()
+        guard
+            identity.executableURL.path == executable.path
+                || (identity.executableURL.path == InstalledCLI.target
+                    && InstalledCLI.sharedPathIsProtected)
+        else { throw SignatureError.untrustedIdentity }
+        let app = InstalledCLI.privateApplication()
+        try InstalledCLI.requirePrivatePath(executable, regularFile: true)
+        let resources = try protectedResources(in: app)
         try identity.verifyExecutable(at: app, identifier: LimitlessIdentity.application)
+        try identity.verifyExecutable(at: executable, identifier: LimitlessIdentity.commandLine)
         return resources
     }
 
-    static func protectedResources(in app: URL, usePrivate: Bool) throws -> URL {
+    static func protectedResources(in app: URL) throws -> URL {
         let resources = app.appendingPathComponent("Contents/Resources/limitless-skill")
         for file in ["SKILL.md"] + providers.map({ "hooks/\($0).json" }) {
-            let url = resources.appendingPathComponent(file)
-            if usePrivate {
-                try InstalledCLI.requirePrivatePath(url, regularFile: true)
-            } else {
-                try InstalledCLI.requireProtectedPath(
-                    root: URL(fileURLWithPath: "/"),
-                    components: Array(url.pathComponents.dropFirst()),
-                    regularFile: true, owner: 0)
-            }
+            try InstalledCLI.requirePrivatePath(
+                resources.appendingPathComponent(file), regularFile: true)
         }
         return resources
     }

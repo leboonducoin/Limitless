@@ -215,10 +215,11 @@ import UserNotifications
             persistsUpdateState = true
             await readUpdateRecovery()
         }
-        if trustedBuild, !InstalledCLI.sharedPathIsProtected {
+        if trustedBuild {
             do {
+                let sharedIsProtected = InstalledCLI.sharedPathIsProtected
                 cliMigrationRequired =
-                    try InstalledCLI.isAppOwnedLinkPresent()
+                    try (!sharedIsProtected && InstalledCLI.isAppOwnedLinkPresent())
                     || !AgentSetup.legacyProviders().isEmpty
             } catch {
                 cliMigrationRequired = true
@@ -1127,27 +1128,22 @@ import UserNotifications
         }
         do {
             try await AdministratorAuthorization.withGrant { grant in
-                var privateResources: URL?
-                if !InstalledCLI.sharedPathIsProtected {
-                    privateResources = try await InstalledCLI.refreshPrivateCopy()
-                }
+                let privateResources = try await InstalledCLI.refreshPrivateCopy()
                 guard await self.perform(.installCLI, authorization: grant) else {
                     self.message =
                         "The limitless command could not be installed. An existing command was left unchanged."
                     return
                 }
                 if migrateLegacy {
-                    if let privateResources {
-                        guard try !InstalledCLI.isAppOwnedLinkPresent()
-                        else { throw ServiceError.restorationRequired }
-                        for provider in try AgentSetup.legacyProviders() {
-                            try AgentSetup.configure(provider, resources: privateResources)
-                        }
-                        guard try AgentSetup.legacyProviders().isEmpty
-                        else { throw ServiceError.restorationRequired }
-                    } else if !InstalledCLI.sharedPathIsProtected {
+                    if !InstalledCLI.sharedPathIsProtected, try InstalledCLI.isAppOwnedLinkPresent()
+                    {
                         throw ServiceError.restorationRequired
                     }
+                    for provider in try AgentSetup.legacyProviders() {
+                        try AgentSetup.configure(provider, resources: privateResources)
+                    }
+                    guard try AgentSetup.legacyProviders().isEmpty
+                    else { throw ServiceError.restorationRequired }
                     self.cliMigrationRequired = false
                 }
                 guard !self.cliMigrationRequired else { return }
